@@ -4,7 +4,7 @@
 
 Lineage connects agent conversations to the code they produce. Sessions from Cursor, Claude Code, and Codex are ingested into your repository as git refs and notes, so you can trace any line back to the prompt that wrote it. No external service. No separate database.
 
-**[Setup](#setup)** · **[Getting started](#getting-started)** · [Agent skill](#agent-skill) · [CLI reference](#cli-reference) · [MCP server](#mcp-server) · [VS Code extension](#vs-code-extension)
+**[Setup](#setup)** · **[Ingest & explore](#ingest-and-explore)** · [CLI & agent skill](docs/cli/README.md) · [MCP server](docs/mcp/README.md) · [VS Code extension](extensions/vscode/README.md)
 
 ## Why Lineage?
 
@@ -17,7 +17,7 @@ It preserves the conversation behind each change and links it to commits, files,
 | **In-repo storage** | Lineage data travels with your repository |
 | **Agent-agnostic** | Works with Cursor, Claude Code, and Codex |
 | **Policy-first** | Secrets are redacted before anything is written |
-| **Queryable** | CLI, MCP server, and VS Code extension |
+| **Queryable** | [CLI](docs/cli/README.md), [MCP](docs/mcp/README.md), and [VS Code](extensions/vscode/README.md) |
 
 ## Setup
 
@@ -75,26 +75,19 @@ New repos need at least one commit before sessions can link to `HEAD`:
 git add . && git commit -m "initial commit"
 ```
 
-### VS Code extension (local dev)
+### Using Lineage on another project
 
-The repo includes `.vscode/settings.json`, `launch.json`, and `tasks.json`. After setup:
-
-1. Open the **lineage** repo in VS Code
-2. Install recommended extensions when prompted
-3. Press **F5** — launches the extension in this repository
-
-`lineage.cliPath` in `.vscode/settings.json` points at `target/debug/git-lineage` (built during setup).
-
-### Optional: MCP server
+If the CLI is already installed globally, you only need:
 
 ```bash
-cargo install --path crates/lineage-mcp
-# or: ./scripts/setup.sh --with-mcp
+cd /path/to/your-app
+git lineage init-config
+git lineage init-skill
+git lineage install-hook
+git lineage ingest --agent all --incremental
 ```
 
----
-
-## Getting started
+## Ingest and explore
 
 After [setup](#setup), ingest and explore lineage in your repository.
 
@@ -190,9 +183,7 @@ git lineage remap
 
 This uses patch-id metadata stored on git notes to match rewritten commits where possible, then re-materializes line objects.
 
----
-
-### Where Lineage finds agent history
+## Where Lineage finds agent history
 
 Lineage scopes discovery to your **repository working directory**. It checks project-local paths first, then global agent config directories.
 
@@ -200,128 +191,9 @@ Lineage scopes discovery to your **repository working directory**. It checks pro
 |-------|-------------------|
 | **Cursor** | `.cursor/projects/*/agent-transcripts/`, `.cursor/agent-transcripts/`, `~/.cursor/projects/<project-key>/agent-transcripts/` |
 | **Claude Code** | `.claude/projects/<encoded-path>/*.jsonl`, `~/.claude/projects/<encoded-path>/*.jsonl` |
-| **Codex** | `.codex/sessions/`, `~/.codex/sessions/` |
+| **Codex** | `.codex/sessions/`, `~/.codex/sessions/` (filtered by session `cwd`) |
 
 Transcript files are JSONL. Lineage skips Claude snapshot/progress files and scopes sessions to the current workspace.
-
-### Troubleshooting
-
-| Problem | What to try |
-|---------|-------------|
-| `git: 'lineage' is not a git command` | Ensure `~/.cargo/bin` is on `PATH`; or use `git-lineage` directly |
-| `discovered 0 … session(s)` | Run `git lineage doctor`; verify agent paths above; confirm you are in the repo root |
-| `missing LFS` in doctor | Run `git lineage lfs fetch` after pulling refs from remote |
-| Search returns nothing | Run `git lineage rebuild-index`, or search again (auto-rebuilds on empty results) |
-| Blame shows no sessions | Run `git lineage ingest` then commit (or `install-hook`); line objects materialize at link time |
-| Sessions contain secrets | Run `git lineage init-config`; use `export --redact` before sharing; review `refs/lineage/config` excludes |
-
-Target a different repository path with `--repo /path/to/repo` on any command.
-
-## Agent skill
-
-Lineage ships an **agent skill** with the CLI so coding agents know how to retrieve engineering context — prior conversations, architecture decisions, and line-level provenance.
-
-Install into your project (also run automatically by `./scripts/setup.sh`):
-
-```bash
-git lineage init-skill                    # all targets (default)
-git lineage init-skill --target cursor  # Cursor only
-git lineage init-skill --target claude --target codex
-git lineage init-skill --target all --force
-```
-
-| Target | Install path | Docs |
-|--------|--------------|------|
-| `cursor` | `.cursor/skills/lineage/SKILL.md` | [Cursor Skills](https://cursor.com/docs/skills) |
-| `claude` | `.claude/skills/lineage/SKILL.md` | [Claude Code](https://code.claude.com/docs/en/claude-directory) |
-| `codex` / `agents` | `.agents/skills/lineage/SKILL.md` | [Codex customization](https://developers.openai.com/codex/concepts/customization) |
-| `all` | All three (default when no `--target` is given) | — |
-
-The same bundled skill ([`crates/lineage-cli/assets/skills/lineage/SKILL.md`](crates/lineage-cli/assets/skills/lineage/SKILL.md)) is copied verbatim to each path — it tells agents to run `git lineage search`, `blame`, and `show --json` before answering *why* code exists. Re-run with `--force` to refresh after upgrading the CLI.
-
-## CLI reference
-
-| Command | Description |
-|---------|-------------|
-| `git lineage doctor` | Check repo configuration and session integrity |
-| `git lineage init-config` | Write default `refs/lineage/config` (policy, excludes, blob threshold) |
-| `git lineage init-skill [--target cursor\|claude\|codex\|agents\|all] [--force]` | Install bundled agent skill (default: all targets) |
-| `git lineage ingest [--agent cursor\|claude\|codex\|all] [--since DATE] [--incremental]` | Ingest agent history into git refs |
-| `git lineage list [--commit SHA] [--json]` | List sessions, or sessions linked to a commit |
-| `git lineage show <id> [--json]` | Display a session |
-| `git lineage blame <path>[:line] [--json]` | Show which agent turn touched a line |
-| `git lineage search <query>` | Full-text search over ingested sessions (auto-rebuilds stale index) |
-| `git lineage rebuild-index` | Rebuild the local search index from git refs |
-| `git lineage export [--redact] [--format json\|jsonl]` | Export sessions |
-| `git lineage link <session-id> <commit-sha>` | Manually link a session to a commit (materializes line objects) |
-| `git lineage materialize [--commit SHA] [--session ID]` | Build line objects from session artifacts at a commit |
-| `git lineage remap` | Remap orphaned lineage notes after rebase (patch-id aware) |
-| `git lineage lfs status` | Show referenced vs local LFS objects |
-| `git lineage lfs push [--remote origin]` | Push LFS pointer and data refs |
-| `git lineage lfs fetch [--remote origin]` | Fetch missing LFS objects from remote |
-| `git lineage delete <session-id> [--purge-blobs]` | Remove session, line objects, notes entries; refcount-aware LFS purge |
-| `git lineage gc` | Purge orphan line objects and unreferenced LFS blobs |
-| `git lineage show <id> [--json] [--hydrate-images]` | Display session (optional inline image data URLs for UI) |
-| `git lineage install-hook [--force]` | Install pre-commit and post-commit hooks |
-| `git lineage uninstall-hook` | Remove lineage git hooks |
-
-Use `--repo <path>` to target a repository other than the current directory.
-
-## MCP server
-
-Expose lineage data to AI tools via the [Model Context Protocol](https://modelcontextprotocol.io/):
-
-```bash
-LINEAGE_REPO=/path/to/your/repo lineage-mcp
-```
-
-| Tool | Description |
-|------|-------------|
-| `lineage_list_sessions` | List all ingested sessions |
-| `lineage_get_session` | Fetch a session by ID (redacted by default) |
-| `lineage_blame_line` | Get lineage for a file and line number |
-| `lineage_search` | Full-text search over sessions |
-| `lineage_doctor` | Check repository lineage health |
-| `lineage_materialize` | Materialize line objects at HEAD or a commit |
-| `lineage_rebuild_index` | Rebuild the local search index |
-| `lineage_export` | Export sessions (optionally redacted) |
-| `lineage_remap` | Remap lineage after rebase |
-
-**Cursor configuration:**
-
-```json
-{
-  "mcpServers": {
-    "lineage": {
-      "command": "lineage-mcp",
-      "env": {
-        "LINEAGE_REPO": "${workspaceFolder}"
-      }
-    }
-  }
-}
-```
-
-## VS Code extension
-
-The extension in [extensions/vscode](extensions/vscode) provides a full lineage UI:
-
-- **Activity bar panel** listing ingested sessions
-- **Session timeline webview** with styled turn-by-turn history
-- **Gutter decorations** and status bar hint for lines with lineage
-- **Commands:** ingest, refresh, open session, show lineage for line, search, doctor, materialize, remap, init config, install git hooks
-- **Session picker** when multiple sessions match a blamed line
-- **Tool calls and artifacts** rendered in the session timeline webview
-
-Run `./scripts/setup.sh` to compile the extension. Open the lineage repo in VS Code and press **F5** (see [VS Code extension (local dev)](#vs-code-extension-local-dev)).
-
-Package a `.vsix` for side-loading:
-
-```bash
-cd extensions/vscode && npm run package
-```
-
-**Extension features:** hover blame (`lineage.hoverEnabled`), architecture summaries in the session panel, gutter decorations, and session timeline with tool calls and image artifacts.
 
 ## Git hooks
 
@@ -338,6 +210,19 @@ git lineage uninstall-hook
 | `pre-commit` | Incremental ingest (`--no-link-head --incremental`) |
 | `post-commit` | Link recently ingested sessions to the new commit |
 
+## Troubleshooting
+
+| Problem | What to try |
+|---------|-------------|
+| `git: 'lineage' is not a git command` | Ensure `~/.cargo/bin` is on `PATH`; or use `git-lineage` directly |
+| `discovered 0 … session(s)` | Run `git lineage doctor`; verify [agent paths](#where-lineage-finds-agent-history); confirm you are in the repo root |
+| `missing LFS` in doctor | Run `git lineage lfs fetch` after pulling refs from remote |
+| Search returns nothing | Run `git lineage rebuild-index`, or search again (auto-rebuilds on empty results) |
+| Blame shows no sessions | Run `git lineage ingest` then commit (or `install-hook`); line objects materialize at link time |
+| Sessions contain secrets | Run `git lineage init-config`; use `export --redact` before sharing; review `refs/lineage/config` excludes |
+
+Target a different repository path with `--repo /path/to/repo` on any command.
+
 ## How it works
 
 Lineage stores three kinds of data inside your git repository:
@@ -346,53 +231,9 @@ Lineage stores three kinds of data inside your git repository:
 2. **Line objects** at `refs/lineage/lines/<id>` (mappings from file lines to conversation turns)
 3. **Git notes** at `refs/notes/lineage` (per-commit indexes linking sessions and line objects)
 
-A manifest at `refs/lineage/index` lists all known sessions. Repository policy lives at `refs/lineage/config` (private session patterns, path/content excludes, large-blob threshold). Last ingest metadata is tracked at `refs/lineage/last-ingest` for smarter hook linking.
+A manifest at `refs/lineage/index` lists all known sessions. Repository policy lives at `refs/lineage/config`. Search uses a local SQLite index at `.git/lineage/index.db`. Large artifacts are stored in Git LFS by default.
 
-Search uses a local SQLite index at `.git/lineage/index.db`. Large artifact content above the configured threshold is stored in Git LFS layout (`.git/lfs/objects/`) by default, with pushable transport refs at `refs/lineage/lfs/` (pointers) and `refs/lineage/lfs-data/` (raw blobs for git transport). Legacy `cache` backend still uses `.git/lineage/blobs/`. Run `git lineage lfs push` before sharing large sessions.
-
-**Ingest defaults** (configurable in `refs/lineage/config`):
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `ingest_only_code_sessions` | `true` | Skip sessions with no file edits or write tools |
-| `commit_mapping` | `auto` | Multi-signal commit matching (`head`, `none`) |
-| `lfs_transport` | `auto` | `git-lfs` CLI → HTTP batch API → ref transport (`gitcli`, `http`, `refs`) |
-
-Images and diagrams from agent transcripts are stored as content-addressed LFS artifacts (`content_hash`, `mime_type`). Architecture summaries are generated at ingest and shown in the VS Code session panel.
-
-**Schemas:**
-
-| Schema | Description |
-|--------|-------------|
-| [conversation-schema-v0](specs/conversation-schema-v0.md) | Agent session and turn format |
-| [line-object-schema-v0](specs/line-object-schema-v0.md) | File line to turn mapping |
-| [git-notes-schema-v0](specs/git-notes-schema-v0.md) | Ref namespace and note layout |
-
-## Architecture
-
-```text
-lineage/
-├── lineage-core/       Domain types (Session, Turn, LineObject)
-├── lineage-policy/     Redaction, excludes, private sessions
-├── lineage-store/      Git blob and filesystem object storage
-├── lineage-git/        Notes, refs, blame, commit mapping
-├── lineage-agent/      Ingestion traits and pipeline
-├── lineage-adapters/   Cursor, Claude, Codex source adapters
-├── lineage-cli/        git-lineage binary
-├── lineage-search/     Rebuildable SQLite FTS index
-└── lineage-mcp/        MCP server
-```
-
-## Sharing lineage data
-
-Lineage refs are ordinary git objects. Push them with your code (see [share lineage with your team](#3-share-lineage-with-your-team) for the full fetch/push workflow):
-
-```bash
-git lineage lfs push
-git push origin refs/lineage/* refs/notes/lineage
-```
-
-Run `git lineage export --redact` before sharing if sessions may contain secrets.
+**Schemas:** [conversation-schema-v0](specs/conversation-schema-v0.md) · [line-object-schema-v0](specs/line-object-schema-v0.md) · [git-notes-schema-v0](specs/git-notes-schema-v0.md)
 
 ## Development
 
@@ -403,20 +244,32 @@ cargo fmt --all -- --check
 cargo build --release
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for a deeper dive.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for crate layout, and [AGENTS.md](AGENTS.md) for AI-assisted development.
 
 ## Roadmap
+
+### Done
 
 - [x] Rebase-aware lineage remapping (`git lineage remap`)
 - [x] Git LFS backend for large session content (`git lineage lfs push/fetch`)
 - [x] Repo config ref (`refs/lineage/config`) and incremental ingest
-- [x] Pre-commit hook for automatic ingest
-- [x] Rich VS Code webview with session timeline and gutter decorations
-- [x] Multi-signal commit mapping, code-only ingest default, session delete/purge
-- [x] Image artifacts (content-addressed LFS), architecture summaries, hover blame
+- [x] Pre-commit and post-commit hooks for automatic ingest and linking
+- [x] One-command project setup (`./scripts/setup.sh`)
+- [x] Bundled agent skill install (`git lineage init-skill`)
+- [x] Session author attribution (`prompted_by_email` / `prompted_by_name`)
+- [x] Multi-signal commit mapping, code-only ingest default, session delete/purge, and `git lineage gc`
+- [x] Image artifacts (content-addressed LFS) and heuristic architecture summaries
 - [x] LFS HTTP batch API transport (alongside git-lfs CLI and ref fallback)
-- [x] VS Code `.vsix` packaging (`npm run package`)
+- [x] VS Code extension — session timeline, gutter decorations, hover blame, resume/fork (Claude & Codex), `.vsix` packaging
+- [x] MCP server — list, get, blame, search, doctor, materialize, rebuild-index, export, remap
+
+### Planned
+
 - [ ] Additional agent adapters
+- [ ] MCP ingest, delete, and gc tools
+- [ ] Cursor resume/fork support (pending stable agent CLI)
+- [ ] LLM-generated architecture summaries
+- [ ] Full GitHub-killer SaaS platform
 
 ## License
 

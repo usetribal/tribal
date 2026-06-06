@@ -27,6 +27,11 @@ make check                   # full contributor gate
 
 ## Docs
 
+- [docs/README.md](docs/README.md) — documentation index
+- [README.md](README.md) — setup and day-to-day usage
+- [docs/cli/README.md](docs/cli/README.md) — CLI and agent skill
+- [docs/mcp/README.md](docs/mcp/README.md) — MCP server
+- [extensions/vscode/README.md](extensions/vscode/README.md) — VS Code extension
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — crates and data flow
 - [CONTRIBUTING.md](CONTRIBUTING.md) — human contributor guide
 - [specs/](specs/) — schema contracts

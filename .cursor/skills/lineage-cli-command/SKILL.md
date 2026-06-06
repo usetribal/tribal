@@ -25,7 +25,7 @@ description: >-
 2. Implement handler in `src/commands.rs` (public fns for integration tests)
 3. Dispatch in `main.rs` `match` — use `--repo` global arg via `repo_path()`
 4. Add integration test in `tests/workflow.rs`
-5. Document in `README.md` CLI reference table
+5. Document in `docs/cli/README.md` command reference table
 6. `CHANGELOG.md` under `[Unreleased]` if user-facing
 
 ## Testing

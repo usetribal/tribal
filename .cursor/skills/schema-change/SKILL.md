@@ -34,14 +34,14 @@ description: >-
 - [ ] `lineage-core` types + serde tests
 - [ ] `lineage-git` persist/read paths
 - [ ] `lineage-adapters` mapping to new fields
-- [ ] `lineage-cli` `--json` output documented in README if public
+- [ ] `lineage-cli` `--json` output documented in `docs/cli/README.md` if public
 - [ ] `lineage-mcp` tool responses
 - [ ] `extensions/vscode` types in `src/types.ts` if UI exposes field
 - [ ] Integration tests in `lineage-git/tests/`
 
 ## Repo config (`refs/lineage/config`)
 
-Config schema changes live in `lineage-git` config types + README config table. Default via `git lineage init-config`.
+Config schema changes live in `lineage-git` config types + `README.md` or `docs/ARCHITECTURE.md` as appropriate. Default via `git lineage init-config`.
 
 ## Changelog
 

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Split component docs into [docs/cli/README.md](docs/cli/README.md), [docs/mcp/README.md](docs/mcp/README.md), and [extensions/vscode/README.md](extensions/vscode/README.md); setup and usage remain in root README
+
 ### Added
 
 - Session author metadata — `prompted_by_email` and `prompted_by_name` stamped at ingest from git config; preserved on re-ingest for team attribution
