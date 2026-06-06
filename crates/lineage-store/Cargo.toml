@@ -1,0 +1,22 @@
+[package]
+name = "lineage-store"
+description = "Git blob and local filesystem storage backends for lineage"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+git2 = { workspace = true }
+lineage-core = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[[test]]
+name = "large_content"
+path = "tests/large_content.rs"

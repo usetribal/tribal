@@ -1,0 +1,7 @@
+{
+  "lineage.cliPath": "${workspaceFolder}/target/debug/git-lineage",
+  "typescript.tsdk": "extensions/vscode/node_modules/typescript/lib",
+  "files.exclude": {
+    "**/target": true
+  }
+}

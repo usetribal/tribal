@@ -1,0 +1,39 @@
+[package]
+name = "lineage-cli"
+description = "git-lineage command-line tool for AI agent provenance"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[lib]
+name = "lineage_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "git-lineage"
+path = "src/main.rs"
+
+[dependencies]
+chrono = { workspace = true }
+clap = { workspace = true }
+lineage-adapters = { workspace = true }
+lineage-agent = { workspace = true }
+lineage-core = { workspace = true }
+lineage-git = { workspace = true }
+lineage-policy = { workspace = true }
+lineage-search = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Lineage Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/extensions/vscode",
+        "${workspaceFolder}"
+      ],
+      "outFiles": ["${workspaceFolder}/extensions/vscode/out/**/*.js"],
+      "preLaunchTask": "compile-vscode-extension"
+    }
+  ]
+}

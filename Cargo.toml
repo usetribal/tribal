@@ -1,0 +1,54 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/lineage-core",
+    "crates/lineage-policy",
+    "crates/lineage-store",
+    "crates/lineage-git",
+    "crates/lineage-agent",
+    "crates/lineage-adapters",
+    "crates/lineage-cli",
+    "crates/lineage-search",
+    "crates/lineage-mcp",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.86"
+license = "MIT"
+repository = "https://github.com/lineage-dev/lineage"
+homepage = "https://github.com/lineage-dev/lineage"
+documentation = "https://github.com/lineage-dev/lineage#readme"
+readme = "README.md"
+authors = ["Lineage Contributors"]
+keywords = ["git", "ai", "provenance", "lineage", "agents", "mcp"]
+categories = ["command-line-utilities", "development-tools"]
+description = "Git-native provenance for AI coding agents"
+
+[workspace.dependencies]
+lineage-core = { path = "crates/lineage-core" }
+lineage-policy = { path = "crates/lineage-policy" }
+lineage-store = { path = "crates/lineage-store" }
+lineage-git = { path = "crates/lineage-git" }
+lineage-agent = { path = "crates/lineage-agent" }
+lineage-adapters = { path = "crates/lineage-adapters" }
+lineage-search = { path = "crates/lineage-search" }
+
+chrono = { version = "0.4", features = ["serde"] }
+clap = { version = "4", features = ["derive"] }
+git2 = "0.19"
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tokio = { version = "1", features = ["full"] }
+ulid = { version = "1", features = ["serde"] }
+walkdir = "2"
+glob = "0.3"
+regex = "1"
+tempfile = "3"
+ureq = { version = "2", features = ["json"] }

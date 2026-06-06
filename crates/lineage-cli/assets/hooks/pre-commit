@@ -1,0 +1,20 @@
+#!/bin/sh
+# Lineage pre-commit hook: ingest agent sessions before each commit.
+# Installed by: git lineage install-hook
+
+set -e
+
+run_ingest() {
+  if command -v git-lineage >/dev/null 2>&1; then
+    git-lineage ingest --agent all --no-link-head --incremental && return 0
+  fi
+  if git lineage ingest --agent all --no-link-head --incremental; then
+    return 0
+  fi
+  return 1
+}
+
+if ! run_ingest; then
+  echo "lineage: ingest failed (commit continues)" >&2
+fi
+exit 0

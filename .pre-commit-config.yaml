@@ -1,0 +1,46 @@
+# Install: pip install pre-commit && pre-commit install
+# Run all: pre-commit run --all-files  (or: make pre-commit)
+
+default_language_version:
+  node: "20"
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^tests/fixtures/
+      - id: end-of-file-fixer
+        exclude: ^tests/fixtures/
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+        args: [--maxkb=512]
+
+  - repo: https://github.com/doublify/pre-commit-rust
+    rev: v1.0
+    hooks:
+      - id: fmt
+        args: [--all, --]
+      - id: clippy
+        args: [--workspace, --all-targets, --, -D, warnings]
+
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.28.4
+    hooks:
+      - id: typos
+
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.17.2
+    hooks:
+      - id: markdownlint-cli2
+        exclude: ^tests/fixtures/
+
+  - repo: local
+    hooks:
+      - id: vscode-extension-check
+        name: VS Code extension (compile + lint)
+        entry: bash -c 'cd extensions/vscode && npm install --silent && npm run check'
+        language: system
+        files: ^extensions/vscode/
+        pass_filenames: false

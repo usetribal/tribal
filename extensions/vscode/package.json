@@ -1,0 +1,169 @@
+{
+  "name": "lineage-vscode",
+  "displayName": "Lineage",
+  "description": "Git-native AI agent provenance in VS Code",
+  "version": "0.1.0",
+  "publisher": "lineage-dev",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other", "SCM Providers"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "lineage.ingest",
+        "title": "Lineage: Ingest Sessions",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "lineage.refresh",
+        "title": "Lineage: Refresh Sessions",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "lineage.openSession",
+        "title": "Lineage: Open Session",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "lineage.showLineage",
+        "title": "Lineage: Show Lineage for Line",
+        "icon": "$(git-commit)"
+      },
+      {
+        "command": "lineage.installHook",
+        "title": "Lineage: Install Git Hooks"
+      },
+      {
+        "command": "lineage.search",
+        "title": "Lineage: Search Sessions"
+      },
+      {
+        "command": "lineage.doctor",
+        "title": "Lineage: Doctor"
+      },
+      {
+        "command": "lineage.materialize",
+        "title": "Lineage: Materialize Line Objects"
+      },
+      {
+        "command": "lineage.remap",
+        "title": "Lineage: Remap After Rebase"
+      },
+      {
+        "command": "lineage.initConfig",
+        "title": "Lineage: Init Config"
+      },
+      {
+        "command": "lineage.deleteSession",
+        "title": "Lineage: Delete Session",
+        "icon": "$(trash)"
+      }
+    ],
+    "views": {
+      "lineage": [
+        {
+          "id": "lineageSessions",
+          "name": "Sessions"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "lineage",
+          "title": "Lineage",
+          "icon": "$(git-commit)"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "lineage.refresh",
+          "when": "view == lineageSessions",
+          "group": "navigation"
+        },
+        {
+          "command": "lineage.ingest",
+          "when": "view == lineageSessions",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "lineage.openSession",
+          "when": "view == lineageSessions",
+          "group": "inline"
+        },
+        {
+          "command": "lineage.deleteSession",
+          "when": "view == lineageSessions && viewItem == lineageSession",
+          "group": "inline"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "lineage.showLineage",
+          "group": "navigation@99"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Lineage",
+      "properties": {
+        "lineage.decorateGutter": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show lineage indicators in the editor gutter"
+        },
+        "lineage.autoRefresh": {
+          "type": "boolean",
+          "default": true,
+          "description": "Refresh session list after ingest"
+        },
+        "lineage.cliPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to git-lineage binary (empty = use git lineage on PATH)"
+        },
+        "lineage.hoverEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show lineage blame on editor hover"
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "lineage.showLineage",
+        "key": "ctrl+shift+l",
+        "mac": "cmd+shift+l",
+        "when": "editorTextFocus"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p .",
+    "watch": "tsc -watch -p .",
+    "lint": "eslint src --max-warnings 0",
+    "format": "prettier --write src",
+    "format:check": "prettier --check src",
+    "check": "npm run compile && npm run lint && npm run format:check",
+    "package": "npx @vscode/vsce package --no-dependencies",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "@vscode/vsce": "^3.2.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.3.0",
+    "typescript": "^5.3.0"
+  }
+}

@@ -1,0 +1,35 @@
+[files]
+extend-exclude = [
+    "tests/fixtures/**",
+    "extensions/vscode/package-lock.json",
+    "target/**",
+]
+
+[default.extend-words]
+# Domain / crate names
+lineage = "lineage"
+jsonl = "jsonl"
+ulid = "ulid"
+rusqlite = "rusqlite"
+ndjson = "ndjson"
+serde = "serde"
+ureq = "ureq"
+walkdir = "walkdir"
+gitlineage = "gitlineage"
+subprocess = "subprocess"
+worktree = "worktree"
+refcount = "refcount"
+subcommand = "subcommand"
+msrv = "msrv"
+clippy = "clippy"
+rustfmt = "rustfmt"
+llvm = "llvm"
+dependabot = "dependabot"
+vsce = "vsce"
+mcp = "mcp"
+stdio = "stdio"
+thiserror = "thiserror"
+tokio = "tokio"
+gitattributes = "gitattributes"
+codex = "codex"
+aider = "aider"

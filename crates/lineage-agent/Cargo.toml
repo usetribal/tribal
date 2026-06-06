@@ -1,0 +1,20 @@
+[package]
+name = "lineage-agent"
+description = "Agent ingestion traits and pipeline for lineage"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+chrono = { workspace = true }
+lineage-core = { workspace = true }
+lineage-policy = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+lineage-adapters = { workspace = true }
