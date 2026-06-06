@@ -75,7 +75,7 @@ make install-hooks  # git hooks: fmt + lint on commit
 make pre-commit     # optional full hook suite (typos, markdownlint; needs pre-commit)
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for crate layout, and [AGENTS.md](AGENTS.md) for AI-assisted development.
+See [docs/README.md](docs/README.md) for full documentation, [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines, and [AGENTS.md](AGENTS.md) for AI-assisted development.
 
 ## Troubleshooting
 

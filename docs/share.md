@@ -1,25 +1,79 @@
 # Share lineage with your team
 
-[← Back to README](../README.md) · [Explore](explore.md) · [After a rebase](rebase.md)
+[← Documentation index](README.md) · [LFS](lfs.md) · [Privacy](privacy.md)
 
-Lineage data lives in git refs and notes. Push them alongside your code:
+Lineage data lives in git refs and notes alongside your code. Teammates with repository access can fetch the same sessions, blame, and search after pulling lineage refs.
+
+## What to push
+
+Lineage-specific refs are separate from branch tips:
 
 ```bash
-# Push session refs, notes, and LFS transport refs
 git lineage lfs push
 git push origin refs/lineage/* refs/notes/lineage
 ```
 
-On a fresh clone, teammates fetch lineage data before blaming or searching:
+| Ref pattern | Contents |
+|-------------|----------|
+| `refs/lineage/sessions/*` | Conversation blobs |
+| `refs/lineage/lines/*` | Line object blobs |
+| `refs/lineage/index` | Session manifest |
+| `refs/lineage/config` | Repository policy |
+| `refs/lineage/last-import` | Incremental import state |
+| `refs/lineage/lfs/*` | LFS pointer blobs |
+| `refs/lineage/lfs-data/*` | Ref-transported large payloads |
+| `refs/notes/lineage` | Per-commit session indexes |
+
+Standard `git push` without these refspecs does not publish lineage data.
+
+## Teammate onboarding
+
+After cloning your application repository:
 
 ```bash
 git fetch origin refs/lineage/* refs/notes/lineage
 git lineage lfs fetch
 git lineage doctor
+git lineage rebuild-index
 ```
 
-Before sharing publicly, export with redaction to review what would leave the repo:
+Install the CLI (`make setup` or `cargo install --path crates/lineage-cli`) and optionally run `git lineage init` for hooks and agent skills. Init-config is only needed if `refs/lineage/config` was not fetched.
+
+Verify access:
 
 ```bash
-git lineage export --redact --format jsonl > lineage-export.jsonl
+git lineage list --json
+git lineage search "module name"
 ```
+
+## Large content
+
+Sessions with long tool output or images require LFS objects locally. Always pair ref push with `git lineage lfs push` and advise teammates to `lfs fetch`. See [Large content (LFS)](lfs.md).
+
+## Review before public release
+
+Open-source or public mirrors need extra care:
+
+```bash
+git lineage export --redact --format jsonl > review.jsonl
+```
+
+Read [Privacy and policy](privacy.md). Remove or delete sensitive sessions (`git lineage delete`) before pushing if review finds issues.
+
+## VS Code and MCP
+
+Teammates can use the [VS Code extension](vscode.md) or [MCP server](mcp/README.md) against the same refs after fetch. No separate Lineage account or cloud sync is required.
+
+## Rebases and force-push
+
+If your team rebases shared branches, run `git lineage remap` after rewrite and push updated notes. See [After a rebase](rebase.md).
+
+## Removing shared data
+
+Deleting a session locally and pushing updated refs removes it for future clones. Rewriting public history to expunge blobs may still require git history remediation — treat lineage refs like any other sensitive git data.
+
+## Related guides
+
+- [Explore](explore.md)
+- [Configuration](configuration.md)
+- [Maintenance](maintenance.md)

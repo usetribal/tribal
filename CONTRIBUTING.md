@@ -39,7 +39,7 @@ Use `make help` for common tasks (`make check` runs the full local gate).
 | `specs/` | Schema contracts (update before changing types) |
 | `tests/fixtures/` | Golden files for adapter and git tests |
 | `extensions/vscode/` | VS Code extension |
-| `.cursor/skills/` | Cursor agent skills (see [AGENTS.md](AGENTS.md)) |
+| `docs/` | User and developer documentation ([index](docs/README.md)) |
 
 ## How to contribute
 

@@ -35,7 +35,7 @@ This document describes how Lineage is structured and how data flows through the
   └──────────────┘  └──────────────┘  └──────────────┘
 ```
 
-## Importion flow
+## Import flow
 
 ```text
 1. Adapter discovers session files on disk

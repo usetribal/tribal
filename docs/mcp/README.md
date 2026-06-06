@@ -1,8 +1,8 @@
 # MCP server
 
-[← Back to README](../../README.md) · [Setup](../../README.md#setup)
+[← Documentation index](../README.md) · [CLI reference](../cli/README.md) · [Developing](../developing.md)
 
-Expose lineage data to AI tools via the [Model Context Protocol](https://modelcontextprotocol.io/).
+The Lineage MCP server exposes repository session data to AI tools via the [Model Context Protocol](https://modelcontextprotocol.io/). Agents can search, blame, and inspect conversations without shelling out manually.
 
 ## Install
 
@@ -17,21 +17,25 @@ cargo install --path crates/lineage-mcp
 LINEAGE_REPO=/path/to/your/repo lineage-mcp
 ```
 
-The server reads lineage refs from `LINEAGE_REPO` (defaults to the current working directory).
+`LINEAGE_REPO` defaults to the current working directory. Point it at the git root that contains `refs/lineage/*`.
+
+The server reads through the same git and policy layers as the CLI. It does not bypass redaction.
 
 ## Tools
 
 | Tool | Description |
 |------|-------------|
-| `lineage_list_sessions` | List all imported sessions |
-| `lineage_get_session` | Fetch a session by ID (redacted by default) |
-| `lineage_blame_line` | Get lineage for a file and line number |
-| `lineage_search` | Full-text search over sessions |
-| `lineage_doctor` | Check repository lineage health |
+| `lineage_list_sessions` | List imported sessions |
+| `lineage_get_session` | Fetch session by id (redacted by policy) |
+| `lineage_blame_line` | Lineage for file path and line number |
+| `lineage_search` | Full-text search over session content |
+| `lineage_doctor` | Repository lineage health |
 | `lineage_materialize` | Materialize line objects at HEAD or a commit |
-| `lineage_rebuild_index` | Rebuild the local search index |
-| `lineage_export` | Export sessions (optionally redacted) |
-| `lineage_remap` | Remap lineage after rebase |
+| `lineage_rebuild_index` | Rebuild local search index from refs |
+| `lineage_export` | Export sessions with optional redaction |
+| `lineage_remap` | Remap notes after rebase |
+
+Not yet exposed via MCP: import, delete, gc (see project roadmap).
 
 ## Cursor configuration
 
@@ -48,6 +52,30 @@ The server reads lineage refs from `LINEAGE_REPO` (defaults to the current worki
 }
 ```
 
-## Claude Code / Codex
+Restart the editor after installing the binary.
 
-Point your MCP client at the `lineage-mcp` binary with `LINEAGE_REPO` set to the git repository root you want to query.
+## Claude Code and Codex
+
+Register `lineage-mcp` as an MCP server in your client configuration. Set `LINEAGE_REPO` to the repository you want agents to query.
+
+## Agent workflow tips
+
+- Prefer `lineage_search` before `lineage_get_session` to limit context size.
+- Use `lineage_blame_line` on code under edit to load decision context.
+- Run `lineage_remap` after the user rebases.
+- Call `lineage_doctor` when tools return empty results unexpectedly.
+
+## Development
+
+```bash
+cargo test -p lineage-mcp
+cargo test -p lineage-mcp --test server
+```
+
+New tools should mirror CLI behavior and respect policy. Update this doc and [CLI reference](../cli/README.md) when adding capabilities.
+
+## Related guides
+
+- [Explore](../explore.md)
+- [Privacy](../privacy.md)
+- [Architecture](../ARCHITECTURE.md)
