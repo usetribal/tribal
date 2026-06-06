@@ -9,7 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Session author metadata — `prompted_by_email` and `prompted_by_name` stamped at ingest from git config; preserved on re-ingest for team attribution
 - `git lineage init-skill` — installs bundled agent skill for Cursor (`.cursor/skills/`), Claude Code (`.claude/skills/`), and Codex (`.agents/skills/`); `--target` multiselect or `all` (default); runs in `./scripts/setup.sh`
+- `git lineage list --json` — session summaries include `git_branch`, `parent_session_id`, `is_sidechain`, `vendor_session_id`, `prompted_by_email`, and `prompted_by_name`
 
 ### Removed
 
@@ -92,11 +94,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### VS Code extension
 
 - Activity bar session tree, timeline webview, gutter decorations, status bar hint
-- Hover blame provider (`lineage.hoverEnabled`)
+- Minimal hover blame — model, prompter (`prompted_by_email` / `prompted_by_name`), and icon-only actions (`lineage.hoverEnabled`)
+- Hover actions: **View Conversation** (`$(open-preview)`), **Fork Conversation** (`$(git-branch)`), **Resume Conversation** (`$(run)` for Claude Code and Codex)
+- **Resume** runs `claude --resume` or `codex resume` in an integrated terminal (no raw CLI hints in the UI)
+- **Fork** copies the agent transcript to `.lineage/forks/` then branches in the agent (Claude `--fork-session`; original transcript untouched)
+- Session panel chips: prompter, model, git branch, vendor session id, parent session link, linked commits
+- Extension activates without an open folder; commands register immediately with a folder-open prompt when needed
+- F5 launch config: **Lineage Extension (other project)** — prompt for target repo path
 - Architecture summary block in session panel
 - Inline image previews for hydrated media artifacts
 - **Delete Session** command (context menu on session tree)
-- Commands: ingest, refresh, open session, show lineage, search, doctor, materialize, remap, init config, install hooks
+- Commands: ingest, refresh, view conversation, resume, fork, show lineage, view commit, search, doctor, materialize, remap, init config, install hooks
 - Session picker when multiple sessions match a blamed line
 - `.vsix` packaging via `npm run package`
 
@@ -112,6 +120,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Conversation schema docs — document `prompted_by_email` and `prompted_by_name` author metadata (`specs/conversation-schema-v0.md`)
 - Default ingest skips sessions that did not modify code (`ingest_only_code_sessions: true`)
 - Ingest uses multi-signal commit mapping by default (`commit_mapping: auto`) instead of always linking to HEAD
 - Pre-commit hook uses incremental ingest; post-commit links only recently ingested sessions

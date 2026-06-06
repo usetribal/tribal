@@ -1,4 +1,11 @@
 import * as vscode from "vscode";
+import {
+    agentLabel,
+    isBranchSession,
+    primaryModel,
+    promptedByLabel,
+    vendorSessionId,
+} from "./lineageMarkdown";
 import type { Artifact, Conversation, ToolCall, Turn } from "./types";
 
 export class SessionPanel {
@@ -13,6 +20,14 @@ export class SessionPanel {
         this.panel.onDidDispose(() => {
             SessionPanel.current = undefined;
         });
+        this.panel.webview.onDidReceiveMessage((msg: { command?: string; id?: string }) => {
+            if (msg.command === "openSession" && msg.id) {
+                void vscode.commands.executeCommand("lineage.openSession", msg.id);
+            }
+            if (msg.command === "viewCommit" && msg.id) {
+                void vscode.commands.executeCommand("lineage.viewCommit", msg.id);
+            }
+        });
     }
 
     public static show(extensionUri: vscode.Uri, conversation: Conversation): void {
@@ -25,7 +40,7 @@ export class SessionPanel {
 
         const panel = vscode.window.createWebviewPanel(
             "lineageSession",
-            `Lineage: ${conversation.agent}`,
+            `Lineage: ${agentLabel(conversation.agent)}`,
             column,
             { enableScripts: true, retainContextWhenHidden: true }
         );
@@ -35,7 +50,7 @@ export class SessionPanel {
     }
 
     private update(conversation: Conversation): void {
-        this.panel.title = `Lineage: ${conversation.agent}`;
+        this.panel.title = `Lineage: ${agentLabel(conversation.agent)}`;
         this.panel.webview.html = renderSessionHtml(conversation);
     }
 }
@@ -46,6 +61,66 @@ function escapeHtml(s: string): string {
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;");
+}
+
+function escapeAttr(s: string): string {
+    return escapeHtml(s).replace(/'/g, "&#39;");
+}
+
+function metaString(conv: Conversation, key: string): string | undefined {
+    const value = conv.metadata?.[key];
+    return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function renderMetaLink(label: string, command: string, id: string): string {
+    return `<button class="link-btn" data-command="${escapeAttr(command)}" data-id="${escapeAttr(id)}">${escapeHtml(label)}</button>`;
+}
+
+function renderHeaderMeta(conversation: Conversation): string {
+    const items: string[] = [];
+    const promptedBy = promptedByLabel(conversation);
+    if (promptedBy) {
+        items.push(`<span class="chip author">Prompted by: ${escapeHtml(promptedBy)}</span>`);
+    }
+    const model = primaryModel(conversation);
+    if (model) {
+        items.push(`<span class="chip">Model: ${escapeHtml(model)}</span>`);
+    }
+    const branch = metaString(conversation, "git_branch");
+    if (branch) {
+        items.push(`<span class="chip branch">Branch: ${escapeHtml(branch)}</span>`);
+    }
+    if (isBranchSession(conversation)) {
+        items.push(`<span class="chip branch">Branched conversation</span>`);
+    }
+    const vendorId = vendorSessionId(conversation);
+    if (vendorId) {
+        items.push(
+            `<span class="chip vendor">${escapeHtml(agentLabel(conversation.agent))} ID: <code>${escapeHtml(vendorId)}</code></span>`
+        );
+    }
+    const source = metaString(conversation, "source");
+    if (source) {
+        items.push(
+            `<span class="chip source">Transcript: <code>${escapeHtml(source)}</code></span>`
+        );
+    }
+    if (conversation.parent_session_id) {
+        items.push(
+            renderMetaLink(
+                `Parent session ${conversation.parent_session_id.slice(0, 12)}…`,
+                "openSession",
+                conversation.parent_session_id
+            )
+        );
+    }
+    for (const sha of conversation.commit_shas ?? []) {
+        items.push(renderMetaLink(`Commit ${sha.slice(0, 12)}`, "viewCommit", sha));
+    }
+    if (!items.length) {
+        return "";
+    }
+    return `<div class="meta-chips">${items.join("")}</div>`;
 }
 
 function renderToolCalls(toolCalls: ToolCall[]): string {
@@ -129,6 +204,8 @@ function renderSessionHtml(conversation: Conversation): string {
     const summaryBlock = conversation.architecture_summary
         ? `<div class="summary"><h2>Architecture summary</h2><pre>${escapeHtml(conversation.architecture_summary)}</pre></div>`
         : "";
+    const agent = agentLabel(conversation.agent);
+    const ended = conversation.ended_at ? ` · ended ${escapeHtml(conversation.ended_at)}` : "";
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -140,6 +217,7 @@ function renderSessionHtml(conversation: Conversation): string {
       --fg: var(--vscode-editor-foreground);
       --border: var(--vscode-panel-border);
       --muted: var(--vscode-descriptionForeground);
+      --link: var(--vscode-textLink-foreground);
       --user-bg: color-mix(in srgb, var(--vscode-inputValidation-infoBorder) 12%, var(--bg));
       --assistant-bg: color-mix(in srgb, var(--vscode-gitDecoration-addedResourceForeground) 10%, var(--bg));
       --tool-bg: color-mix(in srgb, var(--vscode-inputValidation-warningBorder) 10%, var(--bg));
@@ -164,6 +242,31 @@ function renderSessionHtml(conversation: Conversation): string {
       font-weight: 600;
     }
     .header .meta { color: var(--muted); font-size: 0.85rem; }
+    .meta-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .chip, .link-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: color-mix(in srgb, var(--link) 8%, var(--bg));
+      font-size: 0.78rem;
+      color: var(--fg);
+    }
+    .link-btn {
+      cursor: pointer;
+      color: var(--link);
+      font-family: inherit;
+    }
+    .link-btn:hover { text-decoration: underline; }
+    .chip.branch { border-color: var(--vscode-gitDecoration-modifiedResourceForeground); }
+    .chip code { font-size: 0.75rem; }
     .private { color: var(--vscode-inputValidation-warningForeground); }
     .timeline { display: flex; flex-direction: column; gap: 12px; }
     .turn {
@@ -226,15 +329,28 @@ function renderSessionHtml(conversation: Conversation): string {
 </head>
 <body>
   <div class="header">
-    <h1>${escapeHtml(conversation.agent)} session</h1>
+    <h1>${escapeHtml(agent)} conversation</h1>
     <div class="meta">
-      ${escapeHtml(conversation.id)} · started ${escapeHtml(conversation.started_at)}
+      <code>${escapeHtml(conversation.id)}</code>
+      · started ${escapeHtml(conversation.started_at)}${ended}
       · ${conversation.turns.length} turns
     </div>
+    ${renderHeaderMeta(conversation)}
     ${privateNote}
   </div>
   ${summaryBlock}
   <div class="timeline">${turns || "<p>No turns recorded.</p>"}</div>
+  <script>
+    const vscode = acquireVsCodeApi();
+    document.querySelectorAll('.link-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        vscode.postMessage({
+          command: btn.dataset.command,
+          id: btn.dataset.id,
+        });
+      });
+    });
+  </script>
 </body>
 </html>`;
 }

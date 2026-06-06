@@ -24,8 +24,18 @@
       },
       {
         "command": "lineage.openSession",
-        "title": "Lineage: Open Session",
-        "icon": "$(comment-discussion)"
+        "title": "Lineage: View Conversation",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "lineage.resumeSession",
+        "title": "Lineage: Resume Conversation",
+        "icon": "$(run)"
+      },
+      {
+        "command": "lineage.forkSession",
+        "title": "Lineage: Fork Conversation",
+        "icon": "$(git-branch)"
       },
       {
         "command": "lineage.showLineage",
@@ -43,6 +53,10 @@
       {
         "command": "lineage.doctor",
         "title": "Lineage: Doctor"
+      },
+      {
+        "command": "lineage.viewCommit",
+        "title": "Lineage: View Commit"
       },
       {
         "command": "lineage.materialize",

@@ -6,7 +6,13 @@ import type { BlameResult, Conversation, SessionSummary } from "./types";
 const execFileAsync = promisify(execFile);
 
 export class LineageClient {
-    constructor(private readonly workspaceRoot: string) {}
+    private readonly sessionCache = new Map<string, Conversation>();
+
+    constructor(readonly workspaceRoot: string) {}
+
+    clearSessionCache(): void {
+        this.sessionCache.clear();
+    }
 
     private async run(args: string[]): Promise<string> {
         const config = vscode.workspace.getConfiguration("lineage");
@@ -61,6 +67,24 @@ export class LineageClient {
     }
 
     async showSession(id: string, hydrateImages = true): Promise<Conversation> {
+        const conv = await this.fetchSession(id, hydrateImages);
+        this.sessionCache.set(id, conv);
+        return conv;
+    }
+
+    async getSession(id: string): Promise<Conversation | undefined> {
+        const cached = this.sessionCache.get(id);
+        if (cached) {
+            return cached;
+        }
+        try {
+            return await this.fetchSession(id, false);
+        } catch {
+            return undefined;
+        }
+    }
+
+    private async fetchSession(id: string, hydrateImages: boolean): Promise<Conversation> {
         const args = ["show", id, "--json"];
         if (hydrateImages) {
             args.push("--hydrate-images");
@@ -73,6 +97,14 @@ export class LineageClient {
             conv.architecture_summary = summary;
         }
         return conv;
+    }
+
+    async viewCommit(sha: string): Promise<string> {
+        const { stdout } = await execFileAsync("git", ["show", "--stat", "--patch", sha], {
+            cwd: this.workspaceRoot,
+            maxBuffer: 10 * 1024 * 1024,
+        });
+        return stdout;
     }
 
     async blame(path: string, line: number): Promise<BlameResult> {

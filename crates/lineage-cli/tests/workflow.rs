@@ -4,7 +4,7 @@ use std::process::Command;
 
 use lineage_cli::{commands, hooks_cmd, skill_cmd};
 use lineage_core::{AgentKind, Conversation, LineageId, LineageRepoConfig, Role, Turn};
-use lineage_git::{open_repo, persist_conversation};
+use lineage_git::{open_repo, persist_conversation, read_conversation, PROMPTED_BY_EMAIL, PROMPTED_BY_NAME};
 
 fn init_repo() -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
@@ -95,9 +95,9 @@ fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
 }
 
 fn install_cursor_fixture(dir: &Path) {
-    let fixture =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/cursor-history");
-    let dest = dir.join(".cursor/agent-transcripts");
+    let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/fixtures/cursor-history/.cursor");
+    let dest = dir.join(".cursor");
     copy_dir_all(&fixture, &dest).unwrap();
 }
 
@@ -197,6 +197,31 @@ fn cli_ingest_skips_non_code_when_configured() {
     )
     .unwrap();
     commands::ingest(dir.path(), &["cursor".into()], None, false, false).unwrap();
+}
+
+#[test]
+fn ingest_stamps_prompted_by_from_git_config() {
+    let dir = init_repo();
+    install_cursor_fixture(dir.path());
+    commands::init_config(dir.path()).unwrap();
+    commands::ingest(dir.path(), &["cursor".into()], None, false, false).unwrap();
+
+    let repo = open_repo(dir.path()).unwrap();
+    let ids = lineage_git::list_session_ids(repo.inner()).unwrap();
+    assert!(!ids.is_empty(), "expected ingested session");
+    let conv = read_conversation(repo.inner(), &ids[0])
+        .unwrap()
+        .expect("session blob");
+    assert_eq!(
+        conv.metadata
+            .get(PROMPTED_BY_EMAIL)
+            .and_then(|v| v.as_str()),
+        Some("test@test.dev")
+    );
+    assert_eq!(
+        conv.metadata.get(PROMPTED_BY_NAME).and_then(|v| v.as_str()),
+        Some("Test")
+    );
 }
 
 #[test]

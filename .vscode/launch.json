@@ -10,7 +10,28 @@
         "${workspaceFolder}"
       ],
       "outFiles": ["${workspaceFolder}/extensions/vscode/out/**/*.js"],
-      "preLaunchTask": "compile-vscode-extension"
+      "preLaunchTask": "compile-vscode-extension",
+      "sourceMaps": true
+    },
+    {
+      "name": "Lineage Extension (other project)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/extensions/vscode",
+        "${input:lineageTargetRepo}"
+      ],
+      "outFiles": ["${workspaceFolder}/extensions/vscode/out/**/*.js"],
+      "preLaunchTask": "compile-vscode-extension",
+      "sourceMaps": true
+    }
+  ],
+  "inputs": [
+    {
+      "id": "lineageTargetRepo",
+      "type": "promptString",
+      "description": "Absolute path to the git repo to open in the Extension Development Host",
+      "default": "${workspaceFolder}"
     }
   ]
 }

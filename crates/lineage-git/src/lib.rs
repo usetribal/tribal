@@ -7,6 +7,7 @@ mod delete;
 mod doctor;
 mod hooks;
 mod hydrate;
+mod identity;
 mod ingest_state;
 mod line_resolve;
 pub mod lfs_batch;
@@ -27,6 +28,9 @@ pub use blob_gc::{purge_orphans, PurgeReport};
 pub use delete::{delete_session, DeleteReport};
 pub use config::{read_repo_config, write_repo_config, LINEAGE_CONFIG_REF};
 pub use hooks::{link_all_sessions_to_head, link_recent_sessions_to_head};
+pub use identity::{
+    repo_git_identity, stamp_prompted_by, GitIdentity, PROMPTED_BY_EMAIL, PROMPTED_BY_NAME,
+};
 pub use hydrate::{
     hydrate_conversation, hydrate_media_artifacts, indexable_body, HydrateReport,
 };

@@ -12,7 +12,7 @@ use lineage_git::{
     hydrate_media_artifacts, link_session_to_commit, list_session_ids, lfs_fetch, lfs_push,
     lfs_status, map_commit_to_sessions, materialize_session_at_commit, open_repo, persist_ingest,
     purge_orphans, read_conversation, read_repo_config, remap_orphaned_commits, run_doctor,
-    write_last_ingest, write_repo_config,
+    stamp_prompted_by, write_last_ingest, write_repo_config, PROMPTED_BY_EMAIL, PROMPTED_BY_NAME,
 };
 use lineage_policy::{apply_policy, is_private_session, policy_from_repo_config, prepare_for_export, PolicyConfig};
 use lineage_search::{LineageIndex, SearchHit};
@@ -139,6 +139,7 @@ pub fn ingest(
                         skipped += 1;
                         continue;
                     }
+                    stamp_prompted_by(inner, &mut conv)?;
                     let summary = generate_architecture_summary(&conv);
                     conv.metadata.insert(
                         "architecture_summary".into(),
@@ -233,6 +234,26 @@ fn parse_since(s: &str) -> Option<DateTime<Utc>> {
         })
 }
 
+fn is_false_bool(value: &bool) -> bool {
+    !*value
+}
+
+fn vendor_session_id(conv: &lineage_core::Conversation) -> Option<String> {
+    let keys = [
+        "cursor_session_id",
+        "claude_session_id",
+        "codex_session_id",
+    ];
+    for key in keys {
+        if let Some(value) = conv.metadata.get(key).and_then(|v| v.as_str()) {
+            if !value.is_empty() {
+                return Some(value.to_string());
+            }
+        }
+    }
+    None
+}
+
 #[derive(serde::Serialize)]
 struct SessionSummary {
     id: String,
@@ -243,6 +264,18 @@ struct SessionSummary {
     model: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     models_used: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    git_branch: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    parent_session_id: Option<String>,
+    #[serde(skip_serializing_if = "is_false_bool")]
+    is_sidechain: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    vendor_session_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    prompted_by_email: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    prompted_by_name: Option<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -282,6 +315,32 @@ pub fn list(repo_path: &Path, commit: Option<&str>, json: bool) -> Result<()> {
                 started_at: conv.started_at.to_rfc3339(),
                 model: conv.primary_model(),
                 models_used: conv.models_used(),
+                git_branch: conv
+                    .metadata
+                    .get("git_branch")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+                parent_session_id: conv
+                    .parent_session_id
+                    .as_ref()
+                    .map(|id| id.to_string()),
+                is_sidechain: conv
+                    .metadata
+                    .get("is_sidechain")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
+                    || conv.parent_session_id.is_some(),
+                vendor_session_id: vendor_session_id(&conv),
+                prompted_by_email: conv
+                    .metadata
+                    .get(PROMPTED_BY_EMAIL)
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
+                prompted_by_name: conv
+                    .metadata
+                    .get(PROMPTED_BY_NAME)
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
             });
         }
     }
@@ -332,6 +391,8 @@ pub fn show(repo_path: &Path, session_id: &str, json: bool, hydrate_images: bool
             println!("Models:  {}", models.join(", "));
         }
         let meta_keys = [
+            PROMPTED_BY_EMAIL,
+            PROMPTED_BY_NAME,
             "claude_code_version",
             "git_branch",
             "codex_cli_version",

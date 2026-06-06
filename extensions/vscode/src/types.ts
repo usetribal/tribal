@@ -5,6 +5,12 @@ export interface SessionSummary {
     started_at: string;
     model?: string;
     models_used?: string[];
+    git_branch?: string;
+    parent_session_id?: string;
+    is_sidechain?: boolean;
+    vendor_session_id?: string;
+    prompted_by_email?: string;
+    prompted_by_name?: string;
 }
 
 export interface ToolCall {
@@ -36,6 +42,9 @@ export interface Conversation {
     agent: string;
     started_at: string;
     ended_at?: string;
+    workspace_root?: string;
+    parent_session_id?: string;
+    commit_shas?: string[];
     turns: Turn[];
     private?: boolean;
     metadata?: Record<string, unknown>;

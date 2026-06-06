@@ -1,5 +1,7 @@
 import * as vscode from "vscode";
+import { canForkSession, canResumeSession } from "./agentActions";
 import { LineageClient } from "./lineageClient";
+import { commandLink, primaryModel, promptedByLabel, trustedMarkdown } from "./lineageMarkdown";
 
 export class LineageHoverProvider implements vscode.HoverProvider {
     constructor(private readonly client: LineageClient) {}
@@ -22,23 +24,31 @@ export class LineageHoverProvider implements vscode.HoverProvider {
                 return undefined;
             }
 
-            const sessionId = result.sessions[0] ?? "unknown";
-            const match = result.matches?.[0];
-            const parts = [
-                `**Lineage** · line ${line}`,
-                `Session: \`${sessionId.slice(0, 20)}…\``,
-                `Commit: \`${result.commit_sha.slice(0, 12)}\``,
-            ];
-            if (match) {
-                parts.push(`Confidence: ${match.confidence}`);
-                if (match.content_preview) {
-                    parts.push(`\n${match.content_preview.slice(0, 300)}`);
-                }
+            const sessionId = result.sessions[0];
+            if (!sessionId) {
+                return undefined;
             }
-            parts.push("\n*Click: Lineage: Show Lineage for Line*");
+
+            const conv = await this.client.getSession(sessionId);
+            const md = trustedMarkdown();
+
+            const model = (conv ? primaryModel(conv) : undefined) ?? "unknown model";
+            const author = (conv ? promptedByLabel(conv) : undefined) ?? "unknown author";
+            md.appendMarkdown(`\`${model}\` · ${author}\n\n`);
+
+            const actions: string[] = [
+                commandLink("$(open-preview)", "lineage.openSession", [sessionId]),
+            ];
+            if (conv && canForkSession(conv)) {
+                actions.push(commandLink("$(git-branch)", "lineage.forkSession", [sessionId]));
+            }
+            if (conv && canResumeSession(conv)) {
+                actions.push(commandLink("$(run)", "lineage.resumeSession", [sessionId]));
+            }
+            md.appendMarkdown(actions.join(" "));
 
             return new vscode.Hover(
-                new vscode.MarkdownString(parts.join("\n\n")),
+                md,
                 new vscode.Range(position.line, 0, position.line, Number.MAX_SAFE_INTEGER)
             );
         } catch {

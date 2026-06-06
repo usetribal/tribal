@@ -32,7 +32,16 @@ Stable contract for agent session data stored in lineage.
 | `private` | bool | no | Excluded from export by default |
 | `turns` | Turn[] | yes | Ordered conversation turns |
 | `commit_shas` | string[] | no | Linked git commits |
-| `metadata` | object | no | Adapter-specific extras (e.g. `model`, `models_used`, `claude_code_version`, `codex_cli_version`) |
+| `metadata` | object | no | Adapter-specific extras (e.g. `model`, `models_used`, `prompted_by_email`, `prompted_by_name`, `claude_code_version`, `codex_cli_version`) |
+
+### Author metadata
+
+Set at first ingest from the repository git config (`user.email`, `user.name`). Preserved on re-ingest so the original prompter is kept when sessions are refreshed by someone else.
+
+| Key | Description |
+|-----|-------------|
+| `prompted_by_email` | Git email of the developer who had the agent conversation |
+| `prompted_by_name` | Git name of the developer who had the agent conversation |
 
 ## Turn
 
