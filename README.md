@@ -34,37 +34,30 @@ Lineage closes that gap with **local, in-repo memory**: agent context lives in y
 
 ## Setup
 
-From your project root, run the interactive wizard:
-
-```bash
-git lineage init
-```
-
-`git lineage init` walks you through:
-
-| Step | What it does |
-|------|--------------|
-| Config | Write `refs/lineage/config`, policy defaults, and `.gitattributes` |
-| Agent skill | Multiselect install: `.agents/` (Open Standard), `.claude/` (Claude Code), `.cursor/` (Cursor), all, or skip |
-| Git hooks | Pre-commit incremental import and post-commit session linking |
-| Import (optional) | Pull agent history into git refs (`--agent all --incremental`) |
-
-### Install the CLI (first time)
-
-Clone lineage, install `git-lineage`, and build the VS Code extension:
+**1. Clone lineage**
 
 ```bash
 git clone https://github.com/lineage-dev/lineage.git
 cd lineage
-make setup
-git lineage init
 ```
 
-Ensure `~/.cargo/bin` is on your `PATH`:
+**2. Install the CLI and VS Code extension**
+
+```bash
+make setup
+```
+
+**3. Add git-lineage to your PATH**
 
 ```bash
 export PATH="$HOME/.cargo/bin:$PATH"
-git lineage --version
+```
+
+**4. In your project root, run the setup wizard**
+
+```bash
+cd /path/to/your-app
+git lineage init
 ```
 
 ### Development
