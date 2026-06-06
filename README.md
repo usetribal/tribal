@@ -1,23 +1,35 @@
+<p align="center">
+  <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
+  <lottie-player
+    src="./assets/lineage-banner.lottie.json"
+    background="transparent"
+    speed="1"
+    style="width: 100%; max-width: 1400px; height: auto;"
+    loop
+    autoplay>
+  </lottie-player>
+</p>
+
 # Lineage
 
-**Git-native provenance for AI coding agents.**
+**Preserve the prompts, decisions, and context behind every commit.**
 
-Lineage connects agent conversations to the code they produce. Sessions from Cursor, Claude Code, and Codex are ingested into your repository as git refs and notes, so you can trace any line back to the prompt that wrote it. No external service. No separate database.
+Lineage is agent-first engineering context memory for your codebase. It ingests sessions from Cursor, Claude Code, and Codex into your git repo — linked to the commits, files, and lines they touched — so your team and your agents can search past decisions, blame a line back to the prompt that wrote it, and pick up where a conversation left off. Stored as git refs and notes. No SaaS. No separate database.
 
 **[Setup](#setup)** · **[Ingest & explore](#ingest-and-explore)** · [CLI & agent skill](docs/cli/README.md) · [MCP server](docs/mcp/README.md) · [VS Code extension](extensions/vscode/README.md)
 
 ## Why Lineage?
 
-AI-generated code is everywhere. Git shows you what changed. Lineage shows you why.
+Git tells you what changed. It doesn't tell you why — or what your agents already discussed three sprints ago.
 
-It preserves the conversation behind each change and links it to commits, files, and line ranges. Your team gets context that survives `git push`, code review, and onboarding months later.
+Lineage closes that gap. Engineering context travels with the repo: through `git push`, code review, onboarding, and the next agent session. Secrets are redacted before anything is written.
 
 | | |
 |---|---|
-| **In-repo storage** | Lineage data travels with your repository |
-| **Agent-agnostic** | Works with Cursor, Claude Code, and Codex |
-| **Policy-first** | Secrets are redacted before anything is written |
-| **Queryable** | [CLI](docs/cli/README.md), [MCP](docs/mcp/README.md), and [VS Code](extensions/vscode/README.md) |
+| **Agent-first** | Built for coding agents — ingest, search, blame, resume, and fork |
+| **In-repo memory** | Context lives in git refs and notes, not a vendor silo |
+| **Agent-agnostic** | Cursor, Claude Code, and Codex today; more adapters coming |
+| **Queryable everywhere** | [CLI](docs/cli/README.md), [MCP](docs/mcp/README.md), and [VS Code](extensions/vscode/README.md) |
 
 ## Setup
 
@@ -57,7 +69,7 @@ Setup options:
 
 | Requirement | Version | Notes |
 |-------------|---------|-------|
-| [Rust](https://rustlang.org/tools/install) | 1.86+ | Build from source (`rustup` recommended) |
+| [Rust](https://rust-lang.org/tools/install) | 1.86+ | Build from source (`rustup` recommended) |
 | [Git](https://git-scm.com/) | 2.20+ | Notes support required (`refs/notes/*`) |
 | [Node.js](https://nodejs.org/) | 20+ | VS Code extension build during setup |
 | AI agent history | — | Cursor, Claude Code, or Codex (see [agent paths](#where-lineage-finds-agent-history)) |
