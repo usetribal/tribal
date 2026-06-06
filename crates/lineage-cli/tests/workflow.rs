@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use lineage_cli::{commands, hooks_cmd};
+use lineage_cli::{commands, hooks_cmd, skill_cmd};
 use lineage_core::{AgentKind, Conversation, LineageId, LineageRepoConfig, Role, Turn};
 use lineage_git::{open_repo, persist_conversation};
 
@@ -197,4 +197,42 @@ fn cli_ingest_skips_non_code_when_configured() {
     )
     .unwrap();
     commands::ingest(dir.path(), &["cursor".into()], None, false, false).unwrap();
+}
+
+#[test]
+fn init_skill_installs_all_targets_by_default() {
+    let dir = init_repo();
+    skill_cmd::init_skill(dir.path(), &[], false).unwrap();
+    assert!(dir.path().join(".cursor/skills/lineage/SKILL.md").is_file());
+    assert!(dir.path().join(".claude/skills/lineage/SKILL.md").is_file());
+    assert!(dir.path().join(".agents/skills/lineage/SKILL.md").is_file());
+}
+
+#[test]
+fn init_skill_multiselect_targets() {
+    let dir = init_repo();
+    skill_cmd::init_skill(
+        dir.path(),
+        &["cursor".into(), "claude".into()],
+        false,
+    )
+    .unwrap();
+    assert!(dir.path().join(".cursor/skills/lineage/SKILL.md").is_file());
+    assert!(dir.path().join(".claude/skills/lineage/SKILL.md").is_file());
+    assert!(!dir.path().join(".agents/skills/lineage/SKILL.md").exists());
+}
+
+#[test]
+fn init_skill_agents_alias_installs_codex_path() {
+    let dir = init_repo();
+    skill_cmd::init_skill(dir.path(), &["agents".into()], false).unwrap();
+    assert!(dir.path().join(".agents/skills/lineage/SKILL.md").is_file());
+    assert!(!dir.path().join(".cursor/skills/lineage/SKILL.md").exists());
+}
+
+#[test]
+fn init_skill_refuses_without_force_when_present() {
+    let dir = init_repo();
+    skill_cmd::init_skill(dir.path(), &["cursor".into()], false).unwrap();
+    assert!(skill_cmd::init_skill(dir.path(), &["cursor".into()], false).is_err());
 }

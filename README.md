@@ -4,7 +4,7 @@
 
 Lineage connects agent conversations to the code they produce. Sessions from Cursor, Claude Code, and Codex are ingested into your repository as git refs and notes, so you can trace any line back to the prompt that wrote it. No external service. No separate database.
 
-**[Setup](#setup)** · **[Getting started](#getting-started)** · [CLI reference](#cli-reference) · [MCP server](#mcp-server) · [VS Code extension](#vs-code-extension)
+**[Setup](#setup)** · **[Getting started](#getting-started)** · [Agent skill](#agent-skill) · [CLI reference](#cli-reference) · [MCP server](#mcp-server) · [VS Code extension](#vs-code-extension)
 
 ## Why Lineage?
 
@@ -41,6 +41,7 @@ Already cloned? Configure your project or the lineage repo itself:
 | Install CLI | `cargo install` → `git-lineage` on `PATH` as `git lineage` |
 | VS Code extension | `npm install` + compile under `extensions/vscode/` |
 | Repo config | `git lineage init-config` → `refs/lineage/config` + `.gitattributes` |
+| Agent skill | `git lineage init-skill` → `.cursor/`, `.claude/`, `.agents/skills/` (or pick targets) |
 | Health check | `git lineage doctor` |
 | Git hooks | `git lineage install-hook` — pre-commit ingest + post-commit linking |
 
@@ -216,12 +217,35 @@ Transcript files are JSONL. Lineage skips Claude snapshot/progress files and sco
 
 Target a different repository path with `--repo /path/to/repo` on any command.
 
+## Agent skill
+
+Lineage ships an **agent skill** with the CLI so coding agents know how to retrieve engineering context — prior conversations, architecture decisions, and line-level provenance.
+
+Install into your project (also run automatically by `./scripts/setup.sh`):
+
+```bash
+git lineage init-skill                    # all targets (default)
+git lineage init-skill --target cursor  # Cursor only
+git lineage init-skill --target claude --target codex
+git lineage init-skill --target all --force
+```
+
+| Target | Install path | Docs |
+|--------|--------------|------|
+| `cursor` | `.cursor/skills/lineage/SKILL.md` | [Cursor Skills](https://cursor.com/docs/skills) |
+| `claude` | `.claude/skills/lineage/SKILL.md` | [Claude Code](https://code.claude.com/docs/en/claude-directory) |
+| `codex` / `agents` | `.agents/skills/lineage/SKILL.md` | [Codex customization](https://developers.openai.com/codex/concepts/customization) |
+| `all` | All three (default when no `--target` is given) | — |
+
+The same bundled skill ([`crates/lineage-cli/assets/skills/lineage/SKILL.md`](crates/lineage-cli/assets/skills/lineage/SKILL.md)) is copied verbatim to each path — it tells agents to run `git lineage search`, `blame`, and `show --json` before answering *why* code exists. Re-run with `--force` to refresh after upgrading the CLI.
+
 ## CLI reference
 
 | Command | Description |
 |---------|-------------|
 | `git lineage doctor` | Check repo configuration and session integrity |
 | `git lineage init-config` | Write default `refs/lineage/config` (policy, excludes, blob threshold) |
+| `git lineage init-skill [--target cursor\|claude\|codex\|agents\|all] [--force]` | Install bundled agent skill (default: all targets) |
 | `git lineage ingest [--agent cursor\|claude\|codex\|all] [--since DATE] [--incremental]` | Ingest agent history into git refs |
 | `git lineage list [--commit SHA] [--json]` | List sessions, or sessions linked to a commit |
 | `git lineage show <id> [--json]` | Display a session |

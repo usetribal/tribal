@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `git lineage init-skill` — installs bundled agent skill for Cursor (`.cursor/skills/`), Claude Code (`.claude/skills/`), and Codex (`.agents/skills/`); `--target` multiselect or `all` (default); runs in `./scripts/setup.sh`
+
 ### Removed
 
 - `examples/demo-repo` bundled demo; use `tests/fixtures/` for samples and `./scripts/setup.sh` on your own project

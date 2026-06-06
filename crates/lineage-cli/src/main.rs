@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use lineage_cli::{commands, hooks_cmd};
+use lineage_cli::{commands, hooks_cmd, skill_cmd};
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
@@ -27,6 +27,14 @@ enum Commands {
     Doctor,
     /// Write default refs/lineage/config
     InitConfig,
+    /// Install bundled agent skill for lineage context retrieval
+    InitSkill {
+        /// Targets: cursor, claude, codex, agents (same as codex), all (default: all)
+        #[arg(long = "target", value_parser = skill_cmd::parse_skill_target)]
+        target: Vec<String>,
+        #[arg(long)]
+        force: bool,
+    },
     /// Ingest agent sessions into git lineage refs
     Ingest {
         #[arg(long, value_parser = parse_agent)]
@@ -153,6 +161,9 @@ fn main() -> ExitCode {
     let result = match cli.command {
         Commands::Doctor => commands::doctor(&repo_path),
         Commands::InitConfig => commands::init_config(&repo_path),
+        Commands::InitSkill { target, force } => {
+            skill_cmd::init_skill(&repo_path, &target, force)
+        }
         Commands::Ingest {
             agent,
             since,

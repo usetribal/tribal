@@ -11,6 +11,7 @@ Thumbs.db
 node_modules/
 extensions/vscode/out/
 extensions/vscode/dist/
+extensions/vscode/*.vsix
 
 # Lineage local cache (rebuildable)
 .git/lineage/

@@ -102,6 +102,7 @@ fi
 echo "==> Configuring repository: ${REPO_PATH}"
 
 git -C "${REPO_PATH}" lineage init-config
+git -C "${REPO_PATH}" lineage init-skill
 git -C "${REPO_PATH}" lineage doctor
 
 if [[ "${FORCE_HOOKS}" == "true" ]]; then
