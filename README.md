@@ -10,6 +10,10 @@
 
 **Preserve the prompts, decisions, and context behind every commit.**
 
+```bash
+git lineage init
+```
+
 Lineage is agent-first engineering context memory for your codebase. It imports sessions from Cursor, Claude Code, and Codex into your git repo, linked to the commits, files, and lines they touched, so your team and your agents can search past decisions, blame a line back to the prompt that wrote it, and pick up where a conversation left off. Stored as git refs and notes. No SaaS. No separate database.
 
 **[Setup](#setup)** · [Import](docs/import.md) · [Explore](docs/explore.md) · [Share](docs/share.md) · [CLI & agent skill](docs/cli/README.md) · [MCP server](docs/mcp/README.md) · [VS Code extension](extensions/vscode/README.md)
@@ -36,7 +40,6 @@ Lineage closes that gap. Engineering context travels with the repo: through `git
 From your project root, run the interactive wizard:
 
 ```bash
-cd /path/to/your-app
 git lineage init
 ```
 
@@ -49,20 +52,6 @@ git lineage init
 | Git hooks | Pre-commit incremental import and post-commit session linking |
 | Import (optional) | Pull agent history into git refs (`--agent all --incremental`) |
 
-Non-interactive (CI or scripts):
-
-```bash
-git lineage init --yes
-git lineage init --yes --no-import
-git lineage init --yes --target cursor --target claude --force-hooks
-```
-
-New repos need at least one commit before sessions can link to `HEAD`:
-
-```bash
-git add . && git commit -m "initial commit"
-```
-
 ### Install the CLI (first time)
 
 Clone lineage, install `git-lineage`, and build the VS Code extension:
@@ -71,13 +60,7 @@ Clone lineage, install `git-lineage`, and build the VS Code extension:
 git clone https://github.com/lineage-dev/lineage.git && cd lineage && make setup
 ```
 
-Then run `git lineage init` in your project. `make setup` can also target a repo directly:
-
-```bash
-make setup REPO=/path/to/your-app
-```
-
-That installs the CLI and runs `git lineage init --yes` via [`scripts/setup.sh`](scripts/setup.sh). See `make help` for all targets.
+Then in your project root, run `git lineage init`. `make setup` installs the CLI and extension via [`scripts/setup.sh`](scripts/setup.sh).
 
 Ensure `~/.cargo/bin` is on your `PATH`:
 
@@ -85,18 +68,6 @@ Ensure `~/.cargo/bin` is on your `PATH`:
 export PATH="$HOME/.cargo/bin:$PATH"
 git lineage --version
 ```
-
-## Usage
-
-| Guide | Description |
-|-------|-------------|
-| [Import](docs/import.md) | Pull agent sessions into git refs |
-| [Explore](docs/explore.md) | List, show, blame, and search sessions |
-| [Share](docs/share.md) | Push lineage refs with your code |
-| [After a rebase](docs/rebase.md) | Remap lineage after history rewrite |
-| [Agent paths](docs/agent-paths.md) | Where Cursor, Claude, and Codex store transcripts |
-| [Git hooks](docs/git-hooks.md) | Automatic import and commit linking |
-| [How it works](docs/how-it-works.md) | Git refs, notes, and line objects |
 
 ## Troubleshooting
 
@@ -124,28 +95,25 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines, [docs/ARCHITECTURE.md](do
 
 ## Roadmap
 
-### Done
-
-- [x] Rebase-aware lineage remapping (`git lineage remap`)
-- [x] Git LFS backend for large session content (`git lineage lfs push/fetch`)
-- [x] Repo config ref (`refs/lineage/config`) and incremental import
-- [x] Pre-commit and post-commit hooks for automatic import and linking
-- [x] One-command project setup (`make setup`)
-- [x] Bundled agent skill install (`git lineage init-skill`)
-- [x] Session author attribution (`prompted_by_email` / `prompted_by_name`)
-- [x] Multi-signal commit mapping, code-only import default, session delete/purge, and `git lineage gc`
-- [x] Image artifacts (content-addressed LFS) and heuristic architecture summaries
-- [x] LFS HTTP batch API transport (alongside git-lfs CLI and ref fallback)
-- [x] VS Code extension: session timeline, gutter decorations, hover blame, resume/fork (Claude & Codex), `.vsix` packaging
-- [x] MCP server: list, get, blame, search, doctor, materialize, rebuild-index, export, remap
-
-### Planned
-
-- [ ] Additional agent adapters
-- [ ] MCP import, delete, and gc tools
-- [ ] Cursor resume/fork support (pending stable agent CLI)
-- [ ] LLM-generated architecture summaries
-- [ ] Full GitHub-killer SaaS platform
+```text
+[x] Rebase-aware lineage remapping (git lineage remap)
+[x] Git LFS backend for large session content (git lineage lfs push/fetch)
+[x] Repo config ref (refs/lineage/config) and incremental import
+[x] Pre-commit and post-commit hooks for automatic import and linking
+[x] One-command project setup (make setup)
+[x] Bundled agent skill install (git lineage init-skill)
+[x] Session author attribution (prompted_by_email / prompted_by_name)
+[x] Multi-signal commit mapping, code-only import default, session delete/purge, and git lineage gc
+[x] Image artifacts (content-addressed LFS) and heuristic architecture summaries
+[x] LFS HTTP batch API transport (alongside git-lfs CLI and ref fallback)
+[x] VS Code extension: session timeline, gutter decorations, hover blame, resume/fork (Claude & Codex), .vsix packaging
+[x] MCP server: list, get, blame, search, doctor, materialize, rebuild-index, export, remap
+[ ] Additional agent adapters
+[ ] MCP import, delete, and gc tools
+[ ] Cursor resume/fork support (pending stable agent CLI)
+[ ] LLM-generated architecture summaries
+[ ] Full GitHub-killer SaaS platform
+```
 
 ## License
 
