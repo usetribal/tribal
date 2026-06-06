@@ -8,7 +8,7 @@ Expose lineage data to AI tools via the [Model Context Protocol](https://modelco
 
 ```bash
 cargo install --path crates/lineage-mcp
-# or: ./scripts/setup.sh --with-mcp
+# or: make setup WITH_MCP=1
 ```
 
 ## Run

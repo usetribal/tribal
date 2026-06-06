@@ -2,13 +2,13 @@
 
 [← Back to README](../../README.md) · [Setup](../../README.md#setup)
 
-Lineage ships as `git lineage` — a git subcommand for ingesting, querying, and sharing agent provenance in your repository.
+Lineage ships as `git lineage`, a git subcommand for ingesting, querying, and sharing agent provenance in your repository.
 
 ## Install
 
 ```bash
 cargo install --path crates/lineage-cli
-# or: ./scripts/setup.sh
+# or: make setup
 ```
 
 Ensure `~/.cargo/bin` is on your `PATH` so `git lineage` resolves.
@@ -17,9 +17,9 @@ Ensure `~/.cargo/bin` is on your `PATH` so `git lineage` resolves.
 
 ## Agent skill
 
-The CLI bundles an **agent skill** so coding agents know how to retrieve engineering context — prior conversations, architecture decisions, and line-level provenance.
+The CLI bundles an **agent skill** so coding agents know how to retrieve engineering context: prior conversations, architecture decisions, and line-level provenance.
 
-Install into your project (also run automatically by `./scripts/setup.sh`):
+Install into your project (also run automatically by `make setup`):
 
 ```bash
 git lineage init-skill                    # all targets (default)
@@ -33,9 +33,9 @@ git lineage init-skill --target all --force
 | `cursor` | `.cursor/skills/lineage/SKILL.md` | [Cursor Skills](https://cursor.com/docs/skills) |
 | `claude` | `.claude/skills/lineage/SKILL.md` | [Claude Code](https://code.claude.com/docs/en/claude-directory) |
 | `codex` / `agents` | `.agents/skills/lineage/SKILL.md` | [Codex customization](https://developers.openai.com/codex/concepts/customization) |
-| `all` | All three (default when no `--target` is given) | — |
+| `all` | All three (default when no `--target` is given) | - |
 
-The same bundled skill ([`crates/lineage-cli/assets/skills/lineage/SKILL.md`](../../crates/lineage-cli/assets/skills/lineage/SKILL.md)) is copied verbatim to each path — it tells agents to run `git lineage search`, `blame`, and `show --json` before answering *why* code exists. Re-run with `--force` to refresh after upgrading the CLI.
+The same bundled skill ([`crates/lineage-cli/assets/skills/lineage/SKILL.md`](../../crates/lineage-cli/assets/skills/lineage/SKILL.md)) is copied verbatim to each path. It tells agents to run `git lineage search`, `blame`, and `show --json` before answering *why* code exists. Re-run with `--force` to refresh after upgrading the CLI.
 
 ---
 

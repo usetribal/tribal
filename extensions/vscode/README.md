@@ -8,14 +8,14 @@ Git-native AI agent provenance inside VS Code and Cursor.
 
 - **Activity bar panel** listing ingested sessions (agent, model, branch, prompter)
 - **Session timeline webview** with turn-by-turn history, tool calls, and artifacts
-- **Minimal hover blame** — model, prompter, and icon actions (view / fork / resume)
+- **Minimal hover blame**: model, prompter, and icon actions (view / fork / resume)
 - **Gutter decorations** and status bar hint for lines with lineage
-- **Resume / fork** — runs `claude --resume` or `codex resume` in a terminal; fork copies transcript to `.lineage/forks/`
+- **Resume / fork**: runs `claude --resume` or `codex resume` in a terminal; fork copies transcript to `.lineage/forks/`
 - **Search**, doctor, materialize, remap, and git hook commands from the palette
 
 ## Install & build
 
-From the lineage repo (also run by `./scripts/setup.sh`):
+From the lineage repo (also run by `make setup`):
 
 ```bash
 cargo install --path ../../crates/lineage-cli
@@ -36,7 +36,7 @@ The repo includes `.vscode/settings.json`, `launch.json`, and `tasks.json`:
 
 1. Open the **lineage** repo root in VS Code or Cursor
 2. Install recommended extensions when prompted
-3. Press **F5** — select **Lineage Extension** (or **Lineage Extension (other project)** to open a different repo)
+3. Press **F5** and select **Lineage Extension** (or **Lineage Extension (other project)** to open a different repo)
 
 `lineage.cliPath` in `.vscode/settings.json` points at `target/debug/git-lineage` (built during setup).
 
@@ -71,7 +71,7 @@ When hovering a line with lineage data:
 | Icon | Action |
 |------|--------|
 | `$(open-preview)` | View conversation timeline |
-| `$(git-branch)` | Fork — copies transcript to `.lineage/forks/`, then branches in agent |
-| `$(run)` | Resume — opens Claude Code or Codex session in integrated terminal |
+| `$(git-branch)` | Fork: copies transcript to `.lineage/forks/`, then branches in agent |
+| `$(run)` | Resume: opens Claude Code or Codex session in integrated terminal |
 
 Resume and fork are available for **Claude Code** and **Codex** when a vendor session id is stored. Cursor sessions support view only (no resume CLI).
