@@ -110,7 +110,18 @@ if [[ "${IMPORT}" != "true" ]]; then
 fi
 git -C "${REPO_PATH}" lineage init "${INIT_ARGS[@]}"
 
+if [[ "${REPO_PATH}" == "${ROOT}" ]]; then
+  echo "==> Installing contributor git hooks (.githooks: format + lint on commit)"
+  chmod +x "${ROOT}/.githooks/pre-commit" "${ROOT}/.githooks/post-commit"
+  git -C "${ROOT}" config core.hooksPath .githooks
+fi
+
 CLI_PATH="$(command -v git-lineage || echo "${HOME}/.cargo/bin/git-lineage")"
+
+HOOKS_MSG="pre-commit (incremental import), post-commit (link sessions)"
+if [[ "${REPO_PATH}" == "${ROOT}" ]]; then
+  HOOKS_MSG="pre-commit (fmt + clippy + vscode lint), post-commit (link sessions)"
+fi
 
 cat <<EOF
 
@@ -118,7 +129,7 @@ Setup complete.
 
   CLI:          ${CLI_PATH}
   Repository:   ${REPO_PATH}
-  Hooks:        pre-commit (incremental import), post-commit (link sessions)
+  Hooks:        ${HOOKS_MSG}
 
 Next steps:
   cd ${REPO_PATH}

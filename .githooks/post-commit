@@ -1,0 +1,11 @@
+#!/bin/sh
+# Lineage post-commit hook: link recently imported sessions to the new commit.
+set -e
+
+export PATH="${HOME}/.cargo/bin:${PATH}"
+
+if command -v git-lineage >/dev/null 2>&1; then
+  git-lineage hook post-commit
+elif git lineage hook post-commit; then
+  :
+fi

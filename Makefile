@@ -37,8 +37,8 @@ help:
 	@echo "  make md-lint      - markdownlint"
 	@echo "  make typos        - spell check"
 	@echo "  make check        - full local gate (see scripts/check.sh)"
-	@echo "  make pre-commit   - run all pre-commit hooks"
-	@echo "  make install-hooks - install pre-commit framework hooks (contributors)"
+	@echo "  make pre-commit   - run pre-commit framework on all files (optional)"
+	@echo "  make install-hooks - install .githooks/pre-commit (format + lint on commit)"
 
 setup:
 	./scripts/setup.sh $(SETUP_FLAGS) $(REPO)
@@ -83,4 +83,5 @@ pre-commit:
 	pre-commit run --all-files
 
 install-hooks:
-	pre-commit install
+	chmod +x .githooks/pre-commit .githooks/post-commit
+	git config core.hooksPath .githooks

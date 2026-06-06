@@ -18,9 +18,12 @@ cd lineage
 cargo build
 cargo test --workspace
 
-# Optional: pre-commit hooks (rustfmt, clippy, typos, markdownlint)
-pip install pre-commit   # or: brew install pre-commit
+# Git hooks: format + lint on commit (Rust + VS Code extension when staged)
 make install-hooks
+
+# Optional: full pre-commit framework (typos, markdownlint, all files)
+pip install pre-commit   # or: brew install pre-commit
+make pre-commit
 ```
 
 Use `make help` for common tasks (`make check` runs the full local gate).

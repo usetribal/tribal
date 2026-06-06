@@ -76,7 +76,7 @@ If `git lineage install-hook` is active:
 - **pre-commit:** incremental import (`--no-link-head --incremental`)
 - **post-commit:** link recent sessions to the new commit
 
-Manual refresh: `git lineage import --agent all --incremental`
+Manual refresh: `git lineage import --agent all --incremental` (alias: `ingest`)
 
 ## Resume and fork sessions
 
@@ -98,7 +98,7 @@ Cursor has no stable resume CLI; view-only for Cursor sessions.
 
 ## MCP (optional)
 
-If `lineage-mcp` is configured, prefer MCP tools (`lineage_search`, `lineage_get_session`, `lineage_blame_line`, `lineage_remap`, etc.) inside the agent loop.
+If `lineage-mcp` is configured, prefer MCP tools (`lineage_list_sessions`, `lineage_search`, `lineage_get_session`, `lineage_blame_line`, `lineage_remap`, etc.) inside the agent loop.
 
 ## Privacy and side effects
 

@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Contributor pre-commit: format and lint staged Rust / VS Code changes.
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+cd "${root}"
+
+run_rust=false
+run_vscode=false
+
+while IFS= read -r path; do
+  [[ -z "${path}" ]] && continue
+  case "${path}" in
+    *.rs | Cargo.toml | Cargo.lock) run_rust=true ;;
+    extensions/vscode/*) run_vscode=true ;;
+  esac
+done < <(git diff --cached --name-only)
+
+if [[ "${run_rust}" == "false" && "${run_vscode}" == "false" ]]; then
+  exit 0
+fi
+
+if [[ "${run_rust}" == "true" ]]; then
+  echo "pre-commit: cargo fmt"
+  cargo fmt --all
+  git add -u
+
+  echo "pre-commit: clippy"
+  cargo clippy --workspace --all-targets -- -D warnings
+fi
+
+if [[ "${run_vscode}" == "true" ]]; then
+  echo "pre-commit: vscode format + lint"
+  (
+    cd extensions/vscode
+    npm install --silent
+    npm run format
+    npm run lint
+  )
+  git add extensions/vscode/
+fi

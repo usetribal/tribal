@@ -70,10 +70,16 @@ git lineage --version
 ### Development
 
 ```bash
-make setup    # first-time install (see above)
-make check    # full contributor gate (fmt, clippy, test, coverage, extension lint)
-make test     # run workspace tests
-make coverage # line coverage gate (>=80%)
+make setup          # first-time install (see above)
+make check          # full contributor gate (fmt, clippy, test, doc, extension lint)
+make test           # run workspace tests
+make coverage       # line coverage gate (>=80%)
+make vscode-fmt     # format VS Code extension
+make vscode-lint    # lint VS Code extension
+make md-lint        # lint markdown
+make typos          # spell check
+make install-hooks  # git hooks: fmt + lint on commit
+make pre-commit     # optional full hook suite (typos, markdownlint; needs pre-commit)
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for crate layout, and [AGENTS.md](AGENTS.md) for AI-assisted development.
