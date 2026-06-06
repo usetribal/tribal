@@ -1,8 +1,8 @@
 <p align="center">
   <img
-    src="assets/lineage-banner.gif"
+    src="assets/lineage-banner.png"
     alt="Lineage — Preserve the prompts, decisions, and context behind every commit"
-    width="1400"
+    width="1024"
   />
 </p>
 
