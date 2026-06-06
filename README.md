@@ -8,30 +8,27 @@
 
 # Lineage
 
+[![Rust](https://img.shields.io/badge/rust-1.86%2B-orange?logo=rust&logoColor=white)](https://rust-lang.org/tools/install)
+[![Git](https://img.shields.io/badge/git-2.20%2B-blue?logo=git&logoColor=white)](https://git-scm.com/)
+[![Node.js](https://img.shields.io/badge/node.js-20%2B-green?logo=node.js&logoColor=white)](https://nodejs.org/)
+
 **Preserve the prompts, decisions, and context behind every commit.**
 
 ```bash
 git lineage init
 ```
 
-Lineage is agent-first engineering context memory for your codebase. It imports sessions from Cursor, Claude Code, and Codex into your git repo, linked to the commits, files, and lines they touched, so your team and your agents can search past decisions, blame a line back to the prompt that wrote it, and pick up where a conversation left off. Stored as git refs and notes. No SaaS. No separate database.
-
-**[Setup](#setup)** · [Import](docs/import.md) · [Explore](docs/explore.md) · [Share](docs/share.md) · [CLI & agent skill](docs/cli/README.md) · [MCP server](docs/mcp/README.md) · [VS Code extension](extensions/vscode/README.md)
-
-[![Rust](https://img.shields.io/badge/rust-1.86%2B-orange?logo=rust&logoColor=white)](https://rust-lang.org/tools/install)
-[![Git](https://img.shields.io/badge/git-2.20%2B-blue?logo=git&logoColor=white)](https://git-scm.com/)
-[![Node.js](https://img.shields.io/badge/node.js-20%2B-green?logo=node.js&logoColor=white)](https://nodejs.org/)
+Lineage is agent-first engineering context memory for your codebase. It imports sessions from Cursor, Claude Code, and Codex into your git repo, linked to the commits, files, and lines they touched, so your team and your agents can search past decisions, blame a line back to the prompt that wrote it, and pick up where a conversation left off. Stored as git refs and notes.
 
 ## Why Lineage?
 
 Git tells you what changed. It doesn't tell you why, or what your agents already discussed three sprints ago.
 
-Lineage closes that gap. Engineering context travels with the repo: through `git push`, code review, onboarding, and the next agent session. Secrets are redacted before anything is written.
+Lineage closes that gap with **local, in-repo memory**: agent context lives in your git repository as refs and notes, not in a vendor cloud. It travels with `git push`, code review, onboarding, and the next agent session. Secrets are redacted before anything is written.
 
 | | |
 |---|---|
 | **Agent-first** | Built for coding agents: import, search, blame, resume, and fork |
-| **In-repo memory** | Context lives in git refs and notes, not a vendor silo |
 | **Agent-agnostic** | Cursor, Claude Code, and Codex today; more adapters coming |
 | **Queryable everywhere** | [CLI](docs/cli/README.md), [MCP](docs/mcp/README.md), and [VS Code](extensions/vscode/README.md) |
 
@@ -57,10 +54,11 @@ git lineage init
 Clone lineage, install `git-lineage`, and build the VS Code extension:
 
 ```bash
-git clone https://github.com/lineage-dev/lineage.git && cd lineage && make setup
+git clone https://github.com/lineage-dev/lineage.git
+cd lineage
+make setup
+git lineage init
 ```
-
-Then in your project root, run `git lineage init`. `make setup` installs the CLI and extension via [`scripts/setup.sh`](scripts/setup.sh).
 
 Ensure `~/.cargo/bin` is on your `PATH`:
 
@@ -68,6 +66,17 @@ Ensure `~/.cargo/bin` is on your `PATH`:
 export PATH="$HOME/.cargo/bin:$PATH"
 git lineage --version
 ```
+
+### Development
+
+```bash
+make setup    # first-time install (see above)
+make check    # full contributor gate (fmt, clippy, test, coverage, extension lint)
+make test     # run workspace tests
+make coverage # line coverage gate (>=80%)
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for crate layout, and [AGENTS.md](AGENTS.md) for AI-assisted development.
 
 ## Troubleshooting
 
@@ -81,17 +90,6 @@ git lineage --version
 | Sessions contain secrets | Run `git lineage init-config`; use `export --redact` before sharing; review `refs/lineage/config` excludes |
 
 Target a different repository path with `--repo /path/to/repo` on any command.
-
-## Development
-
-```bash
-make setup    # first-time install (see Setup above)
-make check    # full contributor gate (fmt, clippy, test, coverage, extension lint)
-make test
-make coverage
-```
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for crate layout, and [AGENTS.md](AGENTS.md) for AI-assisted development.
 
 ## Roadmap
 
