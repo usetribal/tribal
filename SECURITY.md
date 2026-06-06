@@ -37,15 +37,15 @@ Lineage handles agent conversation data that may contain secrets. Built-in mitig
 ### Recommendations for users
 
 - Run `git lineage export --redact` before sharing lineage data
-- Review ingested sessions before pushing `refs/lineage/*` to a remote
-- Do not ingest sessions from untrusted sources without reviewing policy rules
+- Review imported sessions before pushing `refs/lineage/*` to a remote
+- Do not import sessions from untrusted sources without reviewing policy rules
 - Keep `git-lineage` and `lineage-mcp` updated
 
 ## Scope
 
 The following are in scope for security reports:
 
-- Secret leakage through ingest, export, or MCP tools
+- Secret leakage through import, export, or MCP tools
 - Path traversal or arbitrary file read via adapters
 - Injection in search queries or MCP tool arguments
 - Unsafe deserialization of conversation blobs

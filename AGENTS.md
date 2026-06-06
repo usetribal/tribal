@@ -29,7 +29,7 @@ make coverage                # 80% line coverage
 
 - [docs/README.md](docs/README.md) — documentation index
 - [README.md](README.md): setup and troubleshooting
-- [docs/ingest.md](docs/ingest.md), [docs/explore.md](docs/explore.md), [docs/share.md](docs/share.md): day-to-day usage
+- [docs/import.md](docs/import.md), [docs/explore.md](docs/explore.md), [docs/share.md](docs/share.md): day-to-day usage
 - [docs/cli/README.md](docs/cli/README.md) — CLI and agent skill
 - [docs/mcp/README.md](docs/mcp/README.md) — MCP server
 - [extensions/vscode/README.md](extensions/vscode/README.md) — VS Code extension

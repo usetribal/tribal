@@ -8,7 +8,7 @@ mod doctor;
 mod hooks;
 mod hydrate;
 mod identity;
-mod ingest_state;
+mod import_state;
 mod line_resolve;
 pub mod lfs_batch;
 mod lfs_ops;
@@ -35,7 +35,7 @@ pub use hydrate::{
     hydrate_conversation, hydrate_media_artifacts, indexable_body, HydrateReport,
 };
 pub use lfs_worktree::{ensure_gitattributes, LINEAGE_MEDIA_DIR};
-pub use ingest_state::{read_last_ingest, write_last_ingest, LAST_INGEST_REF};
+pub use import_state::{read_last_import, write_last_import, LAST_IMPORT_REF};
 pub use doctor::{run_doctor, DoctorReport};
 pub use line_resolve::materialize_line_objects;
 pub use lfs_ops::{lfs_fetch, lfs_push, lfs_status, LfsStatusReport, LfsTransferReport};
@@ -53,5 +53,5 @@ pub use refs::{
 pub use repo::{find_repo, open_repo, LineageRepo};
 pub use remap::{remap_orphaned_commits, RemapReport};
 pub use write::{
-    link_session_to_commit, materialize_session_at_commit, persist_conversation, persist_ingest,
+    link_session_to_commit, materialize_session_at_commit, persist_conversation, persist_import,
 };

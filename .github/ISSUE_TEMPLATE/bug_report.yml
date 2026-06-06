@@ -23,7 +23,7 @@ body:
       description: Commands and actions that trigger the issue.
       placeholder: |
         1. cd my-repo
-        2. git lineage ingest --agent cursor
+        2. git lineage import --agent cursor
         3. git lineage blame src/main.rs:10
     validations:
       required: true

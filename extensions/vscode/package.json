@@ -13,8 +13,8 @@
   "contributes": {
     "commands": [
       {
-        "command": "lineage.ingest",
-        "title": "Lineage: Ingest Sessions",
+        "command": "lineage.import",
+        "title": "Lineage: Import Sessions",
         "icon": "$(cloud-download)"
       },
       {
@@ -101,7 +101,7 @@
           "group": "navigation"
         },
         {
-          "command": "lineage.ingest",
+          "command": "lineage.import",
           "when": "view == lineageSessions",
           "group": "navigation"
         }
@@ -136,7 +136,7 @@
         "lineage.autoRefresh": {
           "type": "boolean",
           "default": true,
-          "description": "Refresh session list after ingest"
+          "description": "Refresh session list after import"
         },
         "lineage.cliPath": {
           "type": "string",

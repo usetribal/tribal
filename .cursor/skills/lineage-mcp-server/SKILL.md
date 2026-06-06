@@ -36,7 +36,7 @@ Rebuild search index in tests before search assertions (index is rebuildable fro
 
 ## Dependencies
 
-MCP server reads via `lineage-git` + `lineage-search` — do not bypass policy/redaction paths used by CLI ingest.
+MCP server reads via `lineage-git` + `lineage-search` — do not bypass policy/redaction paths used by CLI import.
 
 ## Verify
 

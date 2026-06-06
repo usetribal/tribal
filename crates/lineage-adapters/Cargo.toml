@@ -1,6 +1,6 @@
 [package]
 name = "lineage-adapters"
-description = "Cursor, Claude, and Codex adapters for lineage ingestion"
+description = "Cursor, Claude, and Codex adapters for lineage import"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -109,7 +109,7 @@ pub async fn handle_request(repo_path: &Path, method: &str, params: &Value) -> R
         "notifications/initialized" => Ok(json!({})),
         "tools/list" => Ok(json!({
             "tools": [
-                tool_schema("lineage_list_sessions", "List ingested sessions", json!({}), &[]),
+                tool_schema("lineage_list_sessions", "List imported sessions", json!({}), &[]),
                 tool_schema("lineage_get_session", "Get session by ID", json!({
                     "session_id": { "type": "string" },
                     "redact": { "type": "boolean" }

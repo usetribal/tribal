@@ -12,7 +12,7 @@ pub fn link_all_sessions_to_head(repo: &Repository) -> Result<usize, LineageErro
 }
 
 pub fn link_recent_sessions_to_head(repo: &Repository) -> Result<usize, LineageError> {
-    let state = crate::ingest_state::read_last_ingest(repo)?;
+    let state = crate::import_state::read_last_import(repo)?;
     if state.session_ids.is_empty() {
         return link_all_sessions_to_head(repo);
     }

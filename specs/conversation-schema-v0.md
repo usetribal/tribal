@@ -23,11 +23,11 @@ Stable contract for agent session data stored in lineage.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `schema_version` | string | yes | Always `conversation-v0` |
-| `id` | string | yes | ULID, stable across re-ingest |
+| `id` | string | yes | ULID, stable across re-import |
 | `agent` | string | yes | `cursor`, `claude`, or `codex` |
 | `started_at` | ISO8601 | yes | Session start |
 | `ended_at` | ISO8601 | no | Session end |
-| `workspace_root` | string | yes | Absolute path at ingest time |
+| `workspace_root` | string | yes | Absolute path at import time |
 | `parent_session_id` | string | no | Forked session |
 | `private` | bool | no | Excluded from export by default |
 | `turns` | Turn[] | yes | Ordered conversation turns |
@@ -36,7 +36,7 @@ Stable contract for agent session data stored in lineage.
 
 ### Author metadata
 
-Set at first ingest from the repository git config (`user.email`, `user.name`). Preserved on re-ingest so the original prompter is kept when sessions are refreshed by someone else.
+Set at first import from the repository git config (`user.email`, `user.name`). Preserved on re-import so the original prompter is kept when sessions are refreshed by someone else.
 
 | Key | Description |
 |-----|-------------|
@@ -91,4 +91,4 @@ File edits and diffs are referenced by hash, not always inlined:
 
 ## ID stability
 
-Session IDs are derived from `(agent, source_path, started_at)` at first ingest. Re-ingest updates content but preserves ID when the source key matches.
+Session IDs are derived from `(agent, source_path, started_at)` at first import. Re-import updates content but preserves ID when the source key matches.

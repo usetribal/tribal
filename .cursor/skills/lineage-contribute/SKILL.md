@@ -34,7 +34,7 @@ Clippy must pass with `--all-targets` and `-D warnings`.
 | `crates/lineage-core` | Domain types — see `schema-change` skill |
 | `crates/lineage-policy` | Redaction, excludes, private sessions |
 | `crates/lineage-git` | Git refs, notes, LFS, hooks, blame, GC |
-| `crates/lineage-agent` | `AgentSource`, `SessionReader`, ingest pipeline |
+| `crates/lineage-agent` | `AgentSource`, `SessionReader`, import pipeline |
 | `crates/lineage-adapters` | Vendor adapters — see `add-agent-adapter` skill |
 | `crates/lineage-store` | Blob/filesystem storage |
 | `crates/lineage-search` | Rebuildable SQLite FTS index |

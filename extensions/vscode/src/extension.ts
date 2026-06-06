@@ -110,16 +110,16 @@ export function activate(context: vscode.ExtensionContext): void {
             })
         ),
         vscode.commands.registerCommand(
-            "lineage.ingest",
+            "lineage.import",
             withClient(async () => {
                 try {
                     await vscode.window.withProgress(
                         {
                             location: vscode.ProgressLocation.Notification,
-                            title: "Lineage ingest",
+                            title: "Lineage import",
                             cancellable: false,
                         },
-                        async () => client!.ingest()
+                        async () => client!.importSessions()
                     );
                     client!.clearSessionCache();
                     if (
@@ -129,9 +129,9 @@ export function activate(context: vscode.ExtensionContext): void {
                     ) {
                         await sessionsProvider?.load();
                     }
-                    vscode.window.showInformationMessage("Lineage sessions ingested.");
+                    vscode.window.showInformationMessage("Lineage sessions imported.");
                 } catch (e) {
-                    vscode.window.showErrorMessage(`Lineage ingest failed: ${e}`);
+                    vscode.window.showErrorMessage(`Lineage import failed: ${e}`);
                 }
             })
         ),

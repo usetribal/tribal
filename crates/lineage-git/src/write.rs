@@ -9,7 +9,7 @@ use crate::line_resolve::materialize_line_objects;
 use crate::patch_id::patch_id_for_commit;
 use crate::refs::{read_conversation_stored, read_manifest, write_conversation, write_line_object, write_manifest};
 
-pub struct IngestWriteResult {
+pub struct ImportWriteResult {
     pub session_id: LineageId,
     pub blob_oid: String,
     pub line_objects_written: usize,
@@ -27,7 +27,7 @@ fn strip_ephemeral_fields(conversation: &mut Conversation) {
 pub fn persist_conversation(
     repo: &Repository,
     conversation: &Conversation,
-) -> Result<IngestWriteResult, LineageError> {
+) -> Result<ImportWriteResult, LineageError> {
     let mut conversation = conversation.clone();
     strip_ephemeral_fields(&mut conversation);
     externalize_media_artifacts(repo, &mut conversation)?;
@@ -63,7 +63,7 @@ pub fn persist_conversation(
         commits_linked += 1;
     }
 
-    Ok(IngestWriteResult {
+    Ok(ImportWriteResult {
         session_id: conversation.id.clone(),
         blob_oid,
         line_objects_written,
@@ -71,10 +71,10 @@ pub fn persist_conversation(
     })
 }
 
-pub fn persist_ingest(
+pub fn persist_import(
     repo: &Repository,
     conversations: &[Conversation],
-) -> Result<Vec<IngestWriteResult>, LineageError> {
+) -> Result<Vec<ImportWriteResult>, LineageError> {
     conversations
         .iter()
         .map(|c| persist_conversation(repo, c))

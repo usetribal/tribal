@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export PATH="${HOME}/.cargo/bin:${PATH}"
 
 WITH_MCP=false
-INGEST=false
+IMPORT=false
 FORCE_HOOKS=false
 REPO_PATH=""
 
@@ -17,7 +17,7 @@ Usage:
   ./scripts/setup.sh [options] [REPO_PATH]
 
 Options:
-  --ingest       Run initial ingest after setup
+  --import       Run initial import after setup
   --with-mcp     Also install the lineage-mcp server
   --force-hooks  Overwrite existing pre-commit/post-commit hooks
   -h, --help     Show this help
@@ -25,14 +25,14 @@ Options:
 Examples:
   ./scripts/setup.sh                          # configure lineage repo root
   ./scripts/setup.sh /path/to/your-project    # configure another repo
-  ./scripts/setup.sh --ingest /path/to/your-project
+  ./scripts/setup.sh --import /path/to/your-project
 EOF
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --with-mcp) WITH_MCP=true; shift ;;
-    --ingest) INGEST=true; shift ;;
+    --import) IMPORT=true; shift ;;
     --force-hooks) FORCE_HOOKS=true; shift ;;
     -h | --help)
       usage
@@ -101,20 +101,14 @@ fi
 
 echo "==> Configuring repository: ${REPO_PATH}"
 
-git -C "${REPO_PATH}" lineage init-config
-git -C "${REPO_PATH}" lineage init-skill
-git -C "${REPO_PATH}" lineage doctor
-
+INIT_ARGS=(--yes)
 if [[ "${FORCE_HOOKS}" == "true" ]]; then
-  git -C "${REPO_PATH}" lineage install-hook --force
-else
-  git -C "${REPO_PATH}" lineage install-hook
+  INIT_ARGS+=(--force-hooks)
 fi
-
-if [[ "${INGEST}" == "true" ]]; then
-  echo "==> Running initial ingest"
-  git -C "${REPO_PATH}" lineage ingest --agent all --incremental || true
+if [[ "${IMPORT}" != "true" ]]; then
+  INIT_ARGS+=(--no-import)
 fi
+git -C "${REPO_PATH}" lineage init "${INIT_ARGS[@]}"
 
 CLI_PATH="$(command -v git-lineage || echo "${HOME}/.cargo/bin/git-lineage")"
 
@@ -124,11 +118,11 @@ Setup complete.
 
   CLI:          ${CLI_PATH}
   Repository:   ${REPO_PATH}
-  Hooks:        pre-commit (incremental ingest), post-commit (link sessions)
+  Hooks:        pre-commit (incremental import), post-commit (link sessions)
 
 Next steps:
   cd ${REPO_PATH}
-  git lineage ingest --agent all
+  git lineage import --agent all
   git lineage list
   git lineage blame <file>:<line>
 

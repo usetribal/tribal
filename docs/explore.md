@@ -1,9 +1,9 @@
 # Explore your lineage
 
-[← Back to README](../README.md) · [Ingest](ingest.md) · [Share](share.md)
+[← Back to README](../README.md) · [Import](import.md) · [Share](share.md)
 
 ```bash
-# List ingested sessions (human-readable)
+# List imported sessions (human-readable)
 git lineage list
 
 # JSON for scripts and tooling

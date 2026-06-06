@@ -23,7 +23,7 @@ The server reads lineage refs from `LINEAGE_REPO` (defaults to the current worki
 
 | Tool | Description |
 |------|-------------|
-| `lineage_list_sessions` | List all ingested sessions |
+| `lineage_list_sessions` | List all imported sessions |
 | `lineage_get_session` | Fetch a session by ID (redacted by default) |
 | `lineage_blame_line` | Get lineage for a file and line number |
 | `lineage_search` | Full-text search over sessions |

@@ -48,7 +48,7 @@ let repo = open_repo(dir.path())?;
 
 Existing suites to extend (not duplicate):
 
-- `full_workflow.rs` — end-to-end ingest/persist/blame
+- `full_workflow.rs` — end-to-end import/persist/blame
 - `hooks_integration.rs` — pre/post commit behavior
 - `remap_integration.rs` — rebase recovery
 - `blame_integration.rs`, `delete_integration.rs`, `lfs_*_integration.rs`

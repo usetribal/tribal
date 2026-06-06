@@ -4,7 +4,7 @@ description: >-
   Adds or modifies agent source adapters in lineage-adapters (Cursor, Claude,
   Codex, or new agents). Covers AgentSource/SessionReader traits, feature flags,
   fixture golden tests, and transcript path discovery. Use when adding agent
-  support, changing ingest discovery, or mapping vendor JSONL to Conversation.
+  support, changing import discovery, or mapping vendor JSONL to Conversation.
 ---
 
 # Add agent adapter
@@ -66,5 +66,5 @@ Enable in `lineage-cli` / workspace consumers if the adapter ships by default.
 ## Do not
 
 - Persist raw vendor files — normalize to `Conversation` first
-- Skip policy pass — ingest pipeline applies `lineage-policy` after read
+- Skip policy pass — import pipeline applies `lineage-policy` after read
 - Commit real agent transcripts with secrets — use sanitized fixtures only

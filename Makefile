@@ -1,14 +1,14 @@
 .PHONY: help setup fmt clippy test coverage doc check msrv vscode vscode-lint vscode-fmt md-lint typos pre-commit install-hooks
 
-# Optional setup flags (e.g. make setup REPO=/path/to/app INGEST=1 WITH_MCP=1 FORCE_HOOKS=1)
+# Optional setup flags (e.g. make setup REPO=/path/to/app IMPORT=1 WITH_MCP=1 FORCE_HOOKS=1)
 REPO ?=
-INGEST ?=
+IMPORT ?=
 WITH_MCP ?=
 FORCE_HOOKS ?=
 
 SETUP_FLAGS :=
-ifdef INGEST
-SETUP_FLAGS += --ingest
+ifdef IMPORT
+SETUP_FLAGS += --import
 endif
 ifdef WITH_MCP
 SETUP_FLAGS += --with-mcp
@@ -19,9 +19,9 @@ endif
 
 help:
 	@echo "Lineage targets:"
-	@echo "  make setup        - one-command local dev setup (CLI, extension, config, hooks)"
+	@echo "  make setup        - one-command local dev setup (CLI, extension, git lineage init)"
 	@echo "    REPO=path        target git repo (default: lineage repo root)"
-	@echo "    INGEST=1         run initial ingest after setup"
+	@echo "    IMPORT=1         run initial import after setup"
 	@echo "    WITH_MCP=1       also install lineage-mcp"
 	@echo "    FORCE_HOOKS=1    overwrite existing git hooks"
 	@echo ""

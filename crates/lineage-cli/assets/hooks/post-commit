@@ -1,20 +1,11 @@
 #!/bin/sh
-# Lineage post-commit hook: link recently ingested sessions to the new commit.
-# Installed by: git lineage install-hook
-
+# Lineage post-commit hook: link recently imported sessions to the new commit.
 set -e
 
-run_post_commit() {
-  if command -v git-lineage >/dev/null 2>&1; then
-    git-lineage hook post-commit && return 0
-  fi
-  if git lineage hook post-commit; then
-    return 0
-  fi
-  return 1
-}
+export PATH="${HOME}/.cargo/bin:${PATH}"
 
-if ! run_post_commit; then
-  echo "lineage: post-commit link failed (commit already succeeded)" >&2
+if command -v git-lineage >/dev/null 2>&1; then
+  git-lineage hook post-commit
+elif git lineage hook post-commit; then
+  :
 fi
-exit 0

@@ -1,6 +1,6 @@
 # Where Lineage finds agent history
 
-[← Back to README](../README.md) · [Ingest](ingest.md)
+[← Back to README](../README.md) · [Import](import.md)
 
 Lineage scopes discovery to your **repository working directory**. It checks project-local paths first, then global agent config directories.
 

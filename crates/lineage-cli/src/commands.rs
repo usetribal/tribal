@@ -5,14 +5,14 @@ use chrono::{DateTime, Utc};
 use lineage_adapters::all_adapters;
 use lineage_core::{
     conversation_modified_code, generate_architecture_summary, AgentKind, CommitMappingMode,
-    LastIngestState, LineageId, LineageRepoConfig,
+    LastImportState, LineageId, LineageRepoConfig,
 };
 use lineage_git::{
     best_commit_for_conversation, blame_with_lineage, delete_session, ensure_gitattributes,
     hydrate_media_artifacts, link_session_to_commit, list_session_ids, lfs_fetch, lfs_push,
-    lfs_status, map_commit_to_sessions, materialize_session_at_commit, open_repo, persist_ingest,
+    lfs_status, map_commit_to_sessions, materialize_session_at_commit, open_repo, persist_import,
     purge_orphans, read_conversation, read_repo_config, remap_orphaned_commits, run_doctor,
-    stamp_prompted_by, write_last_ingest, write_repo_config, PROMPTED_BY_EMAIL, PROMPTED_BY_NAME,
+    stamp_prompted_by, write_last_import, write_repo_config, PROMPTED_BY_EMAIL, PROMPTED_BY_NAME,
 };
 use lineage_policy::{apply_policy, is_private_session, policy_from_repo_config, prepare_for_export, PolicyConfig};
 use lineage_search::{LineageIndex, SearchHit};
@@ -54,16 +54,26 @@ pub fn doctor(repo_path: &Path) -> Result<()> {
 }
 
 pub fn init_config(repo_path: &Path) -> Result<()> {
+    init_config_impl(repo_path, true)
+}
+
+pub(crate) fn init_config_quiet(repo_path: &Path) -> Result<()> {
+    init_config_impl(repo_path, false)
+}
+
+fn init_config_impl(repo_path: &Path, verbose: bool) -> Result<()> {
     let repo = open_repo(repo_path)?;
     let config = LineageRepoConfig::default();
     write_repo_config(repo.inner(), &config)?;
     ensure_gitattributes(repo.inner())?;
-    println!("wrote default config to refs/lineage/config");
-    println!("ensured .gitattributes for .lineage/media/** LFS pointers");
+    if verbose {
+        println!("wrote default config to refs/lineage/config");
+        println!("ensured .gitattributes for .lineage/media/** LFS pointers");
+    }
     Ok(())
 }
 
-pub fn ingest(
+pub fn import(
     repo_path: &Path,
     agents: &[String],
     since: Option<&str>,
@@ -135,7 +145,7 @@ pub fn ingest(
                     if is_private_session(&source, &repo_config) {
                         conv.private = true;
                     }
-                    if repo_config.ingest_only_code_sessions && !conversation_modified_code(&conv) {
+                    if repo_config.import_only_code_sessions && !conversation_modified_code(&conv) {
                         skipped += 1;
                         continue;
                     }
@@ -195,7 +205,7 @@ pub fn ingest(
         }
     }
 
-    let results = persist_ingest(inner, &conversations)?;
+    let results = persist_import(inner, &conversations)?;
     let index = LineageIndex::open(lineage_repo.git_dir().join("lineage").join("index.db"))?;
     for r in &results {
         if let Some(conv) = read_conversation(inner, &r.session_id)? {
@@ -203,12 +213,12 @@ pub fn ingest(
         }
     }
 
-    let ingested_ids: Vec<LineageId> = conversations.iter().map(|c| c.id.clone()).collect();
-    write_last_ingest(inner, &LastIngestState::new(ingested_ids))?;
+    let imported_ids: Vec<LineageId> = conversations.iter().map(|c| c.id.clone()).collect();
+    write_last_import(inner, &LastImportState::new(imported_ids))?;
 
     let line_objects: usize = results.iter().map(|r| r.line_objects_written).sum();
     println!(
-        "ingested {} session(s), {} line object(s), {} skipped, {} error(s)",
+        "imported {} session(s), {} line object(s), {} skipped, {} error(s)",
         results.len(),
         line_objects,
         skipped,

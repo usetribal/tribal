@@ -6,7 +6,7 @@ use lineage_core::{
 use lineage_git::{
     blame_with_lineage, ensure_gitattributes, hydrate_conversation, hydrate_media_artifacts,
     lfs_status, purge_orphans, read_note_for_commit, run_doctor, open_repo, persist_conversation,
-    remap_orphaned_commits, write_last_ingest, read_last_ingest, write_note_for_commit,
+    remap_orphaned_commits, write_last_import, read_last_import, write_note_for_commit,
     LINEAGE_MEDIA_DIR,
 };
 
@@ -83,8 +83,8 @@ fn full_workflow_exercises_git_modules() {
     });
     persist_conversation(inner, &conv).unwrap();
 
-    write_last_ingest(inner, &lineage_core::LastIngestState::new(vec![conv.id.clone()])).unwrap();
-    assert!(read_last_ingest(inner).unwrap().ingested_at.is_some());
+    write_last_import(inner, &lineage_core::LastImportState::new(vec![conv.id.clone()])).unwrap();
+    assert!(read_last_import(inner).unwrap().imported_at.is_some());
 
     let doctor = run_doctor(&repo).unwrap();
     assert!(doctor.is_git_repo);

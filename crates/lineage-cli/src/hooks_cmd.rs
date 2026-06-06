@@ -12,6 +12,14 @@ const PRE_COMMIT_HOOK: &str = include_str!("../assets/hooks/pre-commit");
 const POST_COMMIT_HOOK: &str = include_str!("../assets/hooks/post-commit");
 
 pub fn install_hook(repo_path: &Path, force: bool) -> Result<()> {
+    install_hook_impl(repo_path, force, true)
+}
+
+pub(crate) fn install_hook_quiet(repo_path: &Path, force: bool) -> Result<()> {
+    install_hook_impl(repo_path, force, false)
+}
+
+fn install_hook_impl(repo_path: &Path, force: bool, verbose: bool) -> Result<()> {
     let repo = open_repo(repo_path)?;
     let hooks_dir = repo.git_dir().join("hooks");
     fs::create_dir_all(&hooks_dir)?;
@@ -19,9 +27,11 @@ pub fn install_hook(repo_path: &Path, force: bool) -> Result<()> {
     install_one(&hooks_dir.join("pre-commit"), PRE_COMMIT_HOOK, force)?;
     install_one(&hooks_dir.join("post-commit"), POST_COMMIT_HOOK, force)?;
 
-    println!("installed lineage hooks:");
-    println!("  pre-commit  (ingest agent sessions)");
-    println!("  post-commit (link sessions to new commit)");
+    if verbose {
+        println!("installed lineage hooks:");
+        println!("  pre-commit  (import agent sessions)");
+        println!("  post-commit (link sessions to new commit)");
+    }
     Ok(())
 }
 

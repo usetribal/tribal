@@ -2,7 +2,7 @@
 
 [← Back to README](../../README.md) · [Setup](../../README.md#setup)
 
-Lineage ships as `git lineage`, a git subcommand for ingesting, querying, and sharing agent provenance in your repository.
+Lineage ships as `git lineage`, a git subcommand for importing, querying, and sharing agent provenance in your repository.
 
 ## Install
 
@@ -15,17 +15,23 @@ Ensure `~/.cargo/bin` is on your `PATH` so `git lineage` resolves.
 
 ---
 
+## Project setup
+
+```bash
+git lineage init              # interactive: config, skill, hooks, optional import
+git lineage init --yes        # non-interactive defaults
+```
+
 ## Agent skill
 
-The CLI bundles an **agent skill** so coding agents know how to retrieve engineering context: prior conversations, architecture decisions, and line-level provenance.
-
-Install into your project (also run automatically by `make setup`):
+The CLI bundles an **agent skill** so coding agents know how to use lineage features (search, blame, share, rebase, resume/fork). Installed during `git lineage init`, or manually:
 
 ```bash
 git lineage init-skill                    # all targets (default)
 git lineage init-skill --target cursor    # Cursor only
 git lineage init-skill --target claude --target codex
 git lineage init-skill --target all --force
+git lineage init-skill --target none      # skip (init wizard: option 0)
 ```
 
 | Target | Install path | Docs |
@@ -35,7 +41,7 @@ git lineage init-skill --target all --force
 | `codex` / `agents` | `.agents/skills/lineage/SKILL.md` | [Codex customization](https://developers.openai.com/codex/concepts/customization) |
 | `all` | All three (default when no `--target` is given) | - |
 
-The same bundled skill ([`crates/lineage-cli/assets/skills/lineage/SKILL.md`](../../crates/lineage-cli/assets/skills/lineage/SKILL.md)) is copied verbatim to each path. It tells agents to run `git lineage search`, `blame`, and `show --json` before answering *why* code exists. Re-run with `--force` to refresh after upgrading the CLI.
+The bundled skill ([`crates/lineage-cli/assets/skills/lineage/SKILL.md`](../../crates/lineage-cli/assets/skills/lineage/SKILL.md)) is copied verbatim to each path. It focuses on querying and operating lineage, not setup. Re-run with `--force` to refresh after upgrading the CLI.
 
 ---
 
@@ -44,13 +50,14 @@ The same bundled skill ([`crates/lineage-cli/assets/skills/lineage/SKILL.md`](..
 | Command | Description |
 |---------|-------------|
 | `git lineage doctor` | Check repo configuration and session integrity |
+| `git lineage init [--yes] [--target …] [--no-skill] [--no-import] [--force-hooks]` | Interactive project setup wizard |
 | `git lineage init-config` | Write default `refs/lineage/config` (policy, excludes, blob threshold) |
 | `git lineage init-skill [--target cursor\|claude\|codex\|agents\|all] [--force]` | Install bundled agent skill (default: all targets) |
-| `git lineage ingest [--agent cursor\|claude\|codex\|all] [--since DATE] [--incremental]` | Ingest agent history into git refs |
+| `git lineage import [--agent cursor\|claude\|codex\|all] [--since DATE] [--incremental]` | Import agent history into git refs |
 | `git lineage list [--commit SHA] [--json]` | List sessions, or sessions linked to a commit |
 | `git lineage show <id> [--json] [--hydrate-images]` | Display a session |
 | `git lineage blame <path>[:line] [--json]` | Show which agent turn touched a line |
-| `git lineage search <query>` | Full-text search over ingested sessions (auto-rebuilds stale index) |
+| `git lineage search <query>` | Full-text search over imported sessions (auto-rebuilds stale index) |
 | `git lineage rebuild-index` | Rebuild the local search index from git refs |
 | `git lineage export [--redact] [--format json\|jsonl]` | Export sessions |
 | `git lineage link <session-id> <commit-sha>` | Manually link a session to a commit (materializes line objects) |
@@ -68,4 +75,4 @@ Use `--repo <path>` to target a repository other than the current directory.
 
 ### Session author metadata
 
-At ingest, Lineage stamps `prompted_by_email` and `prompted_by_name` from the repository git config (`user.email`, `user.name`). Values are preserved on re-ingest so team members can see who had each agent conversation. See [conversation-schema-v0](../../specs/conversation-schema-v0.md).
+At import, Lineage stamps `prompted_by_email` and `prompted_by_name` from the repository git config (`user.email`, `user.name`). Values are preserved on re-import so team members can see who had each agent conversation. See [conversation-schema-v0](../../specs/conversation-schema-v0.md).

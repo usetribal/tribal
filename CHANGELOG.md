@@ -7,15 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- Split component docs into [docs/cli/README.md](docs/cli/README.md), [docs/mcp/README.md](docs/mcp/README.md), and [extensions/vscode/README.md](extensions/vscode/README.md); setup and usage remain in root README
-
 ### Added
 
-- Session author metadata — `prompted_by_email` and `prompted_by_name` stamped at ingest from git config; preserved on re-ingest for team attribution
-- `git lineage init-skill` — installs bundled agent skill for Cursor (`.cursor/skills/`), Claude Code (`.claude/skills/`), and Codex (`.agents/skills/`); `--target` multiselect or `all` (default); runs in `./scripts/setup.sh`
+- `git lineage init` — interactive setup wizard: writes config, multiselect skill install (`.agents/`, `.claude/`, `.cursor/`, all, or skip), installs hooks (with overwrite prompt), optional import with side-effect summary; `git lineage init --yes` for scripts and `make setup`
+- Session author metadata — `prompted_by_email` and `prompted_by_name` stamped at import from git config; preserved on re-import for team attribution
+- `git lineage init-skill` — installs bundled agent skill for Cursor (`.cursor/skills/`), Claude Code (`.claude/skills/`), and Codex (`.agents/skills/`); `--target` multiselect, `all` (default), or `none`
 - `git lineage list --json` — session summaries include `git_branch`, `parent_session_id`, `is_sidechain`, `vendor_session_id`, `prompted_by_email`, and `prompted_by_name`
+- README banner image (`assets/lineage-banner.png`) and prerequisite badges (Rust, Git, Node.js)
+
+### Changed
+
+- README repositioned as agent-first engineering context memory; primary setup is `git lineage init` (replaces four-command flow)
+- Usage guides split into [docs/import.md](docs/import.md), [docs/explore.md](docs/explore.md), [docs/share.md](docs/share.md), [docs/rebase.md](docs/rebase.md), [docs/agent-paths.md](docs/agent-paths.md), [docs/git-hooks.md](docs/git-hooks.md), and [docs/how-it-works.md](docs/how-it-works.md)
+- Component docs in [docs/cli/README.md](docs/cli/README.md), [docs/mcp/README.md](docs/mcp/README.md), and [extensions/vscode/README.md](extensions/vscode/README.md)
+- Bundled agent skill ([`crates/lineage-cli/assets/skills/lineage/SKILL.md`](crates/lineage-cli/assets/skills/lineage/SKILL.md)) refocused on lineage features (search, blame, share, rebase, hooks, resume/fork, privacy); setup delegated to `git lineage init`
+- `make setup` / [`scripts/setup.sh`](scripts/setup.sh) run `git lineage init --yes` instead of separate `init-config`, `init-skill`, and `install-hook` calls; `Makefile` accepts `REPO`, `IMPORT`, `WITH_MCP`, and `FORCE_HOOKS` flags
+- README roadmap refreshed (done vs planned items)
+- Renamed CLI command `git lineage ingest` → `git lineage import` (`ingest` kept as alias); init flag `--no-import`; docs at [docs/import.md](docs/import.md); config `import_only_code_sessions`; tracking ref `refs/lineage/last-import`
 
 ### Removed
 
@@ -25,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Developer experience
 
-- `scripts/setup.sh` and `make setup` — one-command install (CLI, VS Code extension, `init-config`, git hooks)
+- `scripts/setup.sh` and `make setup` — one-command install (CLI, VS Code extension, `git lineage init --yes`)
 - Single git repo at project root (no bundled `examples/` demo)
 - `.vscode/` workspace config for extension local dev (F5 launches in this repo)
 - `Makefile` and `scripts/check.sh` for local gates (`make check`, `make coverage`, `make msrv`, etc.)
@@ -54,13 +62,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `git lineage init-config` — write default `refs/lineage/config`
 - `git lineage remap` — patch-id aware rebase recovery
 - `git lineage materialize` — build line objects from session artifacts at a commit
-- `git lineage install-hook` / `uninstall-hook` — pre-commit incremental ingest and post-commit linking
+- `git lineage install-hook` / `uninstall-hook` — pre-commit incremental import and post-commit linking
 - `git lineage export --format jsonl`, `list --json`, `blame --json` with enriched `matches` in JSON output
-- Incremental ingest (`--incremental`), time filter (`--since`), and `refs/lineage/last-ingest` tracking
+- Incremental import (`--incremental`), time filter (`--since`), and `refs/lineage/last-import` tracking
 
 #### Repository config (`refs/lineage/config`)
 
-- `ingest_only_code_sessions` (default `true`) — skip sessions with no file edits or write tools
+- `import_only_code_sessions` (default `true`) — skip sessions with no file edits or write tools
 - `commit_mapping` — `auto` (multi-signal), `head`, or `none`
 - `lfs_transport` — `auto`, `gitcli`, `http`, or `refs`
 - `large_blob_backend` (`lfs` | `cache`) and `large_blob_threshold_bytes`
@@ -71,13 +79,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Git LFS backend for large session content (`.git/lfs/objects/`, `refs/lineage/lfs/*`, `refs/lineage/lfs-data/*`)
 - Legacy blob cache (`.git/lineage/blobs/`) when `large_blob_backend: cache`
 - Git LFS HTTP batch API transport (`lfs_transport: http`)
-- Git LFS worktree integration: `.gitattributes` for `.lineage/media/**` and pointer files on media ingest
+- Git LFS worktree integration: `.gitattributes` for `.lineage/media/**` and pointer files on media import
 - Blob hydration on read for large turn content (`show`, `export`, search rebuild)
-- Architecture summaries generated at ingest (`metadata.architecture_summary`)
+- Architecture summaries generated at import (`metadata.architecture_summary`)
 
 #### Commit mapping & lineage graph
 
-- Multi-signal commit mapping at ingest: time overlap, file overlap, branch ancestry, code-tool signal, patch-id match, diff-similarity scoring
+- Multi-signal commit mapping at import: time overlap, file overlap, branch ancestry, code-tool signal, patch-id match, diff-similarity scoring
 - Line-level blame via artifact resolve hints (`old_string`, `full_file`, citations, diff hunks)
 - Patch-id stored on git notes; `git lineage remap` matches rewritten commits
 
@@ -108,7 +116,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Architecture summary block in session panel
 - Inline image previews for hydrated media artifacts
 - **Delete Session** command (context menu on session tree)
-- Commands: ingest, refresh, view conversation, resume, fork, show lineage, view commit, search, doctor, materialize, remap, init config, install hooks
+- Commands: import, refresh, view conversation, resume, fork, show lineage, view commit, search, doctor, materialize, remap, init config, install hooks
 - Session picker when multiple sessions match a blamed line
 - `.vsix` packaging via `npm run package`
 
@@ -125,9 +133,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Conversation schema docs — document `prompted_by_email` and `prompted_by_name` author metadata (`specs/conversation-schema-v0.md`)
-- Default ingest skips sessions that did not modify code (`ingest_only_code_sessions: true`)
-- Ingest uses multi-signal commit mapping by default (`commit_mapping: auto`) instead of always linking to HEAD
-- Pre-commit hook uses incremental ingest; post-commit links only recently ingested sessions
+- Default import skips sessions that did not modify code (`import_only_code_sessions: true`)
+- Import uses multi-signal commit mapping by default (`commit_mapping: auto`) instead of always linking to HEAD
+- Pre-commit hook uses incremental import; post-commit links only recently imported sessions
 - Search auto-rebuilds index on empty results; FTS triggers dedupe duplicate rows on re-index
 - Hooks no longer swallow stderr on failure (errors surface to the terminal)
 - Blame uses repo-relative paths (fixes git2 blame resolution)
@@ -142,7 +150,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Known limitations
 
 - Cursor transcripts do not include tool results (per Cursor storage format)
-- MCP server uses a minimal JSON-RPC stdio loop (no delete/gc/ingest tools yet)
+- MCP server uses a minimal JSON-RPC stdio loop (no delete/gc/import tools yet)
 - LFS HTTP batch requires HTTPS remotes with standard `/info/lfs` endpoints and git credentials
 - `.lineage/media/**` pointers require `git lfs install` locally for full smudge/clean filter behavior
 - Architecture summaries are heuristic (first user message + files + model), not LLM-generated
@@ -152,7 +160,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Initial open-source release of the Lineage workspace and crates
-- `git-lineage` CLI with `doctor`, `ingest`, `list`, `show`, `blame`, `search`, `export`, `link`, and `rebuild-index`
+- `git-lineage` CLI with `doctor`, `import`, `list`, `show`, `blame`, `search`, `export`, `link`, and `rebuild-index`
 - Agent adapters for Cursor, Claude Code, and Codex
 - Git-native storage via `refs/lineage/*` and `refs/notes/lineage`
 - Policy engine with API key redaction and path excludes

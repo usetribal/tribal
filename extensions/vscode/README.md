@@ -6,7 +6,7 @@ Git-native AI agent provenance inside VS Code and Cursor.
 
 ## Features
 
-- **Activity bar panel** listing ingested sessions (agent, model, branch, prompter)
+- **Activity bar panel** listing imported sessions (agent, model, branch, prompter)
 - **Session timeline webview** with turn-by-turn history, tool calls, and artifacts
 - **Minimal hover blame**: model, prompter, and icon actions (view / fork / resume)
 - **Gutter decorations** and status bar hint for lines with lineage
@@ -60,7 +60,7 @@ The repo includes `.vscode/settings.json`, `launch.json`, and `tasks.json`:
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `lineage.decorateGutter` | `true` | Show gutter icon on lines with lineage |
-| `lineage.autoRefresh` | `true` | Refresh session list after ingest |
+| `lineage.autoRefresh` | `true` | Refresh session list after import |
 | `lineage.cliPath` | `""` | Path to `git-lineage` binary (empty = use `git lineage`) |
 | `lineage.hoverEnabled` | `true` | Show lineage hover on editor lines |
 

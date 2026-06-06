@@ -11,19 +11,19 @@ pub struct SessionError {
 }
 
 #[derive(Debug, Default)]
-pub struct IngestResult {
+pub struct ImportResult {
     pub conversations: Vec<Conversation>,
     pub errors: Vec<SessionError>,
     pub redactions_applied: usize,
     pub artifacts_removed: usize,
 }
 
-pub struct IngestPipeline {
+pub struct ImportPipeline {
     pub policy: PolicyConfig,
     pub link_head_commit: bool,
 }
 
-impl Default for IngestPipeline {
+impl Default for ImportPipeline {
     fn default() -> Self {
         Self {
             policy: PolicyConfig::default_safe(),
@@ -32,13 +32,13 @@ impl Default for IngestPipeline {
     }
 }
 
-impl IngestPipeline {
-    pub fn ingest<S, R>(&self, source: &S, reader: &R) -> IngestResult
+impl ImportPipeline {
+    pub fn import<S, R>(&self, source: &S, reader: &R) -> ImportResult
     where
         S: AgentSource,
         R: SessionReader,
     {
-        let mut result = IngestResult::default();
+        let mut result = ImportResult::default();
 
         let sessions = match source.discover() {
             Ok(s) => s,
@@ -54,7 +54,7 @@ impl IngestPipeline {
         info!(agent = %source.agent().as_str(), count = sessions.len(), "discovered sessions");
 
         for session_ref in sessions {
-            match self.ingest_one(reader, &session_ref) {
+            match self.import_one(reader, &session_ref) {
                 Ok(Some(conv)) => result.conversations.push(conv),
                 Ok(None) => {}
                 Err(e) => result.errors.push(SessionError {
@@ -67,7 +67,7 @@ impl IngestPipeline {
         result
     }
 
-    pub fn ingest_one<R: SessionReader>(
+    pub fn import_one<R: SessionReader>(
         &self,
         reader: &R,
         session_ref: &SessionRef,
@@ -84,14 +84,14 @@ impl IngestPipeline {
         Ok(Some(policy_result.conversation))
     }
 
-    pub fn ingest_all<S, R>(&self, sources: &[(S, R)]) -> IngestResult
+    pub fn import_all<S, R>(&self, sources: &[(S, R)]) -> ImportResult
     where
         S: AgentSource,
         R: SessionReader,
     {
-        let mut combined = IngestResult::default();
+        let mut combined = ImportResult::default();
         for (source, reader) in sources {
-            let partial = self.ingest(source, reader);
+            let partial = self.import(source, reader);
             combined.conversations.extend(partial.conversations);
             combined.errors.extend(partial.errors);
             combined.redactions_applied += partial.redactions_applied;

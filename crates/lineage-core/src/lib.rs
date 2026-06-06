@@ -2,7 +2,7 @@ pub mod config;
 pub mod conversation_util;
 pub mod error;
 pub mod ids;
-pub mod ingest_state;
+pub mod import_state;
 pub mod types;
 
 pub use config::{
@@ -13,7 +13,9 @@ pub use conversation_util::{
 };
 pub use error::{LineageError, Result};
 pub use ids::{derive_line_object_id, derive_session_id, LineageId};
-pub use ingest_state::{LastIngestState, LAST_INGEST_SCHEMA};
+pub use import_state::{
+    is_valid_import_schema, LastImportState, LAST_IMPORT_SCHEMA, LAST_IMPORT_SCHEMA_LEGACY,
+};
 pub use types::{
     AgentKind, Artifact, ArtifactKind, ArtifactResolve, Confidence, Conversation, GitNote,
     LineObject, LineageManifest, ResolveStrategy, Role, SessionIndex, ToolCall, Turn,

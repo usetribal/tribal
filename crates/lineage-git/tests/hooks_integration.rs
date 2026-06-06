@@ -5,7 +5,7 @@ use lineage_core::{
 };
 use lineage_git::{
     link_all_sessions_to_head, link_recent_sessions_to_head, open_repo, persist_conversation,
-    write_last_ingest,
+    write_last_import,
 };
 
 fn init_repo() -> tempfile::TempDir {
@@ -76,7 +76,7 @@ fn hooks_link_sessions_to_head() {
     let linked = link_all_sessions_to_head(inner).unwrap();
     assert_eq!(linked, 1);
 
-    write_last_ingest(inner, &lineage_core::LastIngestState::new(vec![conv.id.clone()])).unwrap();
+    write_last_import(inner, &lineage_core::LastImportState::new(vec![conv.id.clone()])).unwrap();
     let recent = link_recent_sessions_to_head(inner).unwrap();
     assert_eq!(recent, 1);
 

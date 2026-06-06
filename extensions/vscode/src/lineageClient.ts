@@ -37,8 +37,8 @@ export class LineageClient {
         return this.run(["doctor"]);
     }
 
-    async ingest(incremental = true): Promise<string> {
-        const args = ["ingest", "--agent", "all", "--no-link-head"];
+    async importSessions(incremental = true): Promise<string> {
+        const args = ["import", "--agent", "all", "--no-link-head"];
         if (incremental) {
             args.push("--incremental");
         }

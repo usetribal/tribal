@@ -61,9 +61,9 @@ pub struct LineageRepoConfig {
     #[serde(default)]
     pub exclude_content_patterns: Vec<String>,
     /// Skip sessions with no detected file edits or write tools.
-    #[serde(default = "default_true")]
-    pub ingest_only_code_sessions: bool,
-    /// How to link ingested sessions to commits.
+    #[serde(default = "default_true", alias = "ingest_only_code_sessions")]
+    pub import_only_code_sessions: bool,
+    /// How to link imported sessions to commits.
     #[serde(default)]
     pub commit_mapping: CommitMappingMode,
     /// LFS object transport strategy for push/fetch.
@@ -93,7 +93,7 @@ impl Default for LineageRepoConfig {
                 "*credentials*".into(),
             ],
             exclude_content_patterns: vec![],
-            ingest_only_code_sessions: true,
+            import_only_code_sessions: true,
             commit_mapping: CommitMappingMode::Auto,
             lfs_transport: LfsTransport::Auto,
         }

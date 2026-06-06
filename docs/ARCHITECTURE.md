@@ -35,7 +35,7 @@ This document describes how Lineage is structured and how data flows through the
   └──────────────┘  └──────────────┘  └──────────────┘
 ```
 
-## Ingestion flow
+## Importion flow
 
 ```text
 1. Adapter discovers session files on disk
@@ -48,7 +48,7 @@ This document describes how Lineage is structured and how data flows through the
       ↓
 5. lineage-git writes conversation blob + session ref
       ↓
-6. lineage-git updates manifest (refs/lineage/index) and last-ingest state (refs/lineage/last-ingest)
+6. lineage-git updates manifest (refs/lineage/index) and last-import state (refs/lineage/last-import)
       ↓
 7. If commit_shas present: materialize line objects from artifacts (resolve `old_string`, citations, patches against commit tree) and write git notes
       ↓
@@ -63,7 +63,7 @@ This document describes how Lineage is structured and how data flows through the
 |-----|---------|
 | `refs/lineage/index` | JSON manifest of session IDs |
 | `refs/lineage/config` | Repository policy (excludes, private patterns, blob threshold) |
-| `refs/lineage/last-ingest` | Last ingest timestamp and session IDs (for hook linking) |
+| `refs/lineage/last-import` | Last import timestamp and session IDs (for hook linking) |
 | `refs/lineage/sessions/<id>` | OID of conversation JSON blob |
 | `refs/lineage/lines/<id>` | OID of line-object JSON blob |
 | `refs/notes/lineage` | Per-commit note linking sessions and line objects |

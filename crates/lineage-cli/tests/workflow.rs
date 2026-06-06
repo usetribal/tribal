@@ -2,7 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use lineage_cli::{commands, hooks_cmd, skill_cmd};
+use lineage_cli::{commands, hooks_cmd, init_cmd, skill_cmd};
 use lineage_core::{AgentKind, Conversation, LineageId, LineageRepoConfig, Role, Turn};
 use lineage_git::{open_repo, persist_conversation, read_conversation, PROMPTED_BY_EMAIL, PROMPTED_BY_NAME};
 
@@ -102,12 +102,12 @@ fn install_cursor_fixture(dir: &Path) {
 }
 
 #[test]
-fn cli_ingest_and_hooks() {
+fn cli_import_and_hooks() {
     let dir = init_repo();
     install_cursor_fixture(dir.path());
     commands::init_config(dir.path()).unwrap();
-    commands::ingest(dir.path(), &["cursor".into()], None, true, false).unwrap();
-    commands::ingest(dir.path(), &["cursor".into()], Some("2099-01-01"), true, true).unwrap();
+    commands::import(dir.path(), &["cursor".into()], None, true, false).unwrap();
+    commands::import(dir.path(), &["cursor".into()], Some("2099-01-01"), true, true).unwrap();
 
     hooks_cmd::install_hook(dir.path(), true).unwrap();
     hooks_cmd::post_commit(dir.path()).unwrap();
@@ -172,43 +172,41 @@ fn cli_search_no_results() {
 }
 
 #[test]
-fn cli_ingest_all_agents() {
+fn cli_import_all_agents() {
     let dir = init_repo();
     install_cursor_fixture(dir.path());
     commands::init_config(dir.path()).unwrap();
-    commands::ingest(dir.path(), &["all".into()], None, true, false).unwrap();
+    commands::import(dir.path(), &["all".into()], None, true, false).unwrap();
 }
 
 #[test]
-fn cli_ingest_skips_non_code_when_configured() {
+fn cli_import_skips_non_code_when_configured() {
     let dir = init_repo();
     install_cursor_fixture(dir.path());
     commands::init_config(dir.path()).unwrap();
     let repo = open_repo(dir.path()).unwrap();
     let base = lineage_git::read_repo_config(repo.inner()).unwrap();
     let config = LineageRepoConfig {
-        ingest_only_code_sessions: true,
+        import_only_code_sessions: true,
         ..base
     };
     lineage_git::write_repo_config(repo.inner(), &config).unwrap();
-    std::fs::write(
-        dir.path().join(".cursor/agent-transcripts/chat-only.jsonl"),
-        r#"{"role":"user","content":"hello"}"#,
-    )
-    .unwrap();
-    commands::ingest(dir.path(), &["cursor".into()], None, false, false).unwrap();
+    let chat_only = dir.path().join(".cursor/agent-transcripts/chat-only.jsonl");
+    std::fs::create_dir_all(chat_only.parent().unwrap()).unwrap();
+    std::fs::write(chat_only, r#"{"role":"user","content":"hello"}"#).unwrap();
+    commands::import(dir.path(), &["cursor".into()], None, false, false).unwrap();
 }
 
 #[test]
-fn ingest_stamps_prompted_by_from_git_config() {
+fn import_stamps_prompted_by_from_git_config() {
     let dir = init_repo();
     install_cursor_fixture(dir.path());
     commands::init_config(dir.path()).unwrap();
-    commands::ingest(dir.path(), &["cursor".into()], None, false, false).unwrap();
+    commands::import(dir.path(), &["cursor".into()], None, false, false).unwrap();
 
     let repo = open_repo(dir.path()).unwrap();
     let ids = lineage_git::list_session_ids(repo.inner()).unwrap();
-    assert!(!ids.is_empty(), "expected ingested session");
+    assert!(!ids.is_empty(), "expected imported session");
     let conv = read_conversation(repo.inner(), &ids[0])
         .unwrap()
         .expect("session blob");
@@ -222,6 +220,22 @@ fn ingest_stamps_prompted_by_from_git_config() {
         conv.metadata.get(PROMPTED_BY_NAME).and_then(|v| v.as_str()),
         Some("Test")
     );
+}
+
+#[test]
+fn init_non_interactive_installs_defaults() {
+    let dir = init_repo();
+    init_cmd::init(
+        dir.path(),
+        init_cmd::InitOptions {
+            yes: true,
+            no_import: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert!(dir.path().join(".cursor/skills/lineage/SKILL.md").is_file());
+    assert!(dir.path().join(".git/hooks/pre-commit").is_file());
 }
 
 #[test]

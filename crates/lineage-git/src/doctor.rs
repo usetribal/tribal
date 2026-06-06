@@ -33,14 +33,14 @@ pub fn run_doctor(repo: &LineageRepo) -> Result<DoctorReport, LineageError> {
 
     report.notes_ref_ok = inner.find_reference(LINEAGE_NOTES_REF).is_ok() || {
         report.warnings.push(format!(
-            "notes ref {LINEAGE_NOTES_REF} not found (will be created on first ingest)"
+            "notes ref {LINEAGE_NOTES_REF} not found (will be created on first import)"
         ));
         true
     };
 
     report.index_ref_ok = inner.find_reference(LINEAGE_INDEX_REF).is_ok() || {
         report.warnings.push(format!(
-            "index ref {LINEAGE_INDEX_REF} not found (will be created on first ingest)"
+            "index ref {LINEAGE_INDEX_REF} not found (will be created on first import)"
         ));
         true
     };

@@ -46,14 +46,17 @@ impl SkillTarget {
 
 pub fn parse_skill_target(s: &str) -> std::result::Result<String, String> {
     match s.to_lowercase().as_str() {
-        "cursor" | "claude" | "codex" | "agents" | "all" => Ok(s.to_lowercase()),
+        "cursor" | "claude" | "codex" | "agents" | "all" | "none" => Ok(s.to_lowercase()),
         other => Err(format!(
-            "unknown skill target: {other} (use cursor, claude, codex, agents, or all)"
+            "unknown skill target: {other} (use cursor, claude, codex, agents, all, or none)"
         )),
     }
 }
 
 pub fn resolve_targets(requested: &[String]) -> Vec<SkillTarget> {
+    if requested.iter().any(|t| t == "none") {
+        return vec![];
+    }
     if requested.is_empty() || requested.iter().any(|t| t == "all") {
         return vec![SkillTarget::Cursor, SkillTarget::Claude, SkillTarget::Codex];
     }
@@ -87,6 +90,14 @@ pub fn resolve_targets(requested: &[String]) -> Vec<SkillTarget> {
 }
 
 pub fn init_skill(repo_path: &Path, targets: &[String], force: bool) -> Result<()> {
+    init_skill_impl(repo_path, targets, force, true)
+}
+
+pub(crate) fn init_skill_quiet(repo_path: &Path, targets: &[String], force: bool) -> Result<()> {
+    init_skill_impl(repo_path, targets, force, false)
+}
+
+fn init_skill_impl(repo_path: &Path, targets: &[String], force: bool, verbose: bool) -> Result<()> {
     let resolved = resolve_targets(targets);
     if resolved.is_empty() {
         return Err(
@@ -113,16 +124,22 @@ pub fn init_skill(repo_path: &Path, targets: &[String], force: bool) -> Result<(
         .into());
     }
 
-    println!("installing lineage agent skill:");
+    if verbose {
+        println!("installing lineage agent skill:");
+    }
     for target in resolved {
         let path = target.skill_path(repo_path);
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
         fs::write(&path, SKILL_MD)?;
-        println!("  {} — {}", path.display(), target.doc_hint());
+        if verbose {
+            println!("  {}: {}", path.display(), target.doc_hint());
+        }
     }
-    println!("Agents can use lineage to search sessions, blame lines, and show conversations.");
+    if verbose {
+        println!("Agents can use lineage to search sessions, blame lines, and show conversations.");
+    }
     Ok(())
 }
 

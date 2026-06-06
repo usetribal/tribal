@@ -1,6 +1,6 @@
 [package]
 name = "lineage-agent"
-description = "Agent ingestion traits and pipeline for lineage"
+description = "Agent import traits and pipeline for lineage"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

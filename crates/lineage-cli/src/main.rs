@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use lineage_cli::{commands, hooks_cmd, skill_cmd};
+use lineage_cli::{commands, hooks_cmd, init_cmd, skill_cmd};
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
@@ -25,6 +25,24 @@ struct Cli {
 enum Commands {
     /// Check repository lineage configuration
     Doctor,
+    /// Interactive setup: config, skill, hooks, optional import
+    Init {
+        /// Non-interactive defaults (all skill targets, install hooks, run import)
+        #[arg(long)]
+        yes: bool,
+        /// Skill targets: cursor, claude, codex, agents, all, none
+        #[arg(long = "target", value_parser = skill_cmd::parse_skill_target)]
+        target: Vec<String>,
+        /// Skip agent skill install
+        #[arg(long)]
+        no_skill: bool,
+        /// Skip initial import
+        #[arg(long, alias = "no-ingest")]
+        no_import: bool,
+        /// Overwrite existing git hooks
+        #[arg(long, alias = "force")]
+        force_hooks: bool,
+    },
     /// Write default refs/lineage/config
     InitConfig,
     /// Install bundled agent skill for lineage context retrieval
@@ -35,8 +53,9 @@ enum Commands {
         #[arg(long)]
         force: bool,
     },
-    /// Ingest agent sessions into git lineage refs
-    Ingest {
+    /// Import agent sessions into git lineage refs
+    #[command(alias = "ingest")]
+    Import {
         #[arg(long, value_parser = parse_agent)]
         agent: Vec<String>,
         #[arg(long)]
@@ -46,7 +65,7 @@ enum Commands {
         #[arg(long)]
         incremental: bool,
     },
-    /// List ingested sessions
+    /// List imported sessions
     List {
         #[arg(long)]
         commit: Option<String>,
@@ -68,7 +87,7 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
-    /// Install git hooks for automatic lineage ingest
+    /// Install git hooks for automatic lineage import
     InstallHook {
         #[arg(long)]
         force: bool,
@@ -110,7 +129,7 @@ enum Commands {
         #[command(subcommand)]
         action: LfsAction,
     },
-    /// Delete an ingested session (and optionally purge LFS blobs)
+    /// Delete an imported session (and optionally purge LFS blobs)
     Delete {
         session_id: String,
         #[arg(long)]
@@ -160,16 +179,32 @@ fn main() -> ExitCode {
 
     let result = match cli.command {
         Commands::Doctor => commands::doctor(&repo_path),
+        Commands::Init {
+            yes,
+            target,
+            no_skill,
+            no_import,
+            force_hooks,
+        } => init_cmd::init(
+            &repo_path,
+            init_cmd::InitOptions {
+                yes,
+                targets: target,
+                no_skill,
+                no_import,
+                force_hooks,
+            },
+        ),
         Commands::InitConfig => commands::init_config(&repo_path),
         Commands::InitSkill { target, force } => {
             skill_cmd::init_skill(&repo_path, &target, force)
         }
-        Commands::Ingest {
+        Commands::Import {
             agent,
             since,
             no_link_head,
             incremental,
-        } => commands::ingest(
+        } => commands::import(
             &repo_path,
             &agent,
             since.as_deref(),

@@ -28,8 +28,8 @@ pub fn repo_git_identity(repo: &Repository) -> GitIdentity {
 
 /// Records who prompted the session using git `user.email` / `user.name`.
 ///
-/// Preserves existing values on re-ingest so the original author is kept when
-/// sessions are refreshed or ingested by someone else.
+/// Preserves existing values on re-import so the original author is kept when
+/// sessions are refreshed or imported by someone else.
 pub fn stamp_prompted_by(repo: &Repository, conversation: &mut Conversation) -> Result<(), LineageError> {
     if conversation.metadata.contains_key(PROMPTED_BY_EMAIL) {
         return Ok(());
