@@ -1,13 +1,9 @@
 <p align="center">
-  <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
-  <lottie-player
-    src="./assets/lineage-banner.lottie.json"
-    background="transparent"
-    speed="1"
-    style="width: 100%; max-width: 1400px; height: auto;"
-    loop
-    autoplay>
-  </lottie-player>
+  <img
+    src="assets/lineage-banner.gif"
+    alt="Lineage — Preserve the prompts, decisions, and context behind every commit"
+    width="1400"
+  />
 </p>
 
 # Lineage
