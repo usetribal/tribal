@@ -22,7 +22,10 @@ pub fn read_repo_config(repo: &Repository) -> Result<LineageRepoConfig, LineageE
     Ok(config)
 }
 
-pub fn write_repo_config(repo: &Repository, config: &LineageRepoConfig) -> Result<(), LineageError> {
+pub fn write_repo_config(
+    repo: &Repository,
+    config: &LineageRepoConfig,
+) -> Result<(), LineageError> {
     let store = GitBlobStore::new(repo);
     let json = serde_json::to_string_pretty(config).map_err(LineageError::Serde)?;
     let stored = store.put(json.as_bytes())?;

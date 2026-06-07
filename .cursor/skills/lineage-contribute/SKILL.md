@@ -27,6 +27,11 @@ Individual targets: `make fmt`, `make clippy`, `make test`, `make vscode-lint`.
 
 Clippy must pass with `--all-targets` and `-D warnings`.
 
+## Code style
+
+- Match the surrounding code's naming, error handling (`thiserror`), and crate boundaries.
+- **Comments** — explain *why*, in plain language, as close as possible to the code they describe. Prefer a clear sentence over terse "comment golf." Keep a comment close to the lines it explains, not floating in a docstring. Do not narrate an approach that is not in the code (a discarded alternative) unless a future maintainer would otherwise undo the choice.
+
 ## Crate map
 
 | Path | Role |
@@ -50,6 +55,7 @@ Contributor skills live in `.cursor/skills/`, `.agents/skills/`, and `.claude/sk
 ## PR checklist
 
 - [ ] `make check` and `./scripts/coverage.sh` pass
+- [ ] Comments explain *why* in plain language, next to the code, with no narration of discarded approaches
 - [ ] `CHANGELOG.md` updated under `[Unreleased]` if user-facing
 - [ ] `specs/` updated if schema/types changed
 - [ ] No secrets or private conversation content in commits

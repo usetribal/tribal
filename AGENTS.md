@@ -138,3 +138,4 @@ cargo test -p lineage-core
 2. Specs before types
 3. Policy before persist — no unredacted secrets in git objects
 4. Add tests for behavior changes; run `make coverage` before a PR if logic changed
+5. Comment the *why* in plain language, next to the code; no "comment golf" and no narrating discarded approaches

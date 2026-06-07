@@ -1,9 +1,10 @@
 use std::process::Command;
 
-use lineage_core::{LargeBlobBackend, LineageRepoConfig, LfsTransport, LINEAGE_CONFIG_SCHEMA};
+use lineage_core::{LargeBlobBackend, LfsTransport, LineageRepoConfig, LINEAGE_CONFIG_SCHEMA};
 use lineage_git::{lfs_push, open_repo, write_repo_config};
 
-fn init_repo_with_remote() -> tempfile::TempDir {
+/// Returns `(workdir, remote)`; both must stay alive for the test's duration.
+fn init_repo_with_remote() -> (tempfile::TempDir, tempfile::TempDir) {
     let dir = tempfile::tempdir().unwrap();
     Command::new("git")
         .args(["init"])
@@ -20,22 +21,24 @@ fn init_repo_with_remote() -> tempfile::TempDir {
         .current_dir(dir.path())
         .output()
         .unwrap();
+    // Use a local bare repo as the remote so the lfs refs transport stays hermetic.
+    let remote = tempfile::tempdir().unwrap();
     Command::new("git")
-        .args([
-            "remote",
-            "add",
-            "origin",
-            "https://github.com/example/lineage.git",
-        ])
+        .args(["init", "--bare"])
+        .current_dir(remote.path())
+        .output()
+        .unwrap();
+    Command::new("git")
+        .args(["remote", "add", "origin", remote.path().to_str().unwrap()])
         .current_dir(dir.path())
         .output()
         .unwrap();
-    dir
+    (dir, remote)
 }
 
 #[test]
 fn lfs_push_and_fetch_use_refs_transport() {
-    let dir = init_repo_with_remote();
+    let (dir, _remote) = init_repo_with_remote();
     let repo = open_repo(dir.path()).unwrap();
     let inner = repo.inner();
 

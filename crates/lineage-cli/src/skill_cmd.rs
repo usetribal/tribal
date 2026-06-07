@@ -118,10 +118,7 @@ fn init_skill_impl(repo_path: &Path, targets: &[String], force: bool, verbose: b
             .map(|p| p.display().to_string())
             .collect::<Vec<_>>()
             .join(", ");
-        return Err(format!(
-            "skill already exists at: {list} (use --force to overwrite)"
-        )
-        .into());
+        return Err(format!("skill already exists at: {list} (use --force to overwrite)").into());
     }
 
     if verbose {
@@ -163,7 +160,9 @@ mod tests {
     fn agents_alias_maps_to_codex_path() {
         let t = resolve_targets(&["agents".into()]);
         assert_eq!(t, vec![SkillTarget::Codex]);
-        assert!(t[0].skill_path(Path::new("/repo")).ends_with(".agents/skills/lineage/SKILL.md"));
+        assert!(t[0]
+            .skill_path(Path::new("/repo"))
+            .ends_with(".agents/skills/lineage/SKILL.md"));
     }
 
     #[test]

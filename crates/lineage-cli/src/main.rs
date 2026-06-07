@@ -196,9 +196,7 @@ fn main() -> ExitCode {
             },
         ),
         Commands::InitConfig => commands::init_config(&repo_path),
-        Commands::InitSkill { target, force } => {
-            skill_cmd::init_skill(&repo_path, &target, force)
-        }
+        Commands::InitSkill { target, force } => skill_cmd::init_skill(&repo_path, &target, force),
         Commands::Import {
             agent,
             since,
@@ -211,9 +209,7 @@ fn main() -> ExitCode {
             !no_link_head,
             incremental,
         ),
-        Commands::List { commit, json } => {
-            commands::list(&repo_path, commit.as_deref(), json)
-        }
+        Commands::List { commit, json } => commands::list(&repo_path, commit.as_deref(), json),
         Commands::Show {
             session_id,
             json,

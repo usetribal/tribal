@@ -1,12 +1,13 @@
 use std::path::PathBuf;
 
-use lineage_agent::{AgentSource, SessionReader};
 use lineage_adapters::CodexAdapter;
+use lineage_agent::{AgentSource, SessionReader};
 use lineage_core::{AgentKind, Role};
 
 #[test]
 fn reads_codex_rollout_fixture() {
-    let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/codex-history");
+    let fixture =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/codex-history");
     let adapter = CodexAdapter::new(&fixture);
     let sessions = adapter.discover().unwrap();
     assert!(!sessions.is_empty());

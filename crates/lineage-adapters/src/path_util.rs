@@ -17,13 +17,7 @@ pub fn cursor_project_key(workspace: &Path) -> String {
         s = s[1..].to_string();
     }
     s.chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() {
-                c
-            } else {
-                '-'
-            }
-        })
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
         .collect()
 }
 

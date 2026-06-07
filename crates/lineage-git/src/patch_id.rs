@@ -148,7 +148,9 @@ pub fn commit_diff<'a>(
         .map_err(|e| LineageError::Other(e.to_string()))
 }
 
-pub fn build_patch_id_index(repo: &Repository) -> Result<std::collections::HashMap<String, String>, LineageError> {
+pub fn build_patch_id_index(
+    repo: &Repository,
+) -> Result<std::collections::HashMap<String, String>, LineageError> {
     let mut head = repo
         .head()
         .map_err(|e| LineageError::Other(e.to_string()))?

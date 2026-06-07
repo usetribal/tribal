@@ -134,10 +134,7 @@ pub fn fetch_via_http_batch(
             &endpoint,
             &auth,
             "download",
-            chunk
-                .iter()
-                .map(|o| (format_oid(&o.oid), o.size))
-                .collect(),
+            chunk.iter().map(|o| (format_oid(&o.oid), o.size)).collect(),
         )?;
 
         for item in response.objects {
@@ -320,9 +317,7 @@ fn git_remote_url(repo: &Repository, remote: &str) -> Result<String, LineageErro
         .output()
         .map_err(|e| LineageError::Other(e.to_string()))?;
     if !output.status.success() {
-        return Err(LineageError::Other(format!(
-            "remote {remote} not found"
-        )));
+        return Err(LineageError::Other(format!("remote {remote} not found")));
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
@@ -341,7 +336,11 @@ fn git_config_value(repo: &Repository, key: &str) -> Option<String> {
         return None;
     }
     let v = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if v.is_empty() { None } else { Some(v) }
+    if v.is_empty() {
+        None
+    } else {
+        Some(v)
+    }
 }
 
 fn remote_url_to_lfs_endpoint(url: &str) -> String {

@@ -119,7 +119,9 @@ pub fn remap_orphaned_commits(repo: &Repository) -> Result<RemapReport, LineageE
 
             let mut sessions = vec![session_id.clone()];
             let patch_id = repo
-                .find_commit(Oid::from_str(&target_sha).map_err(|e| LineageError::Other(e.to_string()))?)
+                .find_commit(
+                    Oid::from_str(&target_sha).map_err(|e| LineageError::Other(e.to_string()))?,
+                )
                 .ok()
                 .and_then(|c| patch_id_for_commit(repo, &c).ok());
 
@@ -132,13 +134,7 @@ pub fn remap_orphaned_commits(repo: &Repository) -> Result<RemapReport, LineageE
             }
             merge_ids(&mut line_ids);
 
-            write_note_for_commit(
-                repo,
-                &target_sha,
-                &sessions,
-                &line_ids,
-                patch_id.as_deref(),
-            )?;
+            write_note_for_commit(repo, &target_sha, &sessions, &line_ids, patch_id.as_deref())?;
         }
     }
 

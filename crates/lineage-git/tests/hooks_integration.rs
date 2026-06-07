@@ -1,8 +1,6 @@
 use std::process::Command;
 
-use lineage_core::{
-    AgentKind, Artifact, ArtifactKind, Conversation, LineageId, Role, Turn,
-};
+use lineage_core::{AgentKind, Artifact, ArtifactKind, Conversation, LineageId, Role, Turn};
 use lineage_git::{
     link_all_sessions_to_head, link_recent_sessions_to_head, open_repo, persist_conversation,
     write_last_import,
@@ -76,10 +74,16 @@ fn hooks_link_sessions_to_head() {
     let linked = link_all_sessions_to_head(inner).unwrap();
     assert_eq!(linked, 1);
 
-    write_last_import(inner, &lineage_core::LastImportState::new(vec![conv.id.clone()])).unwrap();
+    write_last_import(
+        inner,
+        &lineage_core::LastImportState::new(vec![conv.id.clone()]),
+    )
+    .unwrap();
     let recent = link_recent_sessions_to_head(inner).unwrap();
     assert_eq!(recent, 1);
 
-    let note = lineage_git::read_note_for_commit(inner, &sha).unwrap().unwrap();
+    let note = lineage_git::read_note_for_commit(inner, &sha)
+        .unwrap()
+        .unwrap();
     assert!(note.session_ids.contains(&conv.id));
 }

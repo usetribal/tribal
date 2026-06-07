@@ -9,12 +9,15 @@ use lineage_core::{
 };
 use lineage_git::{
     best_commit_for_conversation, blame_with_lineage, delete_session, ensure_gitattributes,
-    hydrate_media_artifacts, link_session_to_commit, list_session_ids, lfs_fetch, lfs_push,
-    lfs_status, map_commit_to_sessions, materialize_session_at_commit, open_repo, persist_import,
-    purge_orphans, read_conversation, read_repo_config, remap_orphaned_commits, run_doctor,
-    stamp_prompted_by, write_last_import, write_repo_config, PROMPTED_BY_EMAIL, PROMPTED_BY_NAME,
+    hydrate_media_artifacts, lfs_fetch, lfs_push, lfs_status, link_session_to_commit,
+    list_session_ids, map_commit_to_sessions, materialize_session_at_commit, open_repo,
+    persist_import, purge_orphans, read_conversation, read_repo_config, remap_orphaned_commits,
+    run_doctor, stamp_prompted_by, write_last_import, write_repo_config, PROMPTED_BY_EMAIL,
+    PROMPTED_BY_NAME,
 };
-use lineage_policy::{apply_policy, is_private_session, policy_from_repo_config, prepare_for_export, PolicyConfig};
+use lineage_policy::{
+    apply_policy, is_private_session, policy_from_repo_config, prepare_for_export, PolicyConfig,
+};
 use lineage_search::{LineageIndex, SearchHit};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -179,14 +182,10 @@ pub fn import(
                     .ok()
                     .flatten()
                     .map(|m| {
-                        c.metadata.insert(
-                            "commit_match_score".into(),
-                            serde_json::json!(m.score),
-                        );
-                        c.metadata.insert(
-                            "commit_match_signals".into(),
-                            serde_json::json!(m.signals),
-                        );
+                        c.metadata
+                            .insert("commit_match_score".into(), serde_json::json!(m.score));
+                        c.metadata
+                            .insert("commit_match_signals".into(), serde_json::json!(m.signals));
                         m.commit_sha
                     })
                     .or_else(|| {
@@ -249,11 +248,7 @@ fn is_false_bool(value: &bool) -> bool {
 }
 
 fn vendor_session_id(conv: &lineage_core::Conversation) -> Option<String> {
-    let keys = [
-        "cursor_session_id",
-        "claude_session_id",
-        "codex_session_id",
-    ];
+    let keys = ["cursor_session_id", "claude_session_id", "codex_session_id"];
     for key in keys {
         if let Some(value) = conv.metadata.get(key).and_then(|v| v.as_str()) {
             if !value.is_empty() {
@@ -330,10 +325,7 @@ pub fn list(repo_path: &Path, commit: Option<&str>, json: bool) -> Result<()> {
                     .get("git_branch")
                     .and_then(|v| v.as_str())
                     .map(String::from),
-                parent_session_id: conv
-                    .parent_session_id
-                    .as_ref()
-                    .map(|id| id.to_string()),
+                parent_session_id: conv.parent_session_id.as_ref().map(|id| id.to_string()),
                 is_sidechain: conv
                     .metadata
                     .get("is_sidechain")
@@ -550,11 +542,7 @@ pub fn link(repo_path: &Path, session_id: &str, commit_sha: &str) -> Result<()> 
     Ok(())
 }
 
-pub fn materialize(
-    repo_path: &Path,
-    commit: Option<&str>,
-    session: Option<&str>,
-) -> Result<()> {
+pub fn materialize(repo_path: &Path, commit: Option<&str>, session: Option<&str>) -> Result<()> {
     let repo = open_repo(repo_path)?;
     let inner = repo.inner();
 
@@ -633,10 +621,7 @@ pub fn delete_session_cmd(repo_path: &Path, session_id: &str, purge_blobs: bool)
     let report = delete_session(repo.inner(), &id, purge_blobs)?;
     println!(
         "deleted session {} ({} note(s) updated, {} line object(s) removed, {} blob(s) purged)",
-        report.session_id,
-        report.notes_updated,
-        report.line_objects_deleted,
-        report.blobs_purged
+        report.session_id, report.notes_updated, report.line_objects_deleted, report.blobs_purged
     );
     let index = LineageIndex::open(repo.git_dir().join("lineage").join("index.db"))?;
     let _ = index.rebuild(repo.inner());

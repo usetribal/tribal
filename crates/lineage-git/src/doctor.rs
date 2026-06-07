@@ -3,7 +3,9 @@ use lineage_core::LineageError;
 use crate::config::{read_repo_config, LINEAGE_CONFIG_REF};
 use crate::hydrate::hydrate_conversation;
 use crate::lfs_ops::lfs_status;
-use crate::refs::{list_session_ids, read_conversation_stored, LINEAGE_INDEX_REF, LINEAGE_NOTES_REF};
+use crate::refs::{
+    list_session_ids, read_conversation_stored, LINEAGE_INDEX_REF, LINEAGE_NOTES_REF,
+};
 use crate::repo::LineageRepo;
 
 #[derive(Debug, Default)]
@@ -93,4 +95,3 @@ pub fn run_doctor(repo: &LineageRepo) -> Result<DoctorReport, LineageError> {
 
     Ok(report)
 }
-

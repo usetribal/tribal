@@ -76,10 +76,7 @@ impl AgentSource for CodexAdapter {
                     }
                 }
                 sessions.push(SessionRef {
-                    id_hint: meta
-                        .session_id
-                        .clone()
-                        .unwrap_or_else(|| name.to_string()),
+                    id_hint: meta.session_id.clone().unwrap_or_else(|| name.to_string()),
                     agent: AgentKind::Codex,
                     source_path: path.to_path_buf(),
                     started_at: meta.started_at,
@@ -218,8 +215,9 @@ fn extract_session_meta(v: &Value) -> SessionMeta {
         model: normalize_model(pick_str(body, &["model"])),
         originator: pick_str(body, &["originator"]),
         cli_version: pick_str(body, &["cli_version"]),
-        started_at: top_timestamp(v)
-            .or_else(|| pick_str(body, &["timestamp", "started_at"]).and_then(|s| parse_timestamp(&s))),
+        started_at: top_timestamp(v).or_else(|| {
+            pick_str(body, &["timestamp", "started_at"]).and_then(|s| parse_timestamp(&s))
+        }),
     }
 }
 
@@ -240,7 +238,8 @@ fn parse_rollout_lines(content: &str) -> Result<ParsedRollout, LineageError> {
 
         let event = event_type(&v).unwrap_or_default();
         let body = event_body(&v);
-        let ts = top_timestamp(&v).or_else(|| pick_str(body, &["timestamp"]).and_then(|s| parse_timestamp(&s)));
+        let ts = top_timestamp(&v)
+            .or_else(|| pick_str(body, &["timestamp"]).and_then(|s| parse_timestamp(&s)));
 
         if let Some(t) = ts {
             ended_at = Some(t);
@@ -251,7 +250,14 @@ fn parse_rollout_lines(content: &str) -> Result<ParsedRollout, LineageError> {
             "user_message" | "user" => {
                 let content = extract_message_content(body);
                 if !content.is_empty() {
-                    turns.push(make_turn(turn_index, Role::User, content, ts, vec![], vec![]));
+                    turns.push(make_turn(
+                        turn_index,
+                        Role::User,
+                        content,
+                        ts,
+                        vec![],
+                        vec![],
+                    ));
                     turn_index += 1;
                 }
             }
@@ -276,7 +282,8 @@ fn parse_rollout_lines(content: &str) -> Result<ParsedRollout, LineageError> {
                 }
             }
             "tool_call" => {
-                let call_id = pick_str(body, &["call_id", "id"]).unwrap_or_else(|| format!("tc-{turn_index}"));
+                let call_id = pick_str(body, &["call_id", "id"])
+                    .unwrap_or_else(|| format!("tc-{turn_index}"));
                 let name = pick_str(body, &["tool_name", "name"]).unwrap_or_else(|| "tool".into());
                 let args = body
                     .get("arguments")
@@ -311,7 +318,14 @@ fn parse_rollout_lines(content: &str) -> Result<ParsedRollout, LineageError> {
                     "user_message" => {
                         let content = pick_str(body, &["message"]).unwrap_or_default();
                         if !content.is_empty() {
-                            turns.push(make_turn(turn_index, Role::User, content, ts, vec![], vec![]));
+                            turns.push(make_turn(
+                                turn_index,
+                                Role::User,
+                                content,
+                                ts,
+                                vec![],
+                                vec![],
+                            ));
                             turn_index += 1;
                         }
                     }
@@ -331,7 +345,8 @@ fn parse_rollout_lines(content: &str) -> Result<ParsedRollout, LineageError> {
                     }
                     _ => {
                         if let Some(msg) = body.get("message") {
-                            let role = pick_str(msg, &["role"]).unwrap_or_else(|| "assistant".into());
+                            let role =
+                                pick_str(msg, &["role"]).unwrap_or_else(|| "assistant".into());
                             let content = extract_message_content(msg);
                             if !content.is_empty() {
                                 let role = match role.as_str() {
@@ -340,7 +355,14 @@ fn parse_rollout_lines(content: &str) -> Result<ParsedRollout, LineageError> {
                                     "tool" => Role::Tool,
                                     _ => Role::Assistant,
                                 };
-                                turns.push(make_turn(turn_index, role, content, ts, vec![], vec![]));
+                                turns.push(make_turn(
+                                    turn_index,
+                                    role,
+                                    content,
+                                    ts,
+                                    vec![],
+                                    vec![],
+                                ));
                                 turn_index += 1;
                             }
                         }
@@ -352,7 +374,8 @@ fn parse_rollout_lines(content: &str) -> Result<ParsedRollout, LineageError> {
                 match item_type.as_str() {
                     "message" => {
                         let role = pick_str(body, &["role"]).unwrap_or_default();
-                        let content = extract_text_content(body.get("content").unwrap_or(&Value::Null));
+                        let content =
+                            extract_text_content(body.get("content").unwrap_or(&Value::Null));
                         if content.contains("<environment_context>") || role == "developer" {
                             continue;
                         }
@@ -368,7 +391,8 @@ fn parse_rollout_lines(content: &str) -> Result<ParsedRollout, LineageError> {
                         }
                     }
                     "function_call" => {
-                        let call_id = pick_str(body, &["call_id", "id"]).unwrap_or_else(|| format!("tc-{turn_index}"));
+                        let call_id = pick_str(body, &["call_id", "id"])
+                            .unwrap_or_else(|| format!("tc-{turn_index}"));
                         let name = pick_str(body, &["name"]).unwrap_or_else(|| "tool".into());
                         let args = body
                             .get("arguments")
@@ -514,8 +538,8 @@ mod tests {
 
     #[test]
     fn parses_legacy_rollout_fixture() {
-        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../tests/fixtures/codex-history");
+        let fixture =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/codex-history");
         let adapter = CodexAdapter::new(&fixture);
         let sessions = adapter.discover().unwrap();
         assert!(!sessions.is_empty(), "expected codex sessions in fixture");
@@ -531,8 +555,8 @@ mod tests {
 
     #[test]
     fn captures_codex_session_metadata() {
-        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../tests/fixtures/codex-history");
+        let fixture =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/codex-history");
         let adapter = CodexAdapter::new(&fixture);
         let sessions = adapter.discover().unwrap();
         let legacy = sessions
@@ -545,15 +569,17 @@ mod tests {
             Some("gpt-5-codex")
         );
         assert_eq!(
-            conv.metadata.get("codex_cli_version").and_then(|v| v.as_str()),
+            conv.metadata
+                .get("codex_cli_version")
+                .and_then(|v| v.as_str()),
             Some("0.34.0")
         );
     }
 
     #[test]
     fn parses_modern_rollout_fixture() {
-        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../tests/fixtures/codex-history");
+        let fixture =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/codex-history");
         let adapter = CodexAdapter::new(&fixture);
         let sessions = adapter
             .discover()

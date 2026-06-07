@@ -4,7 +4,9 @@ use std::process::Command;
 
 use lineage_cli::{commands, hooks_cmd, init_cmd, skill_cmd};
 use lineage_core::{AgentKind, Conversation, LineageId, LineageRepoConfig, Role, Turn};
-use lineage_git::{open_repo, persist_conversation, read_conversation, PROMPTED_BY_EMAIL, PROMPTED_BY_NAME};
+use lineage_git::{
+    open_repo, persist_conversation, read_conversation, PROMPTED_BY_EMAIL, PROMPTED_BY_NAME,
+};
 
 fn init_repo() -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
@@ -107,7 +109,14 @@ fn cli_import_and_hooks() {
     install_cursor_fixture(dir.path());
     commands::init_config(dir.path()).unwrap();
     commands::import(dir.path(), &["cursor".into()], None, true, false).unwrap();
-    commands::import(dir.path(), &["cursor".into()], Some("2099-01-01"), true, true).unwrap();
+    commands::import(
+        dir.path(),
+        &["cursor".into()],
+        Some("2099-01-01"),
+        true,
+        true,
+    )
+    .unwrap();
 
     hooks_cmd::install_hook(dir.path(), true).unwrap();
     hooks_cmd::post_commit(dir.path()).unwrap();
@@ -130,8 +139,20 @@ fn cli_workflow_covers_commands() {
         .unwrap()
         .id()
         .to_string();
+    // Use a local bare repo as the remote so the lfs push/fetch calls below stay hermetic.
+    let remote_dir = tempfile::tempdir().unwrap();
     Command::new("git")
-        .args(["remote", "add", "origin", "https://github.com/example/lineage.git"])
+        .args(["init", "--bare"])
+        .current_dir(remote_dir.path())
+        .output()
+        .unwrap();
+    Command::new("git")
+        .args([
+            "remote",
+            "add",
+            "origin",
+            remote_dir.path().to_str().unwrap(),
+        ])
         .current_dir(dir.path())
         .output()
         .unwrap();
@@ -250,12 +271,7 @@ fn init_skill_installs_all_targets_by_default() {
 #[test]
 fn init_skill_multiselect_targets() {
     let dir = init_repo();
-    skill_cmd::init_skill(
-        dir.path(),
-        &["cursor".into(), "claude".into()],
-        false,
-    )
-    .unwrap();
+    skill_cmd::init_skill(dir.path(), &["cursor".into(), "claude".into()], false).unwrap();
     assert!(dir.path().join(".cursor/skills/lineage/SKILL.md").is_file());
     assert!(dir.path().join(".claude/skills/lineage/SKILL.md").is_file());
     assert!(!dir.path().join(".agents/skills/lineage/SKILL.md").exists());

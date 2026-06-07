@@ -138,7 +138,8 @@ fn score_commit(
     }
 
     let diff = commit_diff(repo, commit)?;
-    if let (Some(session_pid), Ok(commit_pid)) = (session_patch, patch_id_for_commit(repo, commit)) {
+    if let (Some(session_pid), Ok(commit_pid)) = (session_patch, patch_id_for_commit(repo, commit))
+    {
         if session_pid == commit_pid {
             score += 0.35;
             signals.push("patch_id_match".into());

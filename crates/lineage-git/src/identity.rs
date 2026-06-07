@@ -18,7 +18,10 @@ pub fn repo_git_identity(repo: &Repository) -> GitIdentity {
         return GitIdentity::default();
     };
     GitIdentity {
-        name: config.get_string("user.name").ok().filter(|s| !s.is_empty()),
+        name: config
+            .get_string("user.name")
+            .ok()
+            .filter(|s| !s.is_empty()),
         email: config
             .get_string("user.email")
             .ok()
@@ -30,17 +33,24 @@ pub fn repo_git_identity(repo: &Repository) -> GitIdentity {
 ///
 /// Preserves existing values on re-import so the original author is kept when
 /// sessions are refreshed or imported by someone else.
-pub fn stamp_prompted_by(repo: &Repository, conversation: &mut Conversation) -> Result<(), LineageError> {
+pub fn stamp_prompted_by(
+    repo: &Repository,
+    conversation: &mut Conversation,
+) -> Result<(), LineageError> {
     if conversation.metadata.contains_key(PROMPTED_BY_EMAIL) {
         return Ok(());
     }
 
     if let Some(existing) = read_conversation(repo, &conversation.id)? {
         if let Some(value) = existing.metadata.get(PROMPTED_BY_EMAIL) {
-            conversation.metadata.insert(PROMPTED_BY_EMAIL.into(), value.clone());
+            conversation
+                .metadata
+                .insert(PROMPTED_BY_EMAIL.into(), value.clone());
         }
         if let Some(value) = existing.metadata.get(PROMPTED_BY_NAME) {
-            conversation.metadata.insert(PROMPTED_BY_NAME.into(), value.clone());
+            conversation
+                .metadata
+                .insert(PROMPTED_BY_NAME.into(), value.clone());
         }
         if conversation.metadata.contains_key(PROMPTED_BY_EMAIL) {
             return Ok(());
@@ -49,13 +59,14 @@ pub fn stamp_prompted_by(repo: &Repository, conversation: &mut Conversation) -> 
 
     let identity = repo_git_identity(repo);
     if let Some(email) = identity.email {
-        conversation.metadata.insert(
-            PROMPTED_BY_EMAIL.into(),
-            Value::String(email),
-        );
+        conversation
+            .metadata
+            .insert(PROMPTED_BY_EMAIL.into(), Value::String(email));
     }
     if let Some(name) = identity.name {
-        conversation.metadata.insert(PROMPTED_BY_NAME.into(), Value::String(name));
+        conversation
+            .metadata
+            .insert(PROMPTED_BY_NAME.into(), Value::String(name));
     }
 
     Ok(())

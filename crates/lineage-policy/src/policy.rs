@@ -98,9 +98,10 @@ fn should_exclude_session(config: &PolicyConfig, conversation: &Conversation) ->
         .get("source")
         .and_then(|v| v.as_str())
         .unwrap_or("");
-    config.exclude_patterns.iter().any(|p| {
-        matches!(p.kind, ExcludeKind::Session) && glob_match(&p.pattern, source)
-    })
+    config
+        .exclude_patterns
+        .iter()
+        .any(|p| matches!(p.kind, ExcludeKind::Session) && glob_match(&p.pattern, source))
 }
 
 fn should_exclude_turn_content(config: &PolicyConfig, turn: &Turn) -> bool {

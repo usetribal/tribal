@@ -53,6 +53,9 @@ fn persist_externalizes_embedded_image() {
     persist_conversation(inner, &conv).unwrap();
 
     let stored = read_conversation_stored(inner, &conv.id).unwrap().unwrap();
-    assert!(stored.turns[0].artifacts.iter().any(|a| a.blob_ref.is_some()));
+    assert!(stored.turns[0]
+        .artifacts
+        .iter()
+        .any(|a| a.blob_ref.is_some()));
     assert!(dir.path().join(".gitattributes").exists());
 }

@@ -129,7 +129,8 @@ impl LineageIndex {
 
         let ids = list_session_ids(repo).map_err(SearchError::Lineage)?;
         for id in ids {
-            if let Some(mut conv) = read_conversation_stored(repo, &id).map_err(SearchError::Lineage)?
+            if let Some(mut conv) =
+                read_conversation_stored(repo, &id).map_err(SearchError::Lineage)?
             {
                 hydrate_conversation(repo, &mut conv).map_err(SearchError::Lineage)?;
                 self.index_conversation(&conv)?;

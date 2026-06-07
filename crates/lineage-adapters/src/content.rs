@@ -9,10 +9,9 @@ pub fn extract_text_content(content: &Value) -> String {
             .filter_map(|item| {
                 let t = item.get("type").and_then(|v| v.as_str()).unwrap_or("");
                 match t {
-                    "text" | "input_text" | "output_text" => item
-                        .get("text")
-                        .and_then(|v| v.as_str())
-                        .map(String::from),
+                    "text" | "input_text" | "output_text" => {
+                        item.get("text").and_then(|v| v.as_str()).map(String::from)
+                    }
                     _ => None,
                 }
             })
@@ -119,10 +118,7 @@ pub fn extract_claude_content(message: &Value) -> (String, Vec<ToolCall>, Vec<Ar
                     .and_then(|v| v.as_str())
                     .unwrap_or(&name)
                     .to_string();
-                let input = item
-                    .get("input")
-                    .map(|v| v.to_string())
-                    .unwrap_or_default();
+                let input = item.get("input").map(|v| v.to_string()).unwrap_or_default();
                 tool_calls.push(ToolCall {
                     id: id.clone(),
                     name: name.clone(),
@@ -156,12 +152,7 @@ pub fn extract_claude_content(message: &Value) -> (String, Vec<ToolCall>, Vec<Ar
         }
     }
 
-    (
-        text_parts.join("\n"),
-        tool_calls,
-        artifacts,
-        is_tool_result,
-    )
+    (text_parts.join("\n"), tool_calls, artifacts, is_tool_result)
 }
 
 pub fn artifacts_from_image_block(item: &Value) -> Vec<Artifact> {
@@ -361,23 +352,14 @@ fn artifact_with_resolve(
 fn is_edit_tool(name: &str) -> bool {
     matches!(
         name,
-        "strreplace"
-            | "edit"
-            | "search_replace"
-            | "replace"
-            | "multiedit"
-            | "edit_file"
+        "strreplace" | "edit" | "search_replace" | "replace" | "multiedit" | "edit_file"
     ) || name.contains("replace")
 }
 
 fn is_write_tool(name: &str) -> bool {
     matches!(
         name,
-        "write"
-            | "write_file"
-            | "create_file"
-            | "writefile"
-            | "create"
+        "write" | "write_file" | "create_file" | "writefile" | "create"
     )
 }
 
@@ -468,7 +450,10 @@ pub fn extract_images_from_text(text: &str) -> Vec<Artifact> {
 
 pub fn enrich_turn_with_images(content: &str, artifacts: &mut Vec<Artifact>) {
     for image in extract_images_from_text(content) {
-        if !artifacts.iter().any(|a| a.path == image.path && a.kind == image.kind) {
+        if !artifacts
+            .iter()
+            .any(|a| a.path == image.path && a.kind == image.kind)
+        {
             artifacts.push(image);
         }
     }

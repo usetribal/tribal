@@ -1,8 +1,8 @@
 use std::io::{self, IsTerminal};
 use std::path::Path;
 
-use inquire::{Confirm, MultiSelect};
 use inquire::ui::{Color, RenderConfig, StyleSheet, Styled};
+use inquire::{Confirm, MultiSelect};
 
 use crate::{commands, hooks_cmd, skill_cmd};
 
@@ -116,10 +116,16 @@ fn run_interactive(repo_path: &Path, options: &InitOptions) -> Result<()> {
     step_heading("Configure", None);
     commands::init_config_quiet(repo_path)?;
     step_item(true, "wrote default config to refs/lineage/config");
-    step_item(false, "ensured .gitattributes for .lineage/media/** LFS pointers");
+    step_item(
+        false,
+        "ensured .gitattributes for .lineage/media/** LFS pointers",
+    );
     println!();
 
-    step_heading("Agent skill", Some("bundled SKILL.md for your coding agents"));
+    step_heading(
+        "Agent skill",
+        Some("bundled SKILL.md for your coding agents"),
+    );
     let skill_targets = prompt_skill_targets()?;
     match skill_targets {
         None => step_item(false, "skipped"),
@@ -134,11 +140,17 @@ fn run_interactive(repo_path: &Path, options: &InitOptions) -> Result<()> {
     }
     println!();
 
-    step_heading("Git hooks", Some("pre-commit import and post-commit linking"));
+    step_heading(
+        "Git hooks",
+        Some("pre-commit import and post-commit linking"),
+    );
     install_hooks_with_retry(repo_path, options.force_hooks, true)?;
     println!();
 
-    step_heading("Initial import", Some("import your agent transcripts into refs/lineage/*"));
+    step_heading(
+        "Initial import",
+        Some("import your agent transcripts into refs/lineage/*"),
+    );
     let run_import = prompt_run_import()?;
     if run_import {
         step_item(true, "running import --agent all --incremental");
@@ -340,10 +352,7 @@ mod tests {
             yes: true,
             ..Default::default()
         };
-        assert_eq!(
-            skill_targets_for_init(&opts),
-            Some(vec!["all".into()])
-        );
+        assert_eq!(skill_targets_for_init(&opts), Some(vec!["all".into()]));
     }
 
     #[test]

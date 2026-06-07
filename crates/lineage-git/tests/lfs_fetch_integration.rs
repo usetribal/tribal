@@ -3,7 +3,10 @@ use std::net::TcpListener;
 use std::process::Command;
 use std::thread;
 
-use lineage_core::{AgentKind, Conversation, LargeBlobBackend, LineageRepoConfig, LfsTransport, Role, Turn, LINEAGE_CONFIG_SCHEMA};
+use lineage_core::{
+    AgentKind, Conversation, LargeBlobBackend, LfsTransport, LineageRepoConfig, Role, Turn,
+    LINEAGE_CONFIG_SCHEMA,
+};
 use lineage_git::{lfs_fetch, open_repo, persist_conversation, write_repo_config};
 use lineage_store::{normalize_oid, LfsStore};
 

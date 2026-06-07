@@ -8,7 +8,10 @@ use crate::lfs_worktree::{ensure_gitattributes, worktree_media_path, write_workt
 
 const DATA_URL_PREFIX: &str = "data:";
 
-pub fn externalize_media_artifacts(repo: &Repository, conversation: &mut Conversation) -> Result<(), LineageError> {
+pub fn externalize_media_artifacts(
+    repo: &Repository,
+    conversation: &mut Conversation,
+) -> Result<(), LineageError> {
     let _ = ensure_gitattributes(repo);
     let lfs = LfsStore::new(repo.path());
 

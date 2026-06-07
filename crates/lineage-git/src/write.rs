@@ -1,13 +1,13 @@
 use git2::Repository;
-use lineage_core::{
-    Confidence, Conversation, LineageError, LineageId,
-};
+use lineage_core::{Confidence, Conversation, LineageError, LineageId};
 
 use crate::compact::compact_large_content;
-use crate::media::externalize_media_artifacts;
 use crate::line_resolve::materialize_line_objects;
+use crate::media::externalize_media_artifacts;
 use crate::patch_id::patch_id_for_commit;
-use crate::refs::{read_conversation_stored, read_manifest, write_conversation, write_line_object, write_manifest};
+use crate::refs::{
+    read_conversation_stored, read_manifest, write_conversation, write_line_object, write_manifest,
+};
 
 pub struct ImportWriteResult {
     pub session_id: LineageId,
@@ -155,7 +155,9 @@ fn write_note_for_commit_with_patch(
 }
 
 fn commit_oid(repo: &Repository, sha: &str) -> Option<git2::Oid> {
-    git2::Oid::from_str(sha).ok().filter(|oid| repo.find_commit(*oid).is_ok())
+    git2::Oid::from_str(sha)
+        .ok()
+        .filter(|oid| repo.find_commit(*oid).is_ok())
 }
 
 fn merge_line_ids(target: &mut Vec<LineageId>, more: Vec<LineageId>) {

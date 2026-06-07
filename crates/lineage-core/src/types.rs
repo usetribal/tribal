@@ -231,10 +231,8 @@ impl Conversation {
             .filter(|m| is_real_model(m))
             .is_none()
         {
-            self.metadata.insert(
-                "model".into(),
-                serde_json::Value::String(models[0].clone()),
-            );
+            self.metadata
+                .insert("model".into(), serde_json::Value::String(models[0].clone()));
         }
     }
 }

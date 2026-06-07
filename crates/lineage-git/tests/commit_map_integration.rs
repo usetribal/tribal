@@ -1,8 +1,8 @@
 use std::process::Command;
 
 use lineage_core::{AgentKind, Artifact, ArtifactKind, Conversation, LineageId, Role, Turn};
-use lineage_git::{best_commit_for_conversation, map_conversation_to_commits, open_repo};
 use lineage_git::patch_id::build_patch_id_index;
+use lineage_git::{best_commit_for_conversation, map_conversation_to_commits, open_repo};
 
 fn init_repo_with_file() -> (tempfile::TempDir, String) {
     let dir = tempfile::tempdir().unwrap();

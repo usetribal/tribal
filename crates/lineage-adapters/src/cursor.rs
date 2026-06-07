@@ -260,8 +260,8 @@ mod tests {
 
     #[test]
     fn discovers_nested_cursor_transcripts() {
-        let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../tests/fixtures/cursor-history");
+        let fixture =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/cursor-history");
         let adapter = CursorAdapter::new(&fixture);
         let sessions = adapter.discover().unwrap();
         assert!(!sessions.is_empty(), "expected cursor sessions in fixture");

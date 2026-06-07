@@ -134,9 +134,7 @@ pub fn blame_with_lineage(
                                                     conversation_id: conv.id.clone(),
                                                     line_range: Some(range),
                                                     confidence,
-                                                    content_preview: preview_content(
-                                                        &turn.content,
-                                                    ),
+                                                    content_preview: preview_content(&turn.content),
                                                 });
                                             }
                                         }

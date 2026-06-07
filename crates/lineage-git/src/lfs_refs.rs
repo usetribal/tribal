@@ -48,7 +48,10 @@ pub fn read_lfs_pointer_ref(repo: &Repository, oid: &str) -> Result<Option<Strin
     Ok(Some(String::from_utf8_lossy(&data).into_owned()))
 }
 
-pub fn read_lfs_data_from_ref(repo: &Repository, oid: &str) -> Result<Option<Vec<u8>>, LineageError> {
+pub fn read_lfs_data_from_ref(
+    repo: &Repository,
+    oid: &str,
+) -> Result<Option<Vec<u8>>, LineageError> {
     let oid_ref = match super::refs::read_ref_oid(repo, &lfs_data_ref(oid))? {
         Some(o) => o,
         None => return Ok(None),
@@ -62,7 +65,10 @@ pub fn list_lfs_data_refs(repo: &Repository) -> Result<Vec<String>, LineageError
         .references_glob(&format!("{LFS_DATA_REF_PREFIX}*"))
         .map_err(|e| LineageError::Other(e.to_string()))?
         .filter_map(|r| r.ok())
-        .filter_map(|r| r.name().map(|n| n.strip_prefix(LFS_DATA_REF_PREFIX).unwrap_or(n).to_string()))
+        .filter_map(|r| {
+            r.name()
+                .map(|n| n.strip_prefix(LFS_DATA_REF_PREFIX).unwrap_or(n).to_string())
+        })
         .collect())
 }
 

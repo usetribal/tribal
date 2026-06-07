@@ -90,7 +90,10 @@ async fn mcp_tool_calls_on_repo_with_session() {
     )
     .await
     .unwrap();
-    assert!(doctor["content"][0]["text"].as_str().unwrap().contains("sessions"));
+    assert!(doctor["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .contains("sessions"));
 
     let list = handle_request(
         dir.path(),
@@ -108,7 +111,10 @@ async fn mcp_tool_calls_on_repo_with_session() {
     )
     .await
     .unwrap();
-    assert!(get["content"][0]["text"].as_str().unwrap().contains("edit f.txt"));
+    assert!(get["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .contains("edit f.txt"));
 
     let blame = handle_request(
         dir.path(),
@@ -134,7 +140,10 @@ async fn mcp_tool_calls_on_repo_with_session() {
     )
     .await
     .unwrap();
-    assert!(search["content"][0]["text"].as_str().unwrap().contains("edit"));
+    assert!(search["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .contains("edit"));
 
     handle_request(
         dir.path(),
@@ -185,7 +194,10 @@ async fn mcp_export_jsonl_and_materialize_session() {
     )
     .await
     .unwrap();
-    assert!(export["content"][0]["text"].as_str().unwrap().contains("test export"));
+    assert!(export["content"][0]["text"]
+        .as_str()
+        .unwrap()
+        .contains("test export"));
 
     handle_request(
         dir.path(),

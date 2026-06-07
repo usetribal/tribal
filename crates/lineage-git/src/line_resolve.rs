@@ -2,10 +2,10 @@ use std::collections::HashSet;
 use std::path::Path;
 
 use git2::{Oid, Repository};
+use lineage_core::derive_line_object_id;
 use lineage_core::{
     Artifact, ArtifactKind, Confidence, Conversation, LineObject, LineageError, ResolveStrategy,
 };
-use lineage_core::derive_line_object_id;
 
 pub fn materialize_line_objects(
     repo: &Repository,
@@ -48,16 +48,11 @@ pub fn materialize_line_objects(
     }
 
     objects.sort_by(|a, b| {
-        (
-            a.file_path.as_str(),
-            a.line_range[0],
-            a.turn_id.as_str(),
-        )
-            .cmp(&(
-                b.file_path.as_str(),
-                b.line_range[0],
-                b.turn_id.as_str(),
-            ))
+        (a.file_path.as_str(), a.line_range[0], a.turn_id.as_str()).cmp(&(
+            b.file_path.as_str(),
+            b.line_range[0],
+            b.turn_id.as_str(),
+        ))
     });
     objects.dedup_by(|a, b| {
         a.id == b.id
@@ -71,10 +66,7 @@ pub fn materialize_line_objects(
 }
 
 fn artifact_is_materializable(artifact: &Artifact) -> bool {
-    matches!(
-        artifact.kind,
-        ArtifactKind::FileEdit | ArtifactKind::Diff
-    )
+    matches!(artifact.kind, ArtifactKind::FileEdit | ArtifactKind::Diff)
 }
 
 fn merge_confidence(resolved: Confidence, link: Confidence) -> Confidence {
@@ -113,7 +105,7 @@ fn resolve_artifact_ranges(
             let content = match git_file_at_commit(repo, commit_sha, &artifact.path)? {
                 Some(c) => c,
                 None => {
-                    return Ok(vec![( [1, 1], Confidence::Heuristic )]);
+                    return Ok(vec![([1, 1], Confidence::Heuristic)]);
                 }
             };
             let lines = content.lines().count().max(1) as u32;
@@ -162,7 +154,10 @@ fn parse_diff_hunks(patch: &str, path: &str) -> Vec<([u32; 2], Confidence)> {
             continue;
         }
         if line.starts_with("+++ ") || line.starts_with("--- ") {
-            let file = line[4..].trim().trim_start_matches("b/").trim_start_matches("a/");
+            let file = line[4..]
+                .trim()
+                .trim_start_matches("b/")
+                .trim_start_matches("a/");
             if file.ends_with(normalized_path) || normalized_path.ends_with(file) {
                 continue;
             }
@@ -219,7 +214,10 @@ pub fn git_file_at_commit(
     Ok(Some(text))
 }
 
-pub fn files_changed_in_commit(repo: &Repository, commit_sha: &str) -> Result<HashSet<String>, LineageError> {
+pub fn files_changed_in_commit(
+    repo: &Repository,
+    commit_sha: &str,
+) -> Result<HashSet<String>, LineageError> {
     let oid = Oid::from_str(commit_sha)
         .map_err(|e| LineageError::Other(format!("invalid commit: {e}")))?;
     let commit = repo
@@ -229,10 +227,7 @@ pub fn files_changed_in_commit(repo: &Repository, commit_sha: &str) -> Result<Ha
         .tree()
         .map_err(|e| LineageError::Other(e.to_string()))?;
 
-    let old_tree = commit
-        .parent(0)
-        .ok()
-        .and_then(|p| p.tree().ok());
+    let old_tree = commit.parent(0).ok().and_then(|p| p.tree().ok());
 
     let diff = repo
         .diff_tree_to_tree(old_tree.as_ref(), Some(&new_tree), None)

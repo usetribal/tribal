@@ -74,9 +74,10 @@ fn normalize_repo_path(path: &str) -> String {
 
 pub fn enrich_turn_with_citations(content: &str, artifacts: &mut Vec<Artifact>) {
     for citation in extract_citations_from_text(content) {
-        if !artifacts.iter().any(|a| {
-            a.path == citation.path && a.line_range == citation.line_range
-        }) {
+        if !artifacts
+            .iter()
+            .any(|a| a.path == citation.path && a.line_range == citation.line_range)
+        {
             artifacts.push(citation);
         }
     }

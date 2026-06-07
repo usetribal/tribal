@@ -5,7 +5,10 @@ use lineage_store::{normalize_oid, LargeBlobBackend, LargeContentStore};
 use crate::config::read_repo_config;
 use crate::lfs_refs::{write_lfs_data_ref, write_lfs_pointer_ref};
 
-pub fn compact_large_content(repo: &Repository, conversation: &mut Conversation) -> Result<(), lineage_core::LineageError> {
+pub fn compact_large_content(
+    repo: &Repository,
+    conversation: &mut Conversation,
+) -> Result<(), lineage_core::LineageError> {
     let config = read_repo_config(repo)?;
     let backend = match config.large_blob_backend {
         lineage_core::LargeBlobBackend::Lfs => LargeBlobBackend::Lfs,

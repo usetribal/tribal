@@ -1,7 +1,7 @@
 use std::process::Command;
 
 use git2::Repository;
-use lineage_core::{LineageError, LfsTransport};
+use lineage_core::{LfsTransport, LineageError};
 use lineage_store::{normalize_oid, LfsStore};
 
 use crate::config::read_repo_config;
@@ -89,7 +89,10 @@ pub fn lfs_push(repo: &Repository, remote: &str) -> Result<LfsTransferReport, Li
         }
     }
 
-    if matches!(config.lfs_transport, LfsTransport::Refs | LfsTransport::Auto) {
+    if matches!(
+        config.lfs_transport,
+        LfsTransport::Refs | LfsTransport::Auto
+    ) {
         push_refs(repo, remote, LFS_POINTER_REF_PREFIX)?;
         push_refs(repo, remote, LFS_DATA_REF_PREFIX)?;
         if report.uploaded == 0 {
@@ -150,7 +153,10 @@ pub fn lfs_fetch(repo: &Repository, remote: &str) -> Result<LfsTransferReport, L
         }
     }
 
-    if matches!(config.lfs_transport, LfsTransport::Auto | LfsTransport::Refs) {
+    if matches!(
+        config.lfs_transport,
+        LfsTransport::Auto | LfsTransport::Refs
+    ) {
         fetch_refs(repo, remote, LFS_POINTER_REF_PREFIX)?;
         fetch_refs(repo, remote, LFS_DATA_REF_PREFIX)?;
 

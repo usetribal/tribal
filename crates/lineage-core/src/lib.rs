@@ -6,7 +6,7 @@ pub mod import_state;
 pub mod types;
 
 pub use config::{
-    CommitMappingMode, LargeBlobBackend, LineageRepoConfig, LfsTransport, LINEAGE_CONFIG_SCHEMA,
+    CommitMappingMode, LargeBlobBackend, LfsTransport, LineageRepoConfig, LINEAGE_CONFIG_SCHEMA,
 };
 pub use conversation_util::{
     conversation_modified_code, files_touched, generate_architecture_summary,

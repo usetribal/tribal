@@ -25,10 +25,7 @@ pub fn conversation_modified_code(conv: &Conversation) -> bool {
 
 pub fn turn_modified_code(turn: &Turn) -> bool {
     for artifact in &turn.artifacts {
-        if matches!(
-            artifact.kind,
-            ArtifactKind::FileEdit | ArtifactKind::Diff
-        ) {
+        if matches!(artifact.kind, ArtifactKind::FileEdit | ArtifactKind::Diff) {
             return true;
         }
     }
@@ -94,7 +91,11 @@ pub fn generate_architecture_summary(conv: &Conversation) -> String {
     } else if files.len() <= 5 {
         format!("Files: {}", files.join(", "))
     } else {
-        format!("Files: {} (+{} more)", files[..3].join(", "), files.len() - 3)
+        format!(
+            "Files: {} (+{} more)",
+            files[..3].join(", "),
+            files.len() - 3
+        )
     };
 
     let model = conv
@@ -102,10 +103,7 @@ pub fn generate_architecture_summary(conv: &Conversation) -> String {
         .map(|m| format!("Model: {m}"))
         .unwrap_or_default();
 
-    let mut parts = vec![
-        format!("{} ({})", conv.agent.as_str(), title),
-        file_line,
-    ];
+    let mut parts = vec![format!("{} ({})", conv.agent.as_str(), title), file_line];
     if !model.is_empty() {
         parts.push(model);
     }

@@ -87,11 +87,7 @@ impl Default for LineageRepoConfig {
             private_session_patterns: vec!["*private*".into()],
             large_blob_threshold_bytes: default_large_threshold(),
             large_blob_backend: LargeBlobBackend::Lfs,
-            exclude_paths: vec![
-                ".env".into(),
-                "*.pem".into(),
-                "*credentials*".into(),
-            ],
+            exclude_paths: vec![".env".into(), "*.pem".into(), "*credentials*".into()],
             exclude_content_patterns: vec![],
             import_only_code_sessions: true,
             commit_mapping: CommitMappingMode::Auto,

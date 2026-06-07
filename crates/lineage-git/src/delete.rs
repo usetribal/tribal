@@ -3,9 +3,7 @@ use std::collections::HashSet;
 use git2::Repository;
 use lineage_core::{LineageError, LineageId};
 
-use crate::blob_gc::{
-    delete_session_ref, list_line_objects_for_session, purge_session_blobs,
-};
+use crate::blob_gc::{delete_session_ref, list_line_objects_for_session, purge_session_blobs};
 use crate::lfs_refs::collect_blob_refs_from_conversation;
 use crate::notes::{overwrite_note_for_commit, read_note_for_commit};
 use crate::refs::{read_conversation_stored, read_line_object, read_manifest, write_manifest};

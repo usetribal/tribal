@@ -1,16 +1,16 @@
 use std::process::Command;
 
+use lineage_core::Confidence;
 use lineage_core::{
-    AgentKind, Artifact, ArtifactKind, Conversation, LargeBlobBackend, LineageRepoConfig,
-    LineageId, Role, Turn, LINEAGE_CONFIG_SCHEMA,
+    AgentKind, Artifact, ArtifactKind, Conversation, LargeBlobBackend, LineageId,
+    LineageRepoConfig, Role, Turn, LINEAGE_CONFIG_SCHEMA,
 };
 use lineage_git::{
     best_commit_for_conversation, find_repo, hydrate_conversation, hydrate_media_artifacts,
     indexable_body, link_session_to_commit, list_session_ids, map_commit_to_sessions,
-    materialize_line_objects, open_repo, persist_conversation, read_conversation,
-    read_repo_config, run_doctor, write_repo_config,
+    materialize_line_objects, open_repo, persist_conversation, read_conversation, read_repo_config,
+    run_doctor, write_repo_config,
 };
-use lineage_core::Confidence;
 
 fn init_repo() -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();

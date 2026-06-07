@@ -86,7 +86,13 @@ pub fn hydrate_media_artifacts(
                 continue;
             }
             let blob_ref = artifact.blob_ref.as_deref();
-            if let Some(bytes) = load_media_bytes(repo, &store, &lfs, blob_ref, artifact.content_hash.as_deref()) {
+            if let Some(bytes) = load_media_bytes(
+                repo,
+                &store,
+                &lfs,
+                blob_ref,
+                artifact.content_hash.as_deref(),
+            ) {
                 let mime = artifact
                     .mime_type
                     .as_deref()

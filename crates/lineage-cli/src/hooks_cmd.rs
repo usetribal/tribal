@@ -45,7 +45,8 @@ pub fn uninstall_hook(repo_path: &Path) -> Result<()> {
             continue;
         }
         let content = fs::read_to_string(&path)?;
-        if content.contains("Lineage pre-commit hook") || content.contains("Lineage post-commit hook")
+        if content.contains("Lineage pre-commit hook")
+            || content.contains("Lineage post-commit hook")
         {
             fs::remove_file(&path)?;
             println!("removed {name}");

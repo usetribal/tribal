@@ -15,7 +15,11 @@ pub fn read_ref_oid(repo: &Repository, ref_name: &str) -> Result<Option<git2::Oi
     }
 }
 
-pub fn write_ref_by_name(repo: &Repository, ref_name: &str, oid: git2::Oid) -> Result<(), LineageError> {
+pub fn write_ref_by_name(
+    repo: &Repository,
+    ref_name: &str,
+    oid: git2::Oid,
+) -> Result<(), LineageError> {
     write_ref(repo, ref_name, oid)
 }
 

@@ -76,9 +76,7 @@ fn lfs_compact_and_hydrate_round_trip() {
 
     persist_conversation(inner, &conv).unwrap();
 
-    let stored = read_conversation_stored(inner, &conv.id)
-        .unwrap()
-        .unwrap();
+    let stored = read_conversation_stored(inner, &conv.id).unwrap().unwrap();
     assert!(stored.turns[0].content.starts_with("[blob:"));
 
     let mut hydrated = stored.clone();

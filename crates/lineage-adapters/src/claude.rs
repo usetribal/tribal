@@ -1,6 +1,10 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::citations::enrich_turn_with_citations;
+use crate::content::{enrich_turn_with_images, extract_claude_content};
+use crate::metadata::{finalize_session_metadata, insert_str, normalize_model};
+use crate::path_util::{claude_project_dir, claude_project_key, paths_match_workspace};
 use chrono::{DateTime, Utc};
 use lineage_agent::{AgentSource, SessionReader, SessionRef};
 use lineage_core::{
@@ -8,10 +12,6 @@ use lineage_core::{
     CONVERSATION_SCHEMA,
 };
 use serde_json::Value;
-use crate::citations::enrich_turn_with_citations;
-use crate::content::{enrich_turn_with_images, extract_claude_content};
-use crate::metadata::{finalize_session_metadata, insert_str, normalize_model};
-use crate::path_util::{claude_project_dir, claude_project_key, paths_match_workspace};
 
 const SKIP_TYPES: &[&str] = &[
     "file-history-snapshot",
@@ -175,10 +175,7 @@ impl SessionReader for ClaudeAdapter {
                     .map(String::from);
             }
             if claude_code_version.is_none() {
-                claude_code_version = v
-                    .get("version")
-                    .and_then(|s| s.as_str())
-                    .map(String::from);
+                claude_code_version = v.get("version").and_then(|s| s.as_str()).map(String::from);
             }
             if git_branch.is_none() {
                 git_branch = v
@@ -207,11 +204,7 @@ impl SessionReader for ClaudeAdapter {
 
             let message = v.get("message").unwrap_or(&v);
             let (text, tool_calls, artifacts, is_tool_result) = extract_claude_content(message);
-            let role = if is_tool_result {
-                Role::Tool
-            } else {
-                role
-            };
+            let role = if is_tool_result { Role::Tool } else { role };
 
             if text.is_empty() && tool_calls.is_empty() {
                 continue;
@@ -299,13 +292,14 @@ mod tests {
         assert_eq!(conv.agent, AgentKind::Claude);
         assert!(!conv.turns.is_empty());
         assert!(conv.turns.iter().any(|t| !t.tool_calls.is_empty()));
-        assert!(conv.turns.iter().any(|t| {
-            t.tool_calls
-                .iter()
-                .any(|tc: &ToolCall| tc.name == "Read")
-        }));
+        assert!(conv
+            .turns
+            .iter()
+            .any(|t| { t.tool_calls.iter().any(|tc: &ToolCall| tc.name == "Read") }));
         assert_eq!(
-            conv.metadata.get("claude_code_version").and_then(|v| v.as_str()),
+            conv.metadata
+                .get("claude_code_version")
+                .and_then(|v| v.as_str()),
             Some("2.0.31")
         );
         assert_eq!(

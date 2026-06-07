@@ -3,8 +3,8 @@ use std::process::Command;
 
 use git2::Repository;
 use lineage_core::{
-    AgentKind, Artifact, ArtifactKind, ArtifactResolve, Confidence, Conversation, LineageId, Role,
-    ResolveStrategy, Turn, CONVERSATION_SCHEMA,
+    AgentKind, Artifact, ArtifactKind, ArtifactResolve, Confidence, Conversation, LineageId,
+    ResolveStrategy, Role, Turn, CONVERSATION_SCHEMA,
 };
 use lineage_git::{materialize_line_objects, persist_conversation};
 
@@ -48,7 +48,13 @@ fn init_repo() -> (tempfile::TempDir, Repository) {
 #[test]
 fn materializes_old_string_line_objects() {
     let (_dir, repo) = init_repo();
-    let commit_sha = repo.head().unwrap().peel_to_commit().unwrap().id().to_string();
+    let commit_sha = repo
+        .head()
+        .unwrap()
+        .peel_to_commit()
+        .unwrap()
+        .id()
+        .to_string();
 
     let conv_id = LineageId::from("test-session");
     let turn_id = LineageId::from("turn-1");
@@ -94,8 +100,8 @@ fn materializes_old_string_line_objects() {
         result.line_objects_written
     );
 
-    let objects = materialize_line_objects(&repo, &conversation, &commit_sha, Confidence::Exact)
-        .unwrap();
+    let objects =
+        materialize_line_objects(&repo, &conversation, &commit_sha, Confidence::Exact).unwrap();
     assert!(!objects.is_empty());
     let obj = &objects[0];
     assert_eq!(obj.file_path, "src/auth.rs");
@@ -106,7 +112,13 @@ fn materializes_old_string_line_objects() {
 #[test]
 fn materializes_citation_line_range() {
     let (_dir, repo) = init_repo();
-    let commit_sha = repo.head().unwrap().peel_to_commit().unwrap().id().to_string();
+    let commit_sha = repo
+        .head()
+        .unwrap()
+        .peel_to_commit()
+        .unwrap()
+        .id()
+        .to_string();
 
     let conversation = Conversation {
         schema_version: CONVERSATION_SCHEMA.into(),
@@ -143,8 +155,8 @@ fn materializes_citation_line_range() {
         metadata: Default::default(),
     };
 
-    let objects = materialize_line_objects(&repo, &conversation, &commit_sha, Confidence::Exact)
-        .unwrap();
+    let objects =
+        materialize_line_objects(&repo, &conversation, &commit_sha, Confidence::Exact).unwrap();
     assert_eq!(objects.len(), 1);
     assert_eq!(objects[0].line_range, [2, 2]);
     assert_eq!(objects[0].confidence, Confidence::Exact);

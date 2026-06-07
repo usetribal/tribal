@@ -8,7 +8,10 @@ fn all_agent_fixtures_parse() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let cases = [
         ("cursor", root.join("../../tests/fixtures/cursor-history")),
-        ("claude", root.join("../../tests/fixtures/claude-code-history")),
+        (
+            "claude",
+            root.join("../../tests/fixtures/claude-code-history"),
+        ),
         ("codex", root.join("../../tests/fixtures/codex-rollout")),
     ];
     for (name, path) in cases {

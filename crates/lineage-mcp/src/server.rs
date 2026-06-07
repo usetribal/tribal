@@ -99,7 +99,11 @@ fn write_response(
     stdout.flush()
 }
 
-pub async fn handle_request(repo_path: &Path, method: &str, params: &Value) -> Result<Value, String> {
+pub async fn handle_request(
+    repo_path: &Path,
+    method: &str,
+    params: &Value,
+) -> Result<Value, String> {
     match method {
         "initialize" => Ok(json!({
             "protocolVersion": "2024-11-05",
@@ -140,12 +144,7 @@ pub async fn handle_request(repo_path: &Path, method: &str, params: &Value) -> R
     }
 }
 
-fn tool_schema(
-    name: &str,
-    description: &str,
-    properties: Value,
-    required: &[&str],
-) -> Value {
+fn tool_schema(name: &str, description: &str, properties: Value, required: &[&str]) -> Value {
     json!({
         "name": name,
         "description": description,
