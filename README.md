@@ -142,8 +142,8 @@ Ask, in order:
    editor integration, local indexing)? → It belongs here. Implement against public contracts only.
 3. **Is it a contract change?** → Edit `specs/` first, then regenerate bindings, then update consumers.
 
-A useful test: *if this were already a public repo, would this code make sense in it, and would it
-still build?* If yes, it goes here. If it would drag in closed code, it doesn't.
+A useful test: _if this were already a public repo, would this code make sense in it, and would it
+still build?_ If yes, it goes here. If it would drag in closed code, it doesn't.
 
 ---
 
