@@ -1,0 +1,5 @@
+{"type":"session_meta","item":{"session_id":"codex-sess-001","timestamp":"2026-06-06T10:00:00Z","cwd":".","model":"gpt-5-codex","originator":"codex","cli_version":"0.34.0"},"seq":1}
+{"type":"user_message","item":{"content":"Add JWT middleware to src/auth.rs","timestamp":"2026-06-06T10:01:00Z"},"seq":2}
+{"type":"assistant_message","item":{"content":"I'll add JWT validation middleware.","timestamp":"2026-06-06T10:01:05Z"},"seq":3}
+{"type":"tool_call","item":{"call_id":"tc-1","tool_name":"write_file","arguments":{"path":"src/auth.rs","content":"pub fn validate() {}"},"timestamp":"2026-06-06T10:01:10Z"},"seq":4}
+{"type":"tool_result","item":{"call_id":"tc-1","tool_name":"write_file","result":"File written","timestamp":"2026-06-06T10:01:11Z"},"seq":5}

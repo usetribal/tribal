@@ -1,0 +1,37 @@
+[package]
+name = "lineage-mcp"
+description = "MCP server exposing lineage session data to AI tools"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+readme.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[lib]
+name = "lineage_mcp"
+path = "src/lib.rs"
+
+[[bin]]
+name = "lineage-mcp"
+path = "src/main.rs"
+
+[dependencies]
+lineage-core = { workspace = true }
+lineage-git = { workspace = true }
+lineage-policy = { workspace = true }
+lineage-search = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true }

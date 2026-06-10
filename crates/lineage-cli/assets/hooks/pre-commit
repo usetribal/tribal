@@ -1,0 +1,19 @@
+#!/bin/sh
+# Lineage pre-commit hook: import agent sessions before each commit.
+set -e
+
+export PATH="${HOME}/.cargo/bin:${PATH}"
+
+run_import() {
+  if command -v git-lineage >/dev/null 2>&1; then
+    git-lineage import --agent all --no-link-head --incremental && return 0
+  fi
+  if git lineage import --agent all --no-link-head --incremental; then
+    return 0
+  fi
+  return 1
+}
+
+if ! run_import; then
+  echo "lineage: import failed (commit continues)" >&2
+fi

@@ -1,0 +1,13 @@
+# https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md
+default: true
+
+MD013: false # line length
+MD033: false # inline HTML (badges, etc.)
+MD041: false # first line must be heading
+MD060: false # table column spacing (compact tables are fine)
+
+MD024:
+  siblings_only: true
+
+MD029:
+  style: ordered
