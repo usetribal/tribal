@@ -34,26 +34,26 @@ Lineage closes that gap with **local, in-repo memory**: agent context lives in y
 
 ## Setup
 
-**1. Clone lineage**
+### 1. Clone lineage
 
 ```bash
 git clone https://github.com/lineage-dev/lineage.git
 cd lineage
 ```
 
-**2. Install the CLI and VS Code extension**
+### 2. Install the CLI and VS Code extension
 
 ```bash
 make setup
 ```
 
-**3. Add git-lineage to your PATH**
+### 3. Add git-lineage to your PATH
 
 ```bash
 export PATH="$HOME/.cargo/bin:$PATH"
 ```
 
-**4. In your project root, run the setup wizard**
+### 4. In your project root, run the setup wizard
 
 ```bash
 cd /path/to/your-app
