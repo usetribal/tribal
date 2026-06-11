@@ -32,7 +32,7 @@ it belongs in the closed platform, talking to this code only through the public 
 
 ## Layout
 
-```
+```text
 oss/
 ├── README.md              # this file
 ├── Cargo.toml             # Rust workspace root
@@ -160,3 +160,41 @@ work:
 
 Because of the subtree model, treat history and module boundaries here as if this were already the
 public repo — because one day it will be.
+
+### Publishing model — the monorepo is canonical, indefinitely
+
+This subtree can be developed inside the monorepo for as long as we want, including
+after a public repository exists. The model:
+
+- **The monorepo is the single source of truth.** The public repository is a published
+  _projection_ of `oss/` (via `git subtree split` or an equivalent filter), refreshed
+  automatically on merges to main. Tags and releases are cut on the public repo from
+  published commits.
+- **Inbound contributions flow back as patches.** External PRs are reviewed on the
+  public repo, then imported (`git am --directory=oss/` of the PR's patches, or an
+  equivalent scripted import) and land on the monorepo's main like any other change —
+  re-published commits then appear in the mirror. Contributors keep authorship;
+  commit SHAs differ across the boundary by construction, which is why releases and
+  issue/PR references live on exactly one side (the public repo).
+- **Do not develop on both sides simultaneously.** Two writable heads is the failure
+  mode (divergence, sync conflicts, split provenance). One side is canonical — the
+  monorepo — and the other is a mirror that queues patches.
+- **Graduation path at volume.** If external contribution volume outgrows patch
+  import, adopt a purpose-built bidirectional filter (josh, Copybara) rather than
+  ad-hoc subtree pull/push. The standalone-build invariant and clean `oss/` history
+  this charter enforces are exactly what keeps that migration mechanical.
+
+---
+
+## Commit hygiene — history will be published
+
+Extraction publishes the full **history** of `oss/` paths, not just the tree. From the
+moment of import, every commit touching `oss/` is a future public commit:
+
+- **Public-safe commit messages.** No closed-platform internals, customer names, or
+  private URLs in the subject or body of any commit that touches `oss/`.
+- **Prefer unmixed commits.** Don't touch `oss/` and platform code in the same commit;
+  the split history should read cleanly on its own.
+- **Secret scanning is enforced.** CI runs gitleaks over the history of `oss/` paths
+  (`.github/workflows/oss.yml`). A secret that lands here is a secret published later —
+  treat any hit as an incident, not a lint failure.

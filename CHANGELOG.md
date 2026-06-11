@@ -15,22 +15,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `git lineage list --json` — session summaries include `git_branch`, `parent_session_id`, `is_sidechain`, `vendor_session_id`, `prompted_by_email`, and `prompted_by_name`
 - README banner image (`assets/lineage-banner.png`) and prerequisite badges (Rust, Git, Node.js)
 
-### Changed
-
-- README repositioned as agent-first engineering context memory; primary setup is `git lineage init` (replaces four-command flow)
-- Usage guides split into [docs/import.md](docs/import.md), [docs/explore.md](docs/explore.md), [docs/share.md](docs/share.md), [docs/rebase.md](docs/rebase.md), [docs/agent-paths.md](docs/agent-paths.md), [docs/git-hooks.md](docs/git-hooks.md), and [docs/how-it-works.md](docs/how-it-works.md)
-- Component docs in [docs/cli/README.md](docs/cli/README.md), [docs/mcp/README.md](docs/mcp/README.md), and [extensions/vscode/README.md](extensions/vscode/README.md)
-- Bundled agent skill ([`crates/lineage-cli/assets/skills/lineage/SKILL.md`](crates/lineage-cli/assets/skills/lineage/SKILL.md)) refocused on lineage features (search, blame, share, rebase, hooks, resume/fork, privacy); setup delegated to `git lineage init`
-- `make setup` / [`scripts/setup.sh`](scripts/setup.sh) run `git lineage init --yes` instead of separate `init-config`, `init-skill`, and `install-hook` calls; `Makefile` accepts `REPO`, `IMPORT`, `WITH_MCP`, and `FORCE_HOOKS` flags
-- README roadmap refreshed (done vs planned items)
-- Renamed CLI command `git lineage ingest` → `git lineage import` (`ingest` kept as alias); init flag `--no-import`; docs at [docs/import.md](docs/import.md); config `import_only_code_sessions`; tracking ref `refs/lineage/last-import`
-
-### Removed
-
-- `examples/demo-repo` bundled demo; use `tests/fixtures/` for samples and `./scripts/setup.sh` on your own project
-
-### Added
-
 #### Developer experience
 
 - `scripts/setup.sh` and `make setup` — one-command install (CLI, VS Code extension, `git lineage init --yes`)
@@ -132,6 +116,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- README repositioned as agent-first engineering context memory; primary setup is `git lineage init` (replaces four-command flow)
+- Usage guides split into [docs/import.md](docs/import.md), [docs/explore.md](docs/explore.md), [docs/share.md](docs/share.md), [docs/rebase.md](docs/rebase.md), [docs/agent-paths.md](docs/agent-paths.md), [docs/git-hooks.md](docs/git-hooks.md), and [docs/how-it-works.md](docs/how-it-works.md)
+- Component docs in [docs/cli/README.md](docs/cli/README.md), [docs/mcp/README.md](docs/mcp/README.md), and [extensions/vscode/README.md](extensions/vscode/README.md)
+- Bundled agent skill ([`crates/lineage-cli/assets/skills/lineage/SKILL.md`](crates/lineage-cli/assets/skills/lineage/SKILL.md)) refocused on lineage features (search, blame, share, rebase, hooks, resume/fork, privacy); setup delegated to `git lineage init`
+- `make setup` / [`scripts/setup.sh`](scripts/setup.sh) run `git lineage init --yes` instead of separate `init-config`, `init-skill`, and `install-hook` calls; `Makefile` accepts `REPO`, `IMPORT`, `WITH_MCP`, and `FORCE_HOOKS` flags
+- README roadmap refreshed (done vs planned items)
+- Renamed CLI command `git lineage ingest` → `git lineage import` (`ingest` kept as alias); init flag `--no-import`; docs at [docs/import.md](docs/import.md); config `import_only_code_sessions`; tracking ref `refs/lineage/last-import`
+
 - Conversation schema docs — document `prompted_by_email` and `prompted_by_name` author metadata (`specs/conversation-schema-v0.md`)
 - Default import skips sessions that did not modify code (`import_only_code_sessions: true`)
 - Import uses multi-signal commit mapping by default (`commit_mapping: auto`) instead of always linking to HEAD
@@ -142,6 +134,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `git lineage list` and `show` surface model info in human-readable output
 - `init-config` ensures `.gitattributes` for `.lineage/media/**`
 - Doctor checks for missing LFS blobs and config ref
+
+### Removed
+
+- `examples/demo-repo` bundled demo; use `tests/fixtures/` for samples and `./scripts/setup.sh` on your own project
 
 ### Fixed
 
