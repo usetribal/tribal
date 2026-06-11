@@ -1,0 +1,27 @@
+[package]
+name = "lineage-adapters"
+description = "Cursor, Claude, and Codex adapters for lineage import"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[features]
+default = ["cursor", "claude", "codex"]
+cursor = []
+claude = []
+codex = []
+
+[dependencies]
+chrono = { workspace = true }
+lineage-agent = { workspace = true }
+lineage-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+walkdir = { workspace = true }
+glob = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

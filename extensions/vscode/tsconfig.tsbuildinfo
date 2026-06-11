@@ -1,0 +1,1 @@
+{"root":["./src/agentActions.ts","./src/extension.ts","./src/lineageClient.ts","./src/lineageDecorator.ts","./src/lineageHoverProvider.ts","./src/lineageMarkdown.ts","./src/sessionPanel.ts","./src/sessionsProvider.ts","./src/types.ts"],"errors":true,"version":"5.9.3"}

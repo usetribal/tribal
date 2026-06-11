@@ -1,0 +1,6 @@
+{"timestamp":"2026-06-06T11:00:00Z","type":"session_meta","payload":{"id":"modern-sess-001","timestamp":"2026-06-06T11:00:00Z","cwd":".","originator":"codex_cli_rs","cli_version":"0.34.0"}}
+{"timestamp":"2026-06-06T11:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"<environment_context>\n  <cwd>.</cwd>\n</environment_context>"}]}}
+{"timestamp":"2026-06-06T11:00:01Z","type":"event_msg","payload":{"type":"user_message","message":"hi","kind":"plain"}}
+{"timestamp":"2026-06-06T11:00:05Z","type":"event_msg","payload":{"type":"agent_message","message":"Hello! How can I help?","kind":"plain"}}
+{"timestamp":"2026-06-06T11:00:10Z","type":"response_item","payload":{"type":"function_call","name":"read_file","call_id":"fc-1","arguments":"{\"path\":\"src/auth.rs\"}"}}
+{"timestamp":"2026-06-06T11:00:11Z","type":"response_item","payload":{"type":"function_call_output","call_id":"fc-1","output":"pub mod auth;"}}

@@ -1,0 +1,15 @@
+[package]
+name = "lineage-policy"
+description = "Redaction, private sessions, and exclude rules for lineage"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+lineage-core = { workspace = true }
+regex = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }

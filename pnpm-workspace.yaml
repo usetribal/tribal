@@ -1,0 +1,7 @@
+packages:
+  - extensions/vscode
+  - contracts/*
+
+allowBuilds:
+  '@vscode/vsce-sign': true
+  keytar: true

@@ -1,0 +1,26 @@
+# Rust
+/target
+**/*.rs.bk
+
+# OS
+.DS_Store
+*.swp
+Thumbs.db
+
+# Node / VS Code extension
+node_modules/
+extensions/vscode/out/
+extensions/vscode/dist/
+extensions/vscode/*.vsix
+
+# Lineage local cache (rebuildable)
+.git/lineage/
+
+# Local Claude Code state (skills under .claude/skills/ are committed)
+.claude/*
+!.claude/skills/
+!.claude/skills/**
+
+# IDE
+.idea/
+*.code-workspace

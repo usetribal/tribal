@@ -1,0 +1,13 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "compile-vscode-extension",
+      "type": "npm",
+      "script": "compile",
+      "path": "extensions/vscode/",
+      "group": "build",
+      "problemMatcher": ["$tsc"]
+    }
+  ]
+}

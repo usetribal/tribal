@@ -1,0 +1,367 @@
+use std::io::{self, IsTerminal};
+use std::path::Path;
+
+use inquire::ui::{Color, RenderConfig, StyleSheet, Styled};
+use inquire::{Confirm, MultiSelect};
+
+use crate::{commands, hooks_cmd, skill_cmd};
+
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+const SKILL_CHOICES: [(&str, &str, &str); 3] = [
+    (".agents/skills/", "Open Standard / Codex", "codex"),
+    (".claude/skills/", "Claude Code", "claude"),
+    (".cursor/skills/", "Cursor", "cursor"),
+];
+
+/// Non-interactive / scripted init flags.
+#[derive(Debug, Clone, Default)]
+pub struct InitOptions {
+    pub yes: bool,
+    pub targets: Vec<String>,
+    pub no_skill: bool,
+    pub no_import: bool,
+    pub force_hooks: bool,
+}
+
+/// Map interactive menu selection to `init-skill` target strings.
+pub fn parse_skill_selection(input: &str) -> Option<Vec<String>> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() || trimmed == "0" || trimmed.eq_ignore_ascii_case("none") {
+        return None;
+    }
+    if trimmed == "4" || trimmed.eq_ignore_ascii_case("all") {
+        return Some(vec!["all".into()]);
+    }
+
+    let mut targets = Vec::new();
+    for part in trimmed.split([',', ' ']) {
+        let part = part.trim();
+        if part.is_empty() {
+            continue;
+        }
+        match part {
+            "1" | "agents" | "codex" => targets.push("codex".into()),
+            "2" | "claude" => targets.push("claude".into()),
+            "3" | "cursor" => targets.push("cursor".into()),
+            "4" | "all" => return Some(vec!["all".into()]),
+            "0" | "none" => return None,
+            other => {
+                return Some(vec![other.to_lowercase()]);
+            }
+        }
+    }
+
+    if targets.is_empty() {
+        None
+    } else {
+        Some(targets)
+    }
+}
+
+fn skill_targets_for_init(options: &InitOptions) -> Option<Vec<String>> {
+    if options.no_skill {
+        return None;
+    }
+    if options.targets.iter().any(|t| t == "none") {
+        return None;
+    }
+    if !options.targets.is_empty() {
+        return Some(options.targets.clone());
+    }
+    if options.yes {
+        return Some(vec!["all".into()]);
+    }
+    None
+}
+
+pub fn init(repo_path: &Path, options: InitOptions) -> Result<()> {
+    if options.yes {
+        run_non_interactive(repo_path, &options)
+    } else if !stdin_is_tty() {
+        Err(
+            "stdin is not a TTY; use --yes for non-interactive init (see: git lineage init --help)"
+                .into(),
+        )
+    } else {
+        run_interactive(repo_path, &options)
+    }
+}
+
+fn run_non_interactive(repo_path: &Path, options: &InitOptions) -> Result<()> {
+    println!("Lineage setup");
+    println!("Repository: {}", repo_path.display());
+    println!();
+
+    commands::init_config(repo_path)?;
+    match skill_targets_for_init(options) {
+        None => println!("agent skill: skipped"),
+        Some(ref targets) => skill_cmd::init_skill(repo_path, targets, true)?,
+    }
+    install_hooks_with_retry(repo_path, options.force_hooks, false)?;
+    if !options.no_import {
+        println!("running: git lineage import --agent all --incremental");
+        commands::import(repo_path, &["all".into()], None, true, true)?;
+    } else {
+        println!("initial import: skipped");
+    }
+    println!();
+    print_footer();
+    Ok(())
+}
+
+fn run_interactive(repo_path: &Path, options: &InitOptions) -> Result<()> {
+    print_header(repo_path);
+
+    step_heading("Configure", None);
+    commands::init_config_quiet(repo_path)?;
+    step_item(true, "wrote default config to refs/lineage/config");
+    step_item(
+        false,
+        "ensured .gitattributes for .lineage/media/** LFS pointers",
+    );
+    println!();
+
+    step_heading(
+        "Agent skill",
+        Some("bundled SKILL.md for your coding agents"),
+    );
+    let skill_targets = prompt_skill_targets()?;
+    match skill_targets {
+        None => step_item(false, "skipped"),
+        Some(ref targets) => {
+            skill_cmd::init_skill_quiet(repo_path, targets, true)?;
+            let installed = skill_cmd::resolve_targets(targets);
+            for (i, target) in installed.iter().enumerate() {
+                let last = i + 1 == installed.len();
+                step_item(!last, format!("{}", target.skill_path(repo_path).display()));
+            }
+        }
+    }
+    println!();
+
+    step_heading(
+        "Git hooks",
+        Some("pre-commit import and post-commit linking"),
+    );
+    install_hooks_with_retry(repo_path, options.force_hooks, true)?;
+    println!();
+
+    step_heading(
+        "Initial import",
+        Some("import your agent transcripts into refs/lineage/*"),
+    );
+    let run_import = prompt_run_import()?;
+    if run_import {
+        step_item(true, "running import --agent all --incremental");
+        commands::import(repo_path, &["all".into()], None, true, true)?;
+        println!("└─ ✓ import finished");
+    } else {
+        step_item(false, "skipped");
+    }
+    println!();
+
+    print_footer();
+    Ok(())
+}
+
+fn install_hooks_with_retry(repo_path: &Path, force: bool, quiet: bool) -> Result<()> {
+    let install = |force: bool| {
+        if quiet {
+            hooks_cmd::install_hook_quiet(repo_path, force)
+        } else {
+            hooks_cmd::install_hook(repo_path, force)
+        }
+    };
+
+    match install(force) {
+        Ok(()) => {
+            if quiet {
+                step_item(true, "pre-commit (incremental import)");
+                step_item(false, "post-commit (link sessions to HEAD)");
+            }
+            Ok(())
+        }
+        Err(e) if !force && stdin_is_tty() => {
+            if quiet {
+                step_item(true, format!("existing hooks detected: {e}"));
+            } else {
+                eprintln!("  {e}");
+            }
+            if confirm_prompt("Overwrite existing git hooks?", false)? {
+                install(true)?;
+                if quiet {
+                    step_item(true, "pre-commit (incremental import)");
+                    step_item(false, "post-commit (link sessions to HEAD)");
+                }
+                Ok(())
+            } else {
+                if quiet {
+                    step_item(false, "skipped hook install");
+                } else {
+                    println!("  skipped hook install");
+                }
+                Ok(())
+            }
+        }
+        Err(e) => Err(e),
+    }
+}
+
+fn prompt_skill_targets() -> Result<Option<Vec<String>>> {
+    let labels: Vec<String> = SKILL_CHOICES
+        .iter()
+        .map(|(path, desc, _)| format!("{path}  ({desc})"))
+        .collect();
+
+    // Prompt on its own line; empty message keeps options on the next line (inquire inlines them otherwise).
+    println!("│ Install skill to:");
+    let selected = MultiSelect::new("", labels)
+        .with_all_selected_by_default()
+        .without_filtering()
+        .with_help_message("↑↓ move · space toggle · → select all · ← clear · enter confirm")
+        .with_render_config(inquire_render_config())
+        .prompt()?;
+
+    if selected.is_empty() {
+        return Ok(None);
+    }
+
+    let mut targets = Vec::new();
+    for label in selected {
+        let Some((_, _, target)) = SKILL_CHOICES
+            .iter()
+            .find(|(path, desc, _)| format!("{path}  ({desc})") == label)
+        else {
+            return Err(format!("unknown skill choice: {label}").into());
+        };
+        targets.push((*target).to_string());
+    }
+
+    Ok(Some(targets))
+}
+
+fn prompt_run_import() -> Result<bool> {
+    Confirm::new("Import your agent transcripts now?")
+        .with_default(true)
+        .with_help_message(
+            "Reads agent transcripts · writes refs/lineage/* · redacts secrets · safe to re-run",
+        )
+        .with_render_config(inquire_render_config())
+        .prompt()
+        .map_err(Into::into)
+}
+
+fn confirm_prompt(message: &str, default_yes: bool) -> Result<bool> {
+    Confirm::new(message)
+        .with_default(default_yes)
+        .with_render_config(inquire_render_config())
+        .prompt()
+        .map_err(Into::into)
+}
+
+fn print_header(repo_path: &Path) {
+    let repo_line = format!("Repository: {}", repo_path.display());
+    println!();
+    draw_box(&["Lineage setup", repo_line.as_str()], 36);
+    println!();
+}
+
+/// Draw a aligned box: `│  content  │` rows with matching top/bottom borders.
+fn draw_box(lines: &[&str], min_width: usize) {
+    let content_width = lines
+        .iter()
+        .map(|line| line.len())
+        .max()
+        .unwrap_or(0)
+        .max(min_width);
+    let border = "─".repeat(content_width + 3);
+
+    println!("╭{border}╮");
+    for line in lines {
+        println!("│  {:<content_width$} │", line);
+    }
+    println!("╰{border}╯");
+}
+
+fn step_heading(title: &str, detail: Option<&str>) {
+    println!("│ {title}");
+    if let Some(detail) = detail {
+        println!("│   {detail}");
+    }
+}
+
+fn step_item(more_follows: bool, message: impl AsRef<str>) {
+    let branch = if more_follows { "├" } else { "└" };
+    println!("{branch}─ ✓ {}", message.as_ref());
+}
+
+fn print_footer() {
+    draw_box(
+        &[
+            "Done",
+            "git lineage list",
+            "git lineage blame <file>:<line>",
+            "git lineage search \"<query>\"",
+        ],
+        36,
+    );
+    println!();
+}
+
+fn inquire_render_config() -> RenderConfig<'static> {
+    let mut cfg = RenderConfig::default();
+    let accent = StyleSheet::new().with_fg(Color::LightCyan);
+    cfg.prompt_prefix = Styled::new("│").with_fg(Color::DarkGrey);
+    cfg.prompt = accent;
+    cfg.help_message = StyleSheet::new().with_fg(Color::DarkGrey);
+    cfg
+}
+
+fn stdin_is_tty() -> bool {
+    io::stdin().is_terminal()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_skill_selection_all() {
+        assert_eq!(parse_skill_selection("4"), Some(vec!["all".into()]));
+        assert_eq!(parse_skill_selection("all"), Some(vec!["all".into()]));
+    }
+
+    #[test]
+    fn parse_skill_selection_none() {
+        assert_eq!(parse_skill_selection("0"), None);
+        assert_eq!(parse_skill_selection("none"), None);
+    }
+
+    #[test]
+    fn parse_skill_selection_multiselect() {
+        assert_eq!(
+            parse_skill_selection("1,3"),
+            Some(vec!["codex".into(), "cursor".into()])
+        );
+    }
+
+    #[test]
+    fn skill_targets_for_init_yes_defaults_all() {
+        let opts = InitOptions {
+            yes: true,
+            ..Default::default()
+        };
+        assert_eq!(skill_targets_for_init(&opts), Some(vec!["all".into()]));
+    }
+
+    #[test]
+    fn skill_targets_for_init_no_skill() {
+        let opts = InitOptions {
+            yes: true,
+            no_skill: true,
+            ..Default::default()
+        };
+        assert_eq!(skill_targets_for_init(&opts), None);
+    }
+}

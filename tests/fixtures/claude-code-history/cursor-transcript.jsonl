@@ -1,0 +1,2 @@
+{"role":"user","text":"Refactor src/auth.rs lines 10:25 to use JWT middleware"}
+{"role":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Updated src/auth.rs with JWT validation."}]}}
