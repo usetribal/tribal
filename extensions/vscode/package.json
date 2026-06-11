@@ -168,7 +168,7 @@
     "build": "tsc -p .",
     "compile": "tsc -p .",
     "watch": "tsc -watch -p .",
-    "lint": "eslint src --max-warnings 0",
+    "lint": "ESLINT_USE_FLAT_CONFIG=false eslint src --max-warnings 0",
     "format": "prettier --write src",
     "format:check": "prettier --check src",
     "check": "npm run compile && npm run lint && npm run format:check",
