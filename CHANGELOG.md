@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Generated contract bindings: `lineage-core` types emit JSON Schema (`specs/schema/`, snapshot-tested) and TypeScript zod bindings (`contracts/ts`, `@lineage/contracts`), each hop drift-checked; see `specs/decisions/0001-contract-bindings-pipeline.md`
+- Sync protocol v0 (`specs/sync-protocol-v0.md`): the local↔platform wire protocol — object mapping, ULID identity + write rules, content hashing, blob transfer, privacy, repo binding — with wire types (`SyncBatch`, `SyncResponse`) in `lineage-core` and generated bindings
 - `git lineage init` — interactive setup wizard: writes config, multiselect skill install (`.agents/`, `.claude/`, `.cursor/`, all, or skip), installs hooks (with overwrite prompt), optional import with side-effect summary; `git lineage init --yes` for scripts and `make setup`
 - Session author metadata — `prompted_by_email` and `prompted_by_name` stamped at import from git config; preserved on re-import for team attribution
 - `git lineage init-skill` — installs bundled agent skill for Cursor (`.cursor/skills/`), Claude Code (`.claude/skills/`), and Codex (`.agents/skills/`); `--target` multiselect, `all` (default), or `none`

@@ -1,0 +1,428 @@
+{
+  "$defs": {
+    "AgentKind": {
+      "enum": [
+        "cursor",
+        "claude",
+        "codex"
+      ],
+      "type": "string"
+    },
+    "Artifact": {
+      "properties": {
+        "blob_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "content_hash": {
+          "description": "Content-addressed sha256 hex for binary media (images, diagrams).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kind": {
+          "$ref": "#/$defs/ArtifactKind"
+        },
+        "line_range": {
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "mime_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "preview_data_url": {
+          "description": "Populated on read/export for UI preview; not persisted to git refs.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "resolve": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactResolve"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "path"
+      ],
+      "type": "object"
+    },
+    "ArtifactKind": {
+      "enum": [
+        "file_edit",
+        "terminal_command",
+        "diff",
+        "image",
+        "diagram",
+        "screenshot"
+      ],
+      "type": "string"
+    },
+    "ArtifactResolve": {
+      "properties": {
+        "old_string": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "patch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "strategy": {
+          "$ref": "#/$defs/ResolveStrategy"
+        }
+      },
+      "required": [
+        "strategy"
+      ],
+      "type": "object"
+    },
+    "BlobManifestEntry": {
+      "description": "Declares a blob the batch's objects reference; content travels separately\nvia `PUT /v0/blobs/{sha256}`.",
+      "properties": {
+        "byte_size": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "content_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sha256": {
+          "description": "Bare lowercase sha256 hex (local `lfs:sha256:` prefixes stripped).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sha256",
+        "byte_size"
+      ],
+      "type": "object"
+    },
+    "Confidence": {
+      "enum": [
+        "exact",
+        "heuristic",
+        "manual"
+      ],
+      "type": "string"
+    },
+    "Conversation": {
+      "properties": {
+        "agent": {
+          "$ref": "#/$defs/AgentKind"
+        },
+        "commit_shas": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "ended_at": {
+          "format": "date-time",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "parent_session_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "private": {
+          "default": false,
+          "type": "boolean"
+        },
+        "schema_version": {
+          "type": "string"
+        },
+        "started_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "turns": {
+          "items": {
+            "$ref": "#/$defs/Turn"
+          },
+          "type": "array"
+        },
+        "workspace_root": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "id",
+        "agent",
+        "started_at",
+        "workspace_root",
+        "turns"
+      ],
+      "type": "object"
+    },
+    "LineObject": {
+      "properties": {
+        "commit_sha": {
+          "type": "string"
+        },
+        "confidence": {
+          "$ref": "#/$defs/Confidence"
+        },
+        "conversation_id": {
+          "type": "string"
+        },
+        "file_path": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "line_range": {
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "metadata": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "schema_version": {
+          "type": "string"
+        },
+        "turn_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "id",
+        "file_path",
+        "line_range",
+        "commit_sha",
+        "conversation_id",
+        "turn_id",
+        "confidence"
+      ],
+      "type": "object"
+    },
+    "RepoBinding": {
+      "description": "Repo identity hints; the server owns resolution to a platform repo id.",
+      "properties": {
+        "normalized_remote_url": {
+          "description": "`host/owner/name`, lowercase, no scheme/login, no `.git` suffix.",
+          "type": "string"
+        },
+        "platform_repo_id": {
+          "description": "Server-issued id cached from a previous sync response.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "root_commit_sha": {
+          "description": "SHA of the repository's root commit (first parentless commit\nreachable from the default branch).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "normalized_remote_url",
+        "root_commit_sha"
+      ],
+      "type": "object"
+    },
+    "ResolveStrategy": {
+      "enum": [
+        "old_string",
+        "full_file",
+        "diff_hunk",
+        "citation"
+      ],
+      "type": "string"
+    },
+    "Role": {
+      "enum": [
+        "user",
+        "assistant",
+        "system",
+        "tool"
+      ],
+      "type": "string"
+    },
+    "SessionCommitLink": {
+      "description": "One git-note link, decomposed to a single (session, commit) pair.",
+      "properties": {
+        "commit_sha": {
+          "type": "string"
+        },
+        "conversation_id": {
+          "type": "string"
+        },
+        "patch_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "conversation_id",
+        "commit_sha"
+      ],
+      "type": "object"
+    },
+    "ToolCall": {
+      "properties": {
+        "arguments": {
+          "default": "",
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "result": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "type": "object"
+    },
+    "Turn": {
+      "properties": {
+        "artifacts": {
+          "items": {
+            "$ref": "#/$defs/Artifact"
+          },
+          "type": "array"
+        },
+        "content": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "role": {
+          "$ref": "#/$defs/Role"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tool_calls": {
+          "items": {
+            "$ref": "#/$defs/ToolCall"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "role",
+        "content"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "blobs": {
+      "items": {
+        "$ref": "#/$defs/BlobManifestEntry"
+      },
+      "type": "array"
+    },
+    "conversations": {
+      "items": {
+        "$ref": "#/$defs/Conversation"
+      },
+      "type": "array"
+    },
+    "line_objects": {
+      "items": {
+        "$ref": "#/$defs/LineObject"
+      },
+      "type": "array"
+    },
+    "repo": {
+      "$ref": "#/$defs/RepoBinding"
+    },
+    "schema_version": {
+      "type": "string"
+    },
+    "session_commit_links": {
+      "items": {
+        "$ref": "#/$defs/SessionCommitLink"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "repo"
+  ],
+  "title": "SyncBatch",
+  "type": "object"
+}
