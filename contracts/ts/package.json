@@ -1,0 +1,33 @@
+{
+  "name": "@lineage/contracts",
+  "version": "0.1.0",
+  "description": "TypeScript bindings (zod) for the Lineage public contracts, generated from specs/schema",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "generate": "node scripts/generate.mjs",
+    "check:drift": "node scripts/generate.mjs --check",
+    "build": "pnpm run check:drift && tsc -p tsconfig.json",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "json-schema-to-zod": "^2.6.1",
+    "typescript": "^5.3.0"
+  }
+}

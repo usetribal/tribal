@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::ids::LineageId;
@@ -46,7 +47,7 @@ pub enum Role {
     Tool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Confidence {
     Exact,
@@ -241,7 +242,7 @@ fn is_real_model(model: &str) -> bool {
     !model.is_empty() && model != "<synthetic>"
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct LineObject {
     pub schema_version: String,
     pub id: LineageId,
