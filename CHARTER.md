@@ -71,7 +71,7 @@ allowed to depend on across the boundary, so they live here, in public.
 
 - **The `lineage-core` Rust types are the canonical definition** of the data schemas
   (Conversation, Artifact, LineObject, …). `specs/schema/*.schema.json` is the canonical
-  *artifact* generated from them (snapshot-tested in `lineage-core`), and every downstream
+  _artifact_ generated from them (snapshot-tested in `lineage-core`), and every downstream
   binding is generated from those schemas — see
   [specs/decisions/0001-contract-bindings-pipeline.md](specs/decisions/0001-contract-bindings-pipeline.md).
   The markdown files in `specs/` are narrative documentation of the same contracts; the sync
