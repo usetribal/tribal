@@ -1,0 +1,62 @@
+{
+  "$defs": {
+    "Confidence": {
+      "enum": [
+        "exact",
+        "heuristic",
+        "manual"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "commit_sha": {
+      "type": "string"
+    },
+    "confidence": {
+      "$ref": "#/$defs/Confidence"
+    },
+    "conversation_id": {
+      "type": "string"
+    },
+    "file_path": {
+      "type": "string"
+    },
+    "id": {
+      "type": "string"
+    },
+    "line_range": {
+      "items": {
+        "format": "uint32",
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "schema_version": {
+      "type": "string"
+    },
+    "turn_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "id",
+    "file_path",
+    "line_range",
+    "commit_sha",
+    "conversation_id",
+    "turn_id",
+    "confidence"
+  ],
+  "title": "LineObject",
+  "type": "object"
+}

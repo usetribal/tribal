@@ -3,7 +3,9 @@ use ulid::Ulid;
 
 use crate::AgentKind;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
 #[serde(transparent)]
 pub struct LineageId(String);
 
