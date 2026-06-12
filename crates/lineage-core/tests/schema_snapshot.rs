@@ -13,7 +13,7 @@ use std::path::PathBuf;
 
 use schemars::schema_for;
 
-use lineage_core::{Conversation, GitNote, LineObject};
+use lineage_core::{Conversation, GitNote, LineObject, SyncBatch, SyncResponse};
 
 fn schema_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../specs/schema")
@@ -59,4 +59,14 @@ fn line_object_schema_matches_types() {
 #[test]
 fn git_note_schema_matches_types() {
     check_snapshot("git-notes-v0.schema.json", schema_for!(GitNote));
+}
+
+#[test]
+fn sync_batch_schema_matches_types() {
+    check_snapshot("sync-batch-v0.schema.json", schema_for!(SyncBatch));
+}
+
+#[test]
+fn sync_response_schema_matches_types() {
+    check_snapshot("sync-response-v0.schema.json", schema_for!(SyncResponse));
 }

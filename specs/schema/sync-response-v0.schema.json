@@ -1,0 +1,90 @@
+{
+  "$defs": {
+    "SyncObjectKind": {
+      "enum": [
+        "conversation",
+        "turn",
+        "line_object",
+        "session_commit_link",
+        "blob"
+      ],
+      "type": "string"
+    },
+    "SyncObjectResult": {
+      "properties": {
+        "id": {
+          "description": "The object's id: ULID, `conversation_id:commit_sha` for links,\nsha256 hex for blobs.",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/SyncObjectKind"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SyncRejectReason"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/SyncObjectStatus"
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "status"
+      ],
+      "type": "object"
+    },
+    "SyncObjectStatus": {
+      "enum": [
+        "accepted",
+        "noop",
+        "rejected",
+        "pending"
+      ],
+      "type": "string"
+    },
+    "SyncRejectReason": {
+      "enum": [
+        "hash_mismatch",
+        "private",
+        "schema_version",
+        "too_large",
+        "invalid"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "metadata": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "repo_id": {
+      "description": "Server-resolved platform repo id; cache and send back as\n`repo.platform_repo_id`.",
+      "type": "string"
+    },
+    "results": {
+      "items": {
+        "$ref": "#/$defs/SyncObjectResult"
+      },
+      "type": "array"
+    },
+    "schema_version": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "repo_id",
+    "results"
+  ],
+  "title": "SyncResponse",
+  "type": "object"
+}
