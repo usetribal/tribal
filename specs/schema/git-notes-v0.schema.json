@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "commit_sha": {
+      "type": "string"
+    },
+    "line_object_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "patch_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "schema_version": {
+      "type": "string"
+    },
+    "session_ids": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "commit_sha",
+    "session_ids"
+  ],
+  "title": "GitNote",
+  "type": "object"
+}

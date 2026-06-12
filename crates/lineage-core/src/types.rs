@@ -11,7 +11,7 @@ pub const CONVERSATION_SCHEMA: &str = "conversation-v0";
 pub const LINE_OBJECT_SCHEMA: &str = "line-object-v0";
 pub const GIT_NOTES_SCHEMA: &str = "git-notes-v0";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum AgentKind {
     Cursor,
@@ -38,7 +38,7 @@ impl AgentKind {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
     User,
@@ -55,7 +55,7 @@ pub enum Confidence {
     Manual,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ToolCall {
     pub id: String,
     pub name: String,
@@ -65,7 +65,7 @@ pub struct ToolCall {
     pub result: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ArtifactKind {
     FileEdit,
@@ -76,7 +76,7 @@ pub enum ArtifactKind {
     Screenshot,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ResolveStrategy {
     OldString,
@@ -85,7 +85,7 @@ pub enum ResolveStrategy {
     Citation,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ArtifactResolve {
     pub strategy: ResolveStrategy,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -94,7 +94,7 @@ pub struct ArtifactResolve {
     pub patch: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Artifact {
     pub kind: ArtifactKind,
     pub path: String,
@@ -114,7 +114,7 @@ pub struct Artifact {
     pub resolve: Option<ArtifactResolve>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Turn {
     pub id: LineageId,
     pub role: Role,
@@ -129,7 +129,7 @@ pub struct Turn {
     pub artifacts: Vec<Artifact>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Conversation {
     pub schema_version: String,
     pub id: LineageId,
@@ -323,7 +323,7 @@ impl LineObject {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct GitNote {
     pub schema_version: String,
     pub commit_sha: String,

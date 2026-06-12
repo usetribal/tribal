@@ -38,10 +38,10 @@ oss/
 ├── Cargo.toml             # Rust workspace root
 ├── pnpm-workspace.yaml    # TS workspace root
 │
-├── specs/                 # Canonical contract definitions (markdown). The source of truth.
+├── specs/                 # Contract artifacts: generated schema/ (canonical), narrative markdown, decisions/
 │
 ├── contracts/             # Published, public contract artifacts
-│   └── ts/                #   @lineage/contracts — TS types + zod schemas, generated from specs/
+│   └── ts/                #   @lineage/contracts — TS types + zod schemas, generated from specs/schema/
 │
 ├── crates/                # Rust workspace members (mirrors the existing local workspace)
 │   ├── lineage-core/      #   canonical types (incl. Rust contract types), pure domain logic
@@ -69,11 +69,15 @@ above those, and the CLI on top.
 Contracts are the **only** thing the rest of the system — including the closed platform — is
 allowed to depend on across the boundary, so they live here, in public.
 
-- **`specs/` is canonical.** The markdown contracts are the single source of truth for the data
-  schemas (Conversation, Artifact, LineObject, …) and the sync wire protocol. Language bindings
-  are generated from or kept in sync with `specs/`, never the other way around.
+- **The `lineage-core` Rust types are the canonical definition** of the data schemas
+  (Conversation, Artifact, LineObject, …). `specs/schema/*.schema.json` is the canonical
+  *artifact* generated from them (snapshot-tested in `lineage-core`), and every downstream
+  binding is generated from those schemas — see
+  [specs/decisions/0001-contract-bindings-pipeline.md](specs/decisions/0001-contract-bindings-pipeline.md).
+  The markdown files in `specs/` are narrative documentation of the same contracts; the sync
+  wire protocol is specified in `specs/` as well.
 - **TypeScript** bindings are published from `contracts/ts` as `@lineage/contracts` (types + zod
-  schemas, and the sync/OpenAPI surface).
+  schemas, generated from `specs/schema/` with a drift check).
 - **Rust** contract types live in `crates/lineage-core` (the existing serde types), which is also
   consumed downstream.
 
@@ -83,8 +87,11 @@ Consumers — including the closed platform — depend on contracts **by package
 into or out of `oss/`. Path-based dependencies break the moment this directory is extracted; name-
 based ones survive it.
 
-If you change a contract, change `specs/` first, regenerate/realign the bindings, and treat it as
-a versioned change — downstream code in another language and another repo depends on it.
+If you change a contract, change the `lineage-core` types first, regenerate the schemas and
+bindings (each generation hop has a drift check that fails CI otherwise), and treat it as a
+versioned change — downstream code in another language and another repo depends on it. Evolution
+is additive within a schema version: new fields are optional-with-default, enum values are never
+renamed or removed.
 
 ---
 
@@ -140,7 +147,8 @@ Ask, in order:
    → It belongs in the **closed platform**, not here. Have it talk to this code via public contracts.
 2. **Is it part of the local, single-engineer experience** (a new agent adapter, a CLI command, an
    editor integration, local indexing)? → It belongs here. Implement against public contracts only.
-3. **Is it a contract change?** → Edit `specs/` first, then regenerate bindings, then update consumers.
+3. **Is it a contract change?** → Edit the `lineage-core` types first, then regenerate
+   schemas and bindings, then update consumers.
 
 A useful test: _if this were already a public repo, would this code make sense in it, and would it
 still build?_ If yes, it goes here. If it would drag in closed code, it doesn't.

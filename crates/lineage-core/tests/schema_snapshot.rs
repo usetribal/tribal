@@ -13,7 +13,7 @@ use std::path::PathBuf;
 
 use schemars::schema_for;
 
-use lineage_core::LineObject;
+use lineage_core::{Conversation, GitNote, LineObject};
 
 fn schema_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../specs/schema")
@@ -47,6 +47,16 @@ fn check_snapshot(name: &str, schema: schemars::Schema) {
 }
 
 #[test]
+fn conversation_schema_matches_types() {
+    check_snapshot("conversation-v0.schema.json", schema_for!(Conversation));
+}
+
+#[test]
 fn line_object_schema_matches_types() {
     check_snapshot("line-object-v0.schema.json", schema_for!(LineObject));
+}
+
+#[test]
+fn git_note_schema_matches_types() {
+    check_snapshot("git-notes-v0.schema.json", schema_for!(GitNote));
 }

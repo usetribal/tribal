@@ -113,7 +113,7 @@ After CLI JSON shape changes, update `src/types.ts` and extension commands in `p
 
 | Area | Where to work | Tests |
 |------|---------------|-------|
-| Schema / types | `specs/` → `lineage-core` | serde + downstream crates |
+| Schema / types | `lineage-core` → `specs/schema/` (generated) | serde + schema snapshot + downstream crates |
 | Git persistence | `lineage-git` | `crates/lineage-git/tests/` |
 | Agent adapters | `lineage-adapters` | `tests/all_fixtures.rs`, `tests/fixtures/` |
 | Import pipeline | `lineage-agent` | `tests/pipeline.rs` |
@@ -135,7 +135,7 @@ cargo test -p lineage-core
 ## Rules
 
 1. Minimize scope — focused diffs
-2. Specs before types
+2. Types are the contract source — regenerate `specs/schema/` and bindings after type changes (see `specs/decisions/0001-contract-bindings-pipeline.md`)
 3. Policy before persist — no unredacted secrets in git objects
 4. Add tests for behavior changes; run `make coverage` before a PR if logic changed
 5. Comment the *why* in plain language, next to the code; no "comment golf" and no narrating discarded approaches

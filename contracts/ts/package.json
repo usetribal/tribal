@@ -21,7 +21,7 @@
     "generate": "node scripts/generate.mjs",
     "check:drift": "node scripts/generate.mjs --check",
     "build": "pnpm run check:drift && tsc -p tsconfig.json",
-    "test": "node --test test/*.test.mjs"
+    "test": "pnpm run build && node --test test/*.test.mjs"
   },
   "dependencies": {
     "zod": "^3.25.76"
