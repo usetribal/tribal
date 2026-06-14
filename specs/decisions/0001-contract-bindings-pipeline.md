@@ -5,8 +5,8 @@
 ## Context
 
 Lineage's data contracts (Conversation, LineObject, …) are consumed in two
-languages: Rust (this repo — the local tooling) and TypeScript (the cloud
-platform that ingests synced data). Until now the only cross-language artifact
+languages: Rust (this repo — the local tooling) and TypeScript (the server
+that ingests synced data). Until now the only cross-language artifact
 was hand-written markdown in `specs/`, kept aligned with the `lineage-core`
 serde types by review discipline alone. Drift between the two could only
 surface at runtime, on the sync path — the worst possible place.
@@ -30,10 +30,10 @@ order:
 
 ## Candidates
 
-- **A. OpenAPI-first** (platform ts-rest contract emits OpenAPI; Rust
-  generates a client). Rejected: truth would live in the closed platform —
+- **A. OpenAPI-first** (the server's ts-rest contract emits OpenAPI; Rust
+  generates a client). Rejected: truth would live in the closed consumer —
   backwards per criterion 5 — and Rust OpenAPI codegen fidelity is middling
-  (criterion 4). OpenAPI remains the *wire* description for the platform's
+  (criterion 4). OpenAPI remains the *wire* description for the server's
   HTTP surface; it just doesn't define the shared types.
 - **B. Neutral IDL: hand-written JSON Schema in `specs/`**, `typify` for
   Rust, zod codegen for TS. Direction-correct, but it adds a third
@@ -41,7 +41,7 @@ order:
   types that already exist and are good (criterion 4: every downstream crate
   would churn).
 - **C. Protobuf-style IDL** (proto3/Smithy with JSON mapping). Best-in-class
-  evolution semantics, but an awkward fit with both ends: the platform stack
+  evolution semantics, but an awkward fit with both ends: the server stack
   is zod/ts-rest, the local stack is serde — both sides would be generated
   code nobody wants to read, plus a new toolchain dependency.
 - **D. Rust-as-truth** (chosen): the existing `lineage-core` serde types are
