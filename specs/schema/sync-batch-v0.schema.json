@@ -252,22 +252,22 @@
       "type": "object"
     },
     "RepoBinding": {
-      "description": "Repo identity hints; the server owns resolution to a platform repo id.",
+      "description": "Repo identity hints; the server owns resolution to its repo id.",
       "properties": {
         "normalized_remote_url": {
           "description": "`host/owner/name`, lowercase, no scheme/login, no `.git` suffix.",
           "type": "string"
         },
-        "platform_repo_id": {
+        "root_commit_sha": {
+          "description": "SHA of the repository's root commit (first parentless commit\nreachable from the default branch).",
+          "type": "string"
+        },
+        "server_repo_id": {
           "description": "Server-issued id cached from a previous sync response.",
           "type": [
             "string",
             "null"
           ]
-        },
-        "root_commit_sha": {
-          "description": "SHA of the repository's root commit (first parentless commit\nreachable from the default branch).",
-          "type": "string"
         }
       },
       "required": [
