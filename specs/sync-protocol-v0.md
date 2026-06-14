@@ -1,26 +1,25 @@
 # Sync Protocol v0
 
 How the local tool's git-native storage (refs, notes, LFS-style blobs) maps onto
-the platform's database + object-store model, and the wire protocol that moves
-data between them. The platform's ingest endpoint and the CLI's `sync` command
-are both implemented against this document.
+a server's database + object-store model, and the wire protocol that moves data
+between them. A server's ingest endpoint and the CLI's `sync` command are both
+implemented against this document.
 
 Status: **draft for review** — written against `conversation-schema-v0`,
-`line-object-schema-v0`, `git-notes-schema-v0`, and the platform's sync
-semantics (write rules summarized in [Write rules](#write-rules); the durable
-reasoning lives in the platform's `docs/sync-semantics.md`).
+`line-object-schema-v0`, `git-notes-schema-v0`, and the sync semantics
+summarized in [Write rules](#write-rules).
 
 ## Scope
 
-- **In scope:** one-way up-sync (local → platform): conversations with embedded
+- **In scope:** one-way up-sync (local → server): conversations with embedded
   turns, line objects, session↔commit links, large-content blobs; identity and
   idempotency; blob transfer; privacy; repo binding.
-- **Out of scope, not foreclosed:** down-sync (platform → local) — the read API
+- **Out of scope, not foreclosed:** down-sync (server → local) — the read API
   returns canonical spec shapes so the CLI can become a consumer later; have/want
   dedup negotiation; presigned direct-to-bucket blob upload; backfill (same
   endpoint semantics, versioned separately).
 - **Never in scope:** raw git objects. Git is transport on the local side only;
-  the platform receives JSON documents and content-addressed blobs, never refs,
+  the server receives JSON documents and content-addressed blobs, never refs,
   notes, or packfiles.
 
 ## Transport
@@ -32,7 +31,7 @@ HTTPS + JSON. Two endpoints:
 | `POST /v0/sync` | Upload one batch of metadata objects (`sync-batch-v0`) |
 | `PUT /v0/blobs/{sha256}` | Upload one content-addressed blob (`application/octet-stream`) |
 
-Authentication: every request carries the platform-minted bearer token obtained
+Authentication: every request carries a server-minted bearer token obtained
 via the device flow (`Authorization: Bearer …`). The token's verified claims —
 tenant and user — are inputs to the write rules below; nothing in the request
 body can override them.
@@ -45,8 +44,8 @@ the zod bindings in `@lineage/contracts`.
 
 ## Object mapping
 
-| Local (git-native) | Wire | Platform |
-|--------------------|------|----------|
+| Local (git-native) | Wire | Server |
+|--------------------|------|--------|
 | `refs/lineage/sessions/<id>` → conversation blob | `conversations[]` (conversation-v0 documents, turns embedded) | `conversation` + `turn` rows |
 | line-object blobs | `line_objects[]` (line-object-v0 documents) | `line_object` rows |
 | `refs/notes/lineage` note entries (`session_ids` × `commit_sha`, `patch_id`) | `session_commit_links[]` | `session_commit` rows |
@@ -61,7 +60,7 @@ link — line objects sync as first-class objects and already carry `commit_sha`
 ## Identity
 
 - Every object carries the client-minted ULID from its spec. **Client ids are
-  authoritative and are never regenerated server-side.** Platform rows are keyed
+  authoritative and are never regenerated server-side.** Server rows are keyed
   `(tenant_id, id)`.
 - Idempotency = upsert on id, governed by the write rules below. Re-posting an
   identical batch is a no-op by construction.
@@ -91,7 +90,7 @@ them.
 4. **Forks are new identities.** A fork is a new conversation ULID with
    `parent_session_id` pointing at its origin. The server treats
    `parent_session_id` as an opaque immutable field; the parent need not exist
-   on the platform (it may be private or not yet synced).
+   on the server (it may be private or not yet synced).
 
 Line objects are the one mutable exception: `remap` legitimately rewrites
 `commit_sha` after a rebase. Policy: latest write wins whole-object (derived,
@@ -116,13 +115,13 @@ per **RFC 8785 (JCS)** and encoded as UTF-8.
 
 ## Blob transfer
 
-The local LFS object is the unit of blob transfer and maps 1:1 onto the
-platform's `blob_ref`:
+The local LFS object is the unit of blob transfer and maps 1:1 onto a single
+server-side blob record:
 
 - **Identity:** bare lowercase sha256 hex on the wire. Local references
   (`lfs:sha256:<hex>`, `sha256:<hex>`, pointer-file `oid sha256:<hex>`)
-  normalize to the bare digest. Platform stores `blob_ref(sha256, byte_size,
-  content_type, storage_key)`.
+  normalize to the bare digest. The server records the blob keyed by its sha256
+  (with byte size, content type, and its own storage key).
 - **Flow:** the batch's `blobs[]` manifest declares every blob the batch's
   objects reference (`sha256`, `byte_size`, optional `content_type`). Blob
   content is uploaded via `PUT /v0/blobs/{sha256}` — idempotent; the server
@@ -152,7 +151,7 @@ platform's `blob_ref`:
   privacy.
 - Redaction is client-side and happens before persistence locally
   (policy-before-persist); the protocol carries only already-redacted content.
-  Server-side scanning is the platform's hygiene concern, out of protocol
+  Server-side scanning is the server's own hygiene concern, out of protocol
   scope.
 
 ## Repo binding
@@ -162,17 +161,17 @@ Every batch carries the repo identity hints; the **server** owns resolution:
 - Client sends `repo: { normalized_remote_url, root_commit_sha }`.
   - `normalized_remote_url`: origin remote URL with scheme/login stripped to
     `host/owner/name` lowercase, `.git` suffix removed
-    (e.g. `github.com/lineage-context/lineage-platform`).
+    (e.g. `github.com/acme/widgets`).
   - `root_commit_sha`: the SHA of the repository's root commit (first parentless
     commit reachable from the default branch).
 - The server resolves the forge's numeric repo id using its own forge
-  connection (the user's GitHub token server-side) — the CLI never needs a
+  connection (the user's forge token server-side) — the CLI never needs a
   forge API credential. Unknown repo → implicit first-push registration.
   Resolution precedence: forge numeric id (primary), then
   `(root_commit_sha, normalized_remote_url)` as fallback/hints.
-- The server returns the platform `repo_id` in the response; the client SHOULD
+- The server returns its `repo_id` in the response; the client SHOULD
   cache it in local git config (not committed — avoids fork inheritance) and
-  send it as `repo.platform_repo_id` on subsequent syncs.
+  send it as `repo.server_repo_id` on subsequent syncs.
 
 ## Batch processing and responses
 
@@ -236,7 +235,7 @@ point.
 
 ## Conformance checklist (ingest implementer)
 
-A platform ingest implementation is conforming when:
+A server ingest implementation is conforming when:
 
 1. Double-posting any batch yields all-`noop` and zero row changes.
 2. A turn re-uploaded with altered content is rejected `hash_mismatch`; the

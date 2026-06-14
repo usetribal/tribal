@@ -67,7 +67,7 @@
       "type": "object"
     },
     "repo_id": {
-      "description": "Server-resolved platform repo id; cache and send back as\n`repo.platform_repo_id`.",
+      "description": "Server-resolved repo id; cache and send back as\n`repo.server_repo_id`.",
       "type": "string"
     },
     "results": {

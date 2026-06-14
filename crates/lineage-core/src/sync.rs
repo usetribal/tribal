@@ -15,7 +15,7 @@ use crate::types::{Conversation, LineObject};
 pub const SYNC_BATCH_SCHEMA: &str = "sync-batch-v0";
 pub const SYNC_RESPONSE_SCHEMA: &str = "sync-response-v0";
 
-/// Repo identity hints; the server owns resolution to a platform repo id.
+/// Repo identity hints; the server owns resolution to its repo id.
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct RepoBinding {
     /// `host/owner/name`, lowercase, no scheme/login, no `.git` suffix.
@@ -25,7 +25,7 @@ pub struct RepoBinding {
     pub root_commit_sha: String,
     /// Server-issued id cached from a previous sync response.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub platform_repo_id: Option<String>,
+    pub server_repo_id: Option<String>,
 }
 
 /// One git-note link, decomposed to a single (session, commit) pair.
@@ -121,8 +121,8 @@ pub struct SyncObjectResult {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct SyncResponse {
     pub schema_version: String,
-    /// Server-resolved platform repo id; cache and send back as
-    /// `repo.platform_repo_id`.
+    /// Server-resolved repo id; cache and send back as
+    /// `repo.server_repo_id`.
     pub repo_id: String,
     pub results: Vec<SyncObjectResult>,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
@@ -139,7 +139,7 @@ mod tests {
         let mut batch = SyncBatch::new(RepoBinding {
             normalized_remote_url: "github.com/acme/widgets".into(),
             root_commit_sha: "a".repeat(40),
-            platform_repo_id: None,
+            server_repo_id: None,
         });
         batch
             .conversations
