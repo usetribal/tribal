@@ -8,11 +8,12 @@ use lineage_core::{
     LastImportState, LineageId, LineageRepoConfig,
 };
 use lineage_git::{
-    best_commit_for_conversation, blame_with_lineage, delete_session, ensure_gitattributes,
-    hydrate_media_artifacts, lfs_fetch, lfs_push, lfs_status, link_session_to_commit,
-    list_session_ids, map_commit_to_sessions, materialize_session_at_commit, open_repo,
-    persist_import, purge_orphans, read_conversation, read_repo_config, remap_orphaned_commits,
-    run_doctor, stamp_prompted_by, write_last_import, write_repo_config, PROMPTED_BY_EMAIL,
+    assemble_batch, best_commit_for_conversation, blame_with_lineage, delete_session,
+    ensure_gitattributes, hydrate_media_artifacts, lfs_fetch, lfs_push, lfs_status,
+    link_session_to_commit, list_session_ids, map_commit_to_sessions,
+    materialize_session_at_commit, open_repo, persist_import, purge_orphans, read_conversation,
+    read_conversation_stored, read_repo_config, remap_orphaned_commits, run_doctor,
+    stamp_prompted_by, sync_push, write_last_import, write_repo_config, PROMPTED_BY_EMAIL,
     PROMPTED_BY_NAME,
 };
 use lineage_policy::{
@@ -494,6 +495,68 @@ pub fn export(repo_path: &Path, redact: bool, format: &str) -> Result<()> {
             }
         }
         other => return Err(format!("unsupported format: {other}").into()),
+    }
+    Ok(())
+}
+
+// Resolves the bearer token from an explicit flag, falling back to the
+// LINEAGE_TOKEN env var. Real token issuance (device flow) lands separately in
+// the platform's packages/auth; the flag/env seam is the stand-in for it.
+fn resolve_sync_token(token: Option<&str>) -> Result<String> {
+    token
+        .map(str::to_string)
+        .filter(|t| !t.is_empty())
+        .or_else(|| {
+            std::env::var("LINEAGE_TOKEN")
+                .ok()
+                .filter(|t| !t.is_empty())
+        })
+        .ok_or_else(|| "no auth token: pass --token or set LINEAGE_TOKEN".into())
+}
+
+pub fn sync(repo_path: &Path, server: &str, token: Option<&str>, remote: &str) -> Result<()> {
+    let repo = open_repo(repo_path)?;
+    let inner = repo.inner();
+    let token = resolve_sync_token(token)?;
+
+    // Redact and drop private sessions before anything crosses the wire — the
+    // same guarantee the export path provides (sync-protocol-v0 "Privacy").
+    let repo_config = read_repo_config(inner)?;
+    let mut policy = policy_from_repo_config(&repo_config);
+    policy.strip_private = true;
+    policy.redaction_rules = PolicyConfig::default_safe().redaction_rules;
+
+    let mut conversations = Vec::new();
+    for id in list_session_ids(inner)? {
+        if let Some(conv) = read_conversation_stored(inner, &id)? {
+            if conv.private {
+                continue;
+            }
+            conversations.push(prepare_for_export(&policy, conv));
+        }
+    }
+
+    let batch = assemble_batch(inner, remote, conversations)?;
+    println!(
+        "syncing {} conversation(s), {} line object(s), {} commit link(s), {} blob(s) to {server}",
+        batch.conversations.len(),
+        batch.line_objects.len(),
+        batch.session_commit_links.len(),
+        batch.blobs.len()
+    );
+
+    let report = sync_push(inner, server, &token, &batch)?;
+    println!(
+        "synced to repo {} ({} accepted, {} noop, {} rejected, {} pending, {} blob(s) uploaded)",
+        report.repo_id,
+        report.accepted,
+        report.noop,
+        report.rejected,
+        report.pending,
+        report.blobs_uploaded
+    );
+    if report.rejected > 0 {
+        return Err(format!("{} object(s) rejected by server", report.rejected).into());
     }
     Ok(())
 }

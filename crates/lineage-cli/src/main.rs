@@ -106,6 +106,18 @@ enum Commands {
         #[arg(long, default_value = "json")]
         format: String,
     },
+    /// Push redacted sessions to a Lineage platform server
+    Sync {
+        /// Server base URL (e.g. http://localhost:3000/api)
+        #[arg(long)]
+        server: String,
+        /// Bearer token; falls back to the LINEAGE_TOKEN env var
+        #[arg(long)]
+        token: Option<String>,
+        /// Git remote whose URL identifies the repo to the server
+        #[arg(long, default_value = "origin")]
+        remote: String,
+    },
     /// Search indexed sessions
     Search { query: String },
     /// Rebuild search index from git refs
@@ -222,6 +234,11 @@ fn main() -> ExitCode {
             HookAction::PostCommit => hooks_cmd::post_commit(&repo_path),
         },
         Commands::Export { redact, format } => commands::export(&repo_path, redact, &format),
+        Commands::Sync {
+            server,
+            token,
+            remote,
+        } => commands::sync(&repo_path, &server, token.as_deref(), &remote),
         Commands::Search { query } => commands::search(&repo_path, &query),
         Commands::RebuildIndex => commands::rebuild_index(&repo_path),
         Commands::Link {
