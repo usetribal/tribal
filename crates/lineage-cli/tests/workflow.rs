@@ -186,6 +186,48 @@ fn cli_export_rejects_unknown_format() {
 }
 
 #[test]
+fn cli_sync_requires_a_token() {
+    let dir = init_repo();
+    commands::init_config(dir.path()).unwrap();
+    // No --token and no LINEAGE_TOKEN: the command must fail before touching the
+    // network, with a message naming the seam.
+    std::env::remove_var("LINEAGE_TOKEN");
+    let err = commands::sync(dir.path(), "http://127.0.0.1:0", None, "origin")
+        .expect_err("sync without a token should fail");
+    assert!(err.to_string().contains("token"), "got: {err}");
+}
+
+#[test]
+fn cli_sync_assembles_then_fails_on_unreachable_server() {
+    let dir = init_repo();
+    commands::init_config(dir.path()).unwrap();
+    seed_session(&dir);
+    Command::new("git")
+        .args([
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/acme/widgets.git",
+        ])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    // Reaching the transport error proves assembly + repo binding succeeded; the
+    // port-0 address is guaranteed unbindable, so the POST cannot connect.
+    let err = commands::sync(
+        dir.path(),
+        "http://127.0.0.1:0",
+        Some("dev-token"),
+        "origin",
+    )
+    .expect_err("sync to an unreachable server should fail");
+    assert!(
+        err.to_string().contains("sync request failed"),
+        "got: {err}"
+    );
+}
+
+#[test]
 fn cli_search_no_results() {
     let dir = init_repo();
     commands::init_config(dir.path()).unwrap();

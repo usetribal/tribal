@@ -106,6 +106,20 @@ See [Rebase](../rebase.md) and [Maintenance](../maintenance.md).
 
 See [LFS](../lfs.md).
 
+### Sync
+
+| Command | Description |
+|---------|-------------|
+| `git lineage sync --server URL [--token TOKEN] [--remote origin]` | Push redacted sessions to a Lineage platform server |
+
+Redacts and drops private sessions before anything crosses the wire, assembles a
+`sync-batch-v0` (conversations with embedded turns, line objects, decomposed
+commit links, and a blob manifest), uploads referenced blobs, and POSTs the
+batch. The server resolves the repo from the `--remote` URL and root commit; its
+returned id is cached in local git config (`lineage.serverRepoId`). The token
+falls back to the `LINEAGE_TOKEN` environment variable. Implements
+[sync-protocol-v0](../../specs/sync-protocol-v0.md).
+
 ### Hooks
 
 | Command | Description |
