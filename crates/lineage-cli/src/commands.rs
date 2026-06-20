@@ -500,8 +500,8 @@ pub fn export(repo_path: &Path, redact: bool, format: &str) -> Result<()> {
 }
 
 // Resolves the bearer token from an explicit flag, falling back to the
-// LINEAGE_TOKEN env var. Real token issuance (device flow) lands separately in
-// the platform's packages/auth; the flag/env seam is the stand-in for it.
+// LINEAGE_TOKEN env var. Real token issuance (device flow) is owned by the
+// server; the flag/env seam is the stand-in for it until that lands.
 fn resolve_sync_token(token: Option<&str>) -> Result<String> {
     token
         .map(str::to_string)

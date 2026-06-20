@@ -109,7 +109,7 @@ Target a different repository path with `--repo /path/to/repo` on any command.
 [ ] MCP import, delete, and gc tools
 [ ] Cursor resume/fork support (pending stable agent CLI)
 [ ] LLM-generated architecture summaries
-[ ] Full GitHub-killer SaaS platform
+[ ] Full GitHub-killer SaaS product
 ```
 
 ## License

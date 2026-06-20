@@ -110,7 +110,7 @@ See [LFS](../lfs.md).
 
 | Command | Description |
 |---------|-------------|
-| `git lineage sync --server URL [--token TOKEN] [--remote origin]` | Push redacted sessions to a Lineage platform server |
+| `git lineage sync --server URL [--token TOKEN] [--remote origin]` | Push redacted sessions to a Lineage server |
 
 Redacts and drops private sessions before anything crosses the wire, assembles a
 `sync-batch-v0` (conversations with embedded turns, line objects, decomposed
