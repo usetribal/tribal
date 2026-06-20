@@ -106,7 +106,7 @@ enum Commands {
         #[arg(long, default_value = "json")]
         format: String,
     },
-    /// Push redacted sessions to a Lineage platform server
+    /// Push redacted sessions to a Lineage server
     Sync {
         /// Server base URL (e.g. http://localhost:3000/api)
         #[arg(long)]
