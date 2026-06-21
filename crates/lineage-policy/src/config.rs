@@ -26,10 +26,15 @@ pub fn policy_from_repo_config(repo: &LineageRepoConfig) -> PolicyConfig {
 }
 
 pub fn is_private_session(source_path: &str, config: &LineageRepoConfig) -> bool {
+    let basename = source_path
+        .rsplit('/')
+        .next()
+        .or_else(|| source_path.rsplit('\\').next())
+        .unwrap_or(source_path);
     config
         .private_session_patterns
         .iter()
-        .any(|p| glob_match_simple(p, source_path))
+        .any(|p| glob_match_simple(p, basename))
 }
 
 fn glob_match_simple(pattern: &str, path: &str) -> bool {
@@ -56,6 +61,15 @@ mod tests {
         ));
         assert!(!is_private_session(
             "/home/user/.cursor/agent-transcripts/normal.jsonl",
+            &config
+        ));
+    }
+
+    #[test]
+    fn private_session_pattern_ignores_macos_private_var_prefix() {
+        let config = LineageRepoConfig::default();
+        assert!(!is_private_session(
+            "/private/var/folders/T/tmp/.cursor/agent-transcripts/session-001.jsonl",
             &config
         ));
     }

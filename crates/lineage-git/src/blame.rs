@@ -1,7 +1,10 @@
 use std::path::{Path, PathBuf};
 
 use git2::{BlameOptions, Repository};
-use lineage_core::{Confidence, LineObject, LineageError, LineageId, ResolveStrategy};
+use lineage_core::{
+    normalize_repo_path, paths_match_repo_file, workspace_root_for, Confidence, LineObject,
+    LineageError, LineageId, ResolveStrategy,
+};
 
 use crate::line_resolve::resolve_old_string;
 use crate::notes::read_note_for_commit;
@@ -76,9 +79,11 @@ pub fn blame_with_lineage(
     if line_objects.is_empty() {
         for session_id in &sessions {
             if let Some(conv) = read_conversation(repo, session_id)? {
+                let workspace = workspace_root_for(&conv.workspace_root, repo.workdir());
                 for turn in &conv.turns {
                     for artifact in &turn.artifacts {
-                        if artifact.path != file_path_str {
+                        if !paths_match_repo_file(&artifact.path, &file_path_str, Some(&workspace))
+                        {
                             continue;
                         }
 
@@ -96,8 +101,10 @@ pub fn blame_with_lineage(
                                     })
                                     .unwrap_or(Confidence::Heuristic);
 
+                                let normalized_path =
+                                    normalize_repo_path(&artifact.path, Some(&workspace));
                                 line_objects.push(LineObject::new(
-                                    &file_path_str,
+                                    &normalized_path,
                                     range,
                                     &commit_sha,
                                     conv.id.clone(),
@@ -118,11 +125,13 @@ pub fn blame_with_lineage(
                         if let Some(resolve) = artifact.resolve.as_ref() {
                             if resolve.strategy == ResolveStrategy::OldString {
                                 if let Some(old_string) = resolve.old_string.as_ref() {
+                                    let lookup_path =
+                                        normalize_repo_path(&artifact.path, Some(&workspace));
                                     if let Ok(Some(content)) =
                                         crate::line_resolve::git_file_at_commit(
                                             repo,
                                             &commit_sha,
-                                            &file_path_str,
+                                            &lookup_path,
                                         )
                                     {
                                         for (range, confidence) in

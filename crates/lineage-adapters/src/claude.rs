@@ -203,7 +203,8 @@ impl SessionReader for ClaudeAdapter {
             };
 
             let message = v.get("message").unwrap_or(&v);
-            let (text, tool_calls, artifacts, is_tool_result) = extract_claude_content(message);
+            let (text, tool_calls, artifacts, is_tool_result) =
+                extract_claude_content(message, Some(&self.workspace_root));
             let role = if is_tool_result { Role::Tool } else { role };
 
             if text.is_empty() && tool_calls.is_empty() {
@@ -228,7 +229,7 @@ impl SessionReader for ClaudeAdapter {
             );
 
             let mut artifacts = artifacts;
-            enrich_turn_with_citations(&text, &mut artifacts);
+            enrich_turn_with_citations(&text, &mut artifacts, Some(&self.workspace_root));
             enrich_turn_with_images(&text, &mut artifacts);
 
             conversation.turns.push(Turn {
