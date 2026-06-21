@@ -186,7 +186,7 @@ impl SessionReader for CursorAdapter {
             let (text, tool_calls, artifacts) = if let Some(text) = row.text {
                 (text, vec![], vec![])
             } else if let Some(ref message) = row.message {
-                extract_cursor_content(message)
+                extract_cursor_content(message, Some(&self.workspace_root))
             } else {
                 continue;
             };
@@ -203,7 +203,7 @@ impl SessionReader for CursorAdapter {
                 .map(String::from);
 
             let mut artifacts = artifacts;
-            enrich_turn_with_citations(&text, &mut artifacts);
+            enrich_turn_with_citations(&text, &mut artifacts, Some(&self.workspace_root));
             enrich_turn_with_images(&text, &mut artifacts);
 
             conversation.turns.push(Turn {
@@ -280,5 +280,37 @@ mod tests {
                 .and_then(|v| v.as_str()),
             Some("cursor-sess-001")
         );
+    }
+
+    #[test]
+    fn normalizes_absolute_tool_paths_to_repo_relative() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        std::fs::create_dir_all(
+            root.join(".cursor/projects/FixtureWorkspace/agent-transcripts/abs-sess"),
+        )
+        .unwrap();
+        let transcript = root
+            .join(".cursor/projects/FixtureWorkspace/agent-transcripts/abs-sess/abs-sess.jsonl");
+        let abs = root.join("src/auth.rs");
+        std::fs::create_dir_all(abs.parent().unwrap()).unwrap();
+        std::fs::write(
+            &transcript,
+            format!(
+                r#"{{"role":"assistant","message":{{"content":[{{"type":"tool_use","name":"StrReplace","input":{{"path":"{}","old_string":"a","new_string":"b"}}}}]}}}}"#,
+                abs.display()
+            ),
+        )
+        .unwrap();
+
+        let adapter = CursorAdapter::new(&root);
+        let sessions = adapter.discover().unwrap();
+        let session = sessions
+            .iter()
+            .find(|s| s.id_hint == "abs-sess")
+            .expect("abs-sess transcript");
+        let conv = adapter.read(session).unwrap();
+        let artifact = conv.turns[0].artifacts[0].clone();
+        assert_eq!(artifact.path, "src/auth.rs");
     }
 }

@@ -161,3 +161,113 @@ fn materializes_citation_line_range() {
     assert_eq!(objects[0].line_range, [2, 2]);
     assert_eq!(objects[0].confidence, Confidence::Exact);
 }
+
+#[test]
+fn materializes_absolute_path_artifacts() {
+    let (dir, repo) = init_repo();
+    let commit_sha = repo
+        .head()
+        .unwrap()
+        .peel_to_commit()
+        .unwrap()
+        .id()
+        .to_string();
+    let workspace = dir.path().display().to_string();
+    let abs_path = dir.path().join("src/auth.rs").display().to_string();
+
+    let conversation = Conversation {
+        schema_version: CONVERSATION_SCHEMA.into(),
+        id: LineageId::from("abs-path-session"),
+        agent: AgentKind::Cursor,
+        started_at: chrono::Utc::now(),
+        ended_at: None,
+        workspace_root: workspace,
+        parent_session_id: None,
+        private: false,
+        turns: vec![Turn {
+            id: LineageId::from("turn-abs"),
+            role: Role::Assistant,
+            content: "updated auth".into(),
+            tool_calls: vec![],
+            model: None,
+            timestamp: None,
+            artifacts: vec![Artifact {
+                kind: ArtifactKind::Diff,
+                path: abs_path,
+                blob_ref: None,
+                content_hash: None,
+                mime_type: None,
+                preview_data_url: None,
+                line_range: None,
+                resolve: Some(ArtifactResolve {
+                    strategy: ResolveStrategy::OldString,
+                    old_string: Some("pub fn validate() {}".into()),
+                    patch: None,
+                }),
+            }],
+        }],
+        commit_shas: vec![commit_sha.clone()],
+        metadata: Default::default(),
+    };
+
+    let result = persist_conversation(&repo, &conversation).unwrap();
+    assert!(
+        result.line_objects_written >= 1,
+        "expected line objects for absolute path, got {}",
+        result.line_objects_written
+    );
+    let objects =
+        materialize_line_objects(&repo, &conversation, &commit_sha, Confidence::Exact).unwrap();
+    assert_eq!(objects[0].file_path, "src/auth.rs");
+}
+
+#[test]
+fn skips_artifacts_for_files_not_in_commit_diff() {
+    let (dir, repo) = init_repo();
+    let commit_sha = repo
+        .head()
+        .unwrap()
+        .peel_to_commit()
+        .unwrap()
+        .id()
+        .to_string();
+    fs::write(dir.path().join("src/other.rs"), "fn other() {}\n").unwrap();
+
+    let conversation = Conversation {
+        schema_version: CONVERSATION_SCHEMA.into(),
+        id: LineageId::from("skip-session"),
+        agent: AgentKind::Cursor,
+        started_at: chrono::Utc::now(),
+        ended_at: None,
+        workspace_root: dir.path().display().to_string(),
+        parent_session_id: None,
+        private: false,
+        turns: vec![Turn {
+            id: LineageId::from("turn-skip"),
+            role: Role::Assistant,
+            content: "edit other".into(),
+            tool_calls: vec![],
+            model: None,
+            timestamp: None,
+            artifacts: vec![Artifact {
+                kind: ArtifactKind::FileEdit,
+                path: "src/other.rs".into(),
+                blob_ref: None,
+                content_hash: None,
+                mime_type: None,
+                preview_data_url: None,
+                line_range: Some([1, 1]),
+                resolve: None,
+            }],
+        }],
+        commit_shas: vec![commit_sha.clone()],
+        metadata: Default::default(),
+    };
+
+    let objects =
+        materialize_line_objects(&repo, &conversation, &commit_sha, Confidence::Exact).unwrap();
+    assert!(
+        objects.is_empty(),
+        "expected no line objects when file was not in commit diff"
+    );
+}

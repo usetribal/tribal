@@ -3,6 +3,7 @@ pub mod conversation_util;
 pub mod error;
 pub mod ids;
 pub mod import_state;
+pub mod path_util;
 pub mod sync;
 pub mod types;
 
@@ -17,6 +18,7 @@ pub use ids::{derive_line_object_id, derive_session_id, LineageId};
 pub use import_state::{
     is_valid_import_schema, LastImportState, LAST_IMPORT_SCHEMA, LAST_IMPORT_SCHEMA_LEGACY,
 };
+pub use path_util::{normalize_repo_path, paths_match_repo_file, workspace_root_for};
 pub use sync::{
     BlobManifestEntry, RepoBinding, SessionCommitLink, SyncBatch, SyncObjectKind, SyncObjectResult,
     SyncObjectStatus, SyncRejectReason, SyncResponse, SYNC_BATCH_SCHEMA, SYNC_RESPONSE_SCHEMA,

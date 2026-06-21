@@ -110,7 +110,7 @@ impl SessionReader for CodexAdapter {
             &started_key,
         );
 
-        let parsed = parse_rollout_lines(&content)?;
+        let parsed = parse_rollout_lines(&content, Some(self.workspace_root.as_path()))?;
         let mut conversation = Conversation {
             schema_version: CONVERSATION_SCHEMA.into(),
             id,
@@ -221,7 +221,10 @@ fn extract_session_meta(v: &Value) -> SessionMeta {
     }
 }
 
-fn parse_rollout_lines(content: &str) -> Result<ParsedRollout, LineageError> {
+fn parse_rollout_lines(
+    content: &str,
+    workspace_root: Option<&std::path::Path>,
+) -> Result<ParsedRollout, LineageError> {
     let mut turns = Vec::new();
     let mut tool_results: HashMap<String, String> = HashMap::new();
     let mut ended_at = None;
@@ -289,7 +292,8 @@ fn parse_rollout_lines(content: &str) -> Result<ParsedRollout, LineageError> {
                     .get("arguments")
                     .map(|a| a.to_string())
                     .unwrap_or_default();
-                let artifacts = artifacts_from_tool_input(&name, body.get("arguments"));
+                let artifacts =
+                    artifacts_from_tool_input(&name, body.get("arguments"), workspace_root);
                 turns.push(make_turn(
                     turn_index,
                     Role::Tool,
@@ -399,7 +403,8 @@ fn parse_rollout_lines(content: &str) -> Result<ParsedRollout, LineageError> {
                             .map(|a| a.to_string())
                             .unwrap_or_default();
                         let parsed_args = body.get("arguments").and_then(parse_tool_arguments);
-                        let artifacts = artifacts_from_tool_input(&name, parsed_args.as_ref());
+                        let artifacts =
+                            artifacts_from_tool_input(&name, parsed_args.as_ref(), workspace_root);
                         turns.push(make_turn(
                             turn_index,
                             Role::Tool,
@@ -449,7 +454,7 @@ fn parse_rollout_lines(content: &str) -> Result<ParsedRollout, LineageError> {
                 tc.result = Some(result.chars().take(4000).collect());
             }
         }
-        enrich_turn_with_citations(&turn.content, &mut turn.artifacts);
+        enrich_turn_with_citations(&turn.content, &mut turn.artifacts, workspace_root);
         enrich_turn_with_images(&turn.content, &mut turn.artifacts);
     }
 

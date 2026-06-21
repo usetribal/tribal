@@ -1,4 +1,4 @@
-use lineage_core::{Artifact, ArtifactKind, ArtifactResolve, ResolveStrategy};
+use lineage_core::{normalize_repo_path, Artifact, ArtifactKind, ArtifactResolve, ResolveStrategy};
 
 /// Extract `start:end:path` citations from backtick-delimited spans.
 pub fn extract_citations_from_text(text: &str) -> Vec<Artifact> {
@@ -48,7 +48,7 @@ fn parse_citation(inner: &str) -> Option<Artifact> {
     }
     let start = parts[0].parse::<u32>().ok()?;
     let end = parts[1].parse::<u32>().ok()?;
-    let path = normalize_repo_path(parts[2]);
+    let path = normalize_repo_path(parts[2], None);
     if path.is_empty() || start == 0 || end == 0 || end < start {
         return None;
     }
@@ -68,12 +68,14 @@ fn parse_citation(inner: &str) -> Option<Artifact> {
     })
 }
 
-fn normalize_repo_path(path: &str) -> String {
-    path.trim_start_matches("./").to_string()
-}
-
-pub fn enrich_turn_with_citations(content: &str, artifacts: &mut Vec<Artifact>) {
+pub fn enrich_turn_with_citations(
+    content: &str,
+    artifacts: &mut Vec<Artifact>,
+    workspace_root: Option<&std::path::Path>,
+) {
     for citation in extract_citations_from_text(content) {
+        let mut citation = citation;
+        citation.path = normalize_repo_path(&citation.path, workspace_root);
         if !artifacts
             .iter()
             .any(|a| a.path == citation.path && a.line_range == citation.line_range)

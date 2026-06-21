@@ -3,7 +3,7 @@ use std::process::Command;
 use lineage_core::{AgentKind, Artifact, ArtifactKind, Conversation, LineageId, Role, Turn};
 use lineage_git::{
     link_all_sessions_to_head, link_recent_sessions_to_head, open_repo, persist_conversation,
-    write_last_import,
+    read_line_object, write_last_import,
 };
 
 fn init_repo() -> tempfile::TempDir {
@@ -86,4 +86,14 @@ fn hooks_link_sessions_to_head() {
         .unwrap()
         .unwrap();
     assert!(note.session_ids.contains(&conv.id));
+    assert!(
+        !note.line_object_ids.is_empty(),
+        "hooks should materialize line objects onto the commit note"
+    );
+    let line_id = &note.line_object_ids[0];
+    let obj = read_line_object(inner, line_id)
+        .unwrap()
+        .expect("line object ref should resolve");
+    assert_eq!(obj.file_path, "lib.rs");
+    assert_eq!(obj.line_range, [1, 1]);
 }

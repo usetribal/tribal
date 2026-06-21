@@ -1,4 +1,8 @@
-use lineage_core::{Artifact, ArtifactKind, ArtifactResolve, ResolveStrategy, ToolCall};
+use std::path::Path;
+
+use lineage_core::{
+    normalize_repo_path, Artifact, ArtifactKind, ArtifactResolve, ResolveStrategy, ToolCall,
+};
 use serde_json::Value;
 
 pub fn extract_text_content(content: &Value) -> String {
@@ -21,7 +25,10 @@ pub fn extract_text_content(content: &Value) -> String {
     }
 }
 
-pub fn extract_cursor_content(message: &Value) -> (String, Vec<ToolCall>, Vec<Artifact>) {
+pub fn extract_cursor_content(
+    message: &Value,
+    workspace_root: Option<&Path>,
+) -> (String, Vec<ToolCall>, Vec<Artifact>) {
     let mut text_parts = Vec::new();
     let mut tool_calls = Vec::new();
     let mut artifacts = Vec::new();
@@ -72,6 +79,7 @@ pub fn extract_cursor_content(message: &Value) -> (String, Vec<ToolCall>, Vec<Ar
                 artifacts.extend(artifacts_from_tool_input(
                     &name,
                     item.get("input").or_else(|| item.get("arguments")),
+                    workspace_root,
                 ));
             }
             _ => {}
@@ -81,7 +89,10 @@ pub fn extract_cursor_content(message: &Value) -> (String, Vec<ToolCall>, Vec<Ar
     (text_parts.join("\n"), tool_calls, artifacts)
 }
 
-pub fn extract_claude_content(message: &Value) -> (String, Vec<ToolCall>, Vec<Artifact>, bool) {
+pub fn extract_claude_content(
+    message: &Value,
+    workspace_root: Option<&Path>,
+) -> (String, Vec<ToolCall>, Vec<Artifact>, bool) {
     let mut text_parts = Vec::new();
     let mut tool_calls = Vec::new();
     let mut artifacts = Vec::new();
@@ -125,7 +136,11 @@ pub fn extract_claude_content(message: &Value) -> (String, Vec<ToolCall>, Vec<Ar
                     arguments: input.clone(),
                     result: None,
                 });
-                artifacts.extend(artifacts_from_tool_input(&name, item.get("input")));
+                artifacts.extend(artifacts_from_tool_input(
+                    &name,
+                    item.get("input"),
+                    workspace_root,
+                ));
             }
             "tool_result" => {
                 is_tool_result = true;
@@ -204,7 +219,11 @@ pub fn artifacts_from_image_block(item: &Value) -> Vec<Artifact> {
     vec![media_artifact(kind, url, mime)]
 }
 
-pub fn artifacts_from_tool_input(name: &str, input: Option<&Value>) -> Vec<Artifact> {
+pub fn artifacts_from_tool_input(
+    name: &str,
+    input: Option<&Value>,
+    workspace_root: Option<&Path>,
+) -> Vec<Artifact> {
     let Some(input) = input else {
         return Vec::new();
     };
@@ -220,7 +239,7 @@ pub fn artifacts_from_tool_input(name: &str, input: Option<&Value>) -> Vec<Artif
             .to_string();
         return vec![media_artifact(
             ArtifactKind::Image,
-            normalize_repo_path(&path),
+            normalize_repo_path(&path, workspace_root),
             guess_mime_from_path(&path),
         )];
     }
@@ -242,7 +261,7 @@ pub fn artifacts_from_tool_input(name: &str, input: Option<&Value>) -> Vec<Artif
             let path = path.unwrap_or_else(|| "unknown".into());
             return vec![artifact_with_resolve(
                 ArtifactKind::Diff,
-                normalize_repo_path(&path),
+                normalize_repo_path(&path, workspace_root),
                 None,
                 ArtifactResolve {
                     strategy: ResolveStrategy::DiffHunk,
@@ -264,7 +283,7 @@ pub fn artifacts_from_tool_input(name: &str, input: Option<&Value>) -> Vec<Artif
             if let Some(old_string) = pick_string(input, &["old_string", "old_str", "oldText"]) {
                 return vec![artifact_with_resolve(
                     ArtifactKind::Diff,
-                    normalize_repo_path(&path),
+                    normalize_repo_path(&path, workspace_root),
                     line_range,
                     ArtifactResolve {
                         strategy: ResolveStrategy::OldString,
@@ -278,7 +297,7 @@ pub fn artifacts_from_tool_input(name: &str, input: Option<&Value>) -> Vec<Artif
         if is_write_tool(&lower) {
             return vec![artifact_with_resolve(
                 ArtifactKind::FileEdit,
-                normalize_repo_path(&path),
+                normalize_repo_path(&path, workspace_root),
                 line_range,
                 ArtifactResolve {
                     strategy: ResolveStrategy::FullFile,
@@ -318,7 +337,7 @@ pub fn artifacts_from_tool_input(name: &str, input: Option<&Value>) -> Vec<Artif
 
         return vec![Artifact {
             kind,
-            path: normalize_repo_path(&path),
+            path: normalize_repo_path(&path, workspace_root),
             blob_ref: None,
             content_hash: None,
             mime_type: None,
@@ -389,10 +408,6 @@ fn parse_line_range(v: &Value) -> Option<[u32; 2]> {
         }
     }
     None
-}
-
-fn normalize_repo_path(path: &str) -> String {
-    path.trim_start_matches("./").to_string()
 }
 
 fn media_artifact(kind: ArtifactKind, path: String, mime_type: Option<String>) -> Artifact {
@@ -506,7 +521,7 @@ mod tests {
     #[test]
     fn parses_generate_image_tool() {
         let input = json!({ "filename": "out/diagram.png", "description": "x" });
-        let arts = artifacts_from_tool_input("GenerateImage", Some(&input));
+        let arts = artifacts_from_tool_input("GenerateImage", Some(&input), None);
         assert_eq!(arts.len(), 1);
         assert_eq!(arts[0].path, "out/diagram.png");
         assert_eq!(arts[0].kind, ArtifactKind::Image);
@@ -537,9 +552,23 @@ mod tests {
                 { "type": "tool_use", "name": "edit", "input": { "path": "src/lib.rs" } }
             ]
         });
-        let (text, tools, _) = extract_cursor_content(&message);
+        let (text, tools, _) = extract_cursor_content(&message, None);
         assert_eq!(text, "done");
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0].name, "edit");
+    }
+
+    #[test]
+    fn strreplace_absolute_path_becomes_repo_relative() {
+        let root = std::path::Path::new("/Users/dev/my-project");
+        let input = json!({
+            "path": "/Users/dev/my-project/src/auth.rs",
+            "old_string": "fn old() {}",
+            "new_string": "fn new() {}"
+        });
+        let arts = artifacts_from_tool_input("StrReplace", Some(&input), Some(root));
+        assert_eq!(arts.len(), 1);
+        assert_eq!(arts[0].path, "src/auth.rs");
+        assert_eq!(arts[0].kind, ArtifactKind::Diff);
     }
 }

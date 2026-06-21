@@ -4,7 +4,8 @@ use std::path::Path;
 use git2::{Oid, Repository};
 use lineage_core::derive_line_object_id;
 use lineage_core::{
-    Artifact, ArtifactKind, Confidence, Conversation, LineObject, LineageError, ResolveStrategy,
+    normalize_repo_path, workspace_root_for, Artifact, ArtifactKind, Confidence, Conversation,
+    LineObject, LineageError, ResolveStrategy,
 };
 
 pub fn materialize_line_objects(
@@ -14,6 +15,7 @@ pub fn materialize_line_objects(
     link_confidence: Confidence,
 ) -> Result<Vec<LineObject>, LineageError> {
     let changed = files_changed_in_commit(repo, commit_sha)?;
+    let workspace = workspace_root_for(&conversation.workspace_root, repo.workdir());
     let mut objects = Vec::new();
 
     for turn in &conversation.turns {
@@ -21,22 +23,26 @@ pub fn materialize_line_objects(
             if !artifact_is_materializable(artifact) {
                 continue;
             }
-            if !changed.is_empty() && !changed.contains(&artifact.path) {
+            let file_path = normalize_repo_path(&artifact.path, Some(&workspace));
+            if file_path.is_empty() {
+                continue;
+            }
+            if !changed.is_empty() && !changed.contains(&file_path) {
                 continue;
             }
 
-            let ranges = resolve_artifact_ranges(repo, commit_sha, artifact)?;
+            let ranges = resolve_artifact_ranges(repo, commit_sha, artifact, &file_path)?;
             for (range, confidence) in ranges {
                 let id = derive_line_object_id(
                     &conversation.id,
                     &turn.id,
-                    &artifact.path,
+                    &file_path,
                     range,
                     commit_sha,
                 );
                 objects.push(LineObject::with_id(
                     id,
-                    &artifact.path,
+                    &file_path,
                     range,
                     commit_sha,
                     conversation.id.clone(),
@@ -80,6 +86,7 @@ fn resolve_artifact_ranges(
     repo: &Repository,
     commit_sha: &str,
     artifact: &Artifact,
+    file_path: &str,
 ) -> Result<Vec<([u32; 2], Confidence)>, LineageError> {
     if let Some(range) = artifact.line_range {
         return Ok(vec![(range, Confidence::Exact)]);
@@ -95,14 +102,14 @@ fn resolve_artifact_ranges(
             let Some(old_string) = resolve.old_string.as_ref() else {
                 return Ok(Vec::new());
             };
-            let content = match git_file_at_commit(repo, commit_sha, &artifact.path)? {
+            let content = match git_file_at_commit(repo, commit_sha, file_path)? {
                 Some(c) => c,
                 None => return Ok(Vec::new()),
             };
             Ok(resolve_old_string(&content, old_string))
         }
         ResolveStrategy::FullFile => {
-            let content = match git_file_at_commit(repo, commit_sha, &artifact.path)? {
+            let content = match git_file_at_commit(repo, commit_sha, file_path)? {
                 Some(c) => c,
                 None => {
                     return Ok(vec![([1, 1], Confidence::Heuristic)]);
@@ -113,7 +120,7 @@ fn resolve_artifact_ranges(
         }
         ResolveStrategy::DiffHunk => {
             let patch = resolve.patch.as_deref().unwrap_or("");
-            Ok(parse_diff_hunks(patch, &artifact.path))
+            Ok(parse_diff_hunks(patch, file_path))
         }
     }
 }
