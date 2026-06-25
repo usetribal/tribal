@@ -9,6 +9,7 @@ pub struct RedactionRule {
 }
 
 impl RedactionRule {
+    /// Optional extra rule for repo-specific policy. Built-in detection uses vendored gitleaks rules.
     pub fn api_key() -> Self {
         Self {
             name: "api_key".into(),
@@ -17,6 +18,7 @@ impl RedactionRule {
         }
     }
 
+    /// Optional extra rule for repo-specific policy. Built-in detection uses vendored gitleaks rules.
     pub fn env_file() -> Self {
         Self {
             name: "env_var".into(),

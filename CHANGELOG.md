@@ -119,6 +119,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Import-time secret redaction now uses vendored [gitleaks](https://github.com/gitleaks/gitleaks) rules (regex, entropy, allowlists) instead of broad `api_key`/`env_var` regexes — fewer false positives on agent prose while keeping high-confidence secret detection
+- Gitleaks config parser reads `[[rules.allowlists]]` (plural) and triple-quoted path arrays; conformance fixtures cover identification edge cases
 - README repositioned as agent-first engineering context memory; primary setup is `git lineage init` (replaces four-command flow)
 - Usage guides split into [docs/import.md](docs/import.md), [docs/explore.md](docs/explore.md), [docs/share.md](docs/share.md), [docs/rebase.md](docs/rebase.md), [docs/agent-paths.md](docs/agent-paths.md), [docs/git-hooks.md](docs/git-hooks.md), and [docs/how-it-works.md](docs/how-it-works.md)
 - Component docs in [docs/cli/README.md](docs/cli/README.md), [docs/mcp/README.md](docs/mcp/README.md), and [extensions/vscode/README.md](extensions/vscode/README.md)
