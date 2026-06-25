@@ -29,7 +29,7 @@ You should receive a response within 72 hours. If the issue is confirmed, we wil
 
 Lineage handles agent conversation data that may contain secrets. Built-in mitigations:
 
-- **Policy engine** — redacts API keys, tokens, and env-file patterns before persistence
+- **Policy engine** — redacts secrets via vendored gitleaks rules before persistence
 - **Path excludes** — `.env`, credentials, keys, and PEM files are excluded by default
 - **Export redaction** — `git lineage export --redact` strips sensitive content
 - **MCP responses** — session data is redacted by default in MCP tool output

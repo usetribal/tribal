@@ -12,7 +12,7 @@ pub struct PolicyConfig {
 impl PolicyConfig {
     pub fn default_safe() -> Self {
         Self {
-            redaction_rules: vec![RedactionRule::api_key(), RedactionRule::env_file()],
+            redaction_rules: Vec::new(),
             exclude_patterns: ExcludePattern::default_paths(),
             strip_private: true,
         }
@@ -117,7 +117,7 @@ fn should_exclude_turn_content(config: &PolicyConfig, turn: &Turn) -> bool {
 }
 
 fn redact_text(config: &PolicyConfig, text: &str) -> String {
-    let mut out = text.to_string();
+    let mut out = crate::gitleaks::redact_text(text);
     for rule in &config.redaction_rules {
         if let Some(re) = rule.compile() {
             out = re.replace_all(&out, rule.replacement.as_str()).to_string();
@@ -149,13 +149,13 @@ mod tests {
     use lineage_core::{AgentKind, Role};
 
     #[test]
-    fn redacts_api_keys() {
+    fn redacts_detected_secrets() {
         let config = PolicyConfig::default_safe();
         let mut c = Conversation::new(AgentKind::Cursor, "/tmp");
         c.turns.push(lineage_core::Turn {
             id: lineage_core::LineageId::new(),
             role: Role::User,
-            content: "API_KEY=supersecret123".into(),
+            content: "export STRIPE_KEY=sk_test_abcdefghijklmnopqrstuvwxyz".into(),
             tool_calls: vec![],
             model: None,
             timestamp: None,
@@ -163,6 +163,26 @@ mod tests {
         });
         let result = apply_policy(&config, c);
         assert!(result.conversation.turns[0].content.contains("[REDACTED]"));
+        assert!(result.redactions_applied > 0);
+    }
+
+    #[test]
+    fn leaves_innocent_prose_unredacted() {
+        let config = PolicyConfig::default_safe();
+        let mut c = Conversation::new(AgentKind::Cursor, "/tmp");
+        let prose = "The password: field in the schema is optional.".to_string();
+        c.turns.push(lineage_core::Turn {
+            id: lineage_core::LineageId::new(),
+            role: Role::Assistant,
+            content: prose.clone(),
+            tool_calls: vec![],
+            model: None,
+            timestamp: None,
+            artifacts: vec![],
+        });
+        let result = apply_policy(&config, c);
+        assert_eq!(result.conversation.turns[0].content, prose);
+        assert_eq!(result.redactions_applied, 0);
     }
 
     #[test]

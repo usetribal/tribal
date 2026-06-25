@@ -62,7 +62,7 @@ Configuration drives the policy engine at import time:
 
 - `exclude_paths` and `exclude_content_patterns` extend default artifact and content filters.
 - `private_session_patterns` mark sessions that should not expose turn content on export.
-- Built-in redaction rules (API keys, env-style lines) always run regardless of config.
+- Built-in gitleaks rules (vendored from upstream `gitleaks.toml`) always run regardless of config. Optional `redaction_rules` in policy extend that set.
 
 See [Privacy and policy](privacy.md) for the full picture.
 

@@ -13,7 +13,7 @@ Every import passes through the policy engine:
 3. **Content excludes** — entire turns matching content patterns are cleared.
 4. **Private sessions** — source paths matching `private_session_patterns` are marked private.
 
-Default redaction covers common API key and environment-variable line shapes. Default path excludes cover `.env`, credentials files, keys, and similar paths.
+Default redaction uses the vendored [gitleaks](https://github.com/gitleaks/gitleaks) rule set (regex + entropy + allowlists). Default path excludes cover `.env`, credentials files, keys, and similar paths.
 
 ## Private sessions
 

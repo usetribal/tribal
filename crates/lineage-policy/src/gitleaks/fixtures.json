@@ -1,0 +1,45 @@
+[
+  {
+    "name": "innocent_password_field",
+    "input": "The password: field in the schema is optional.",
+    "should_redact": false
+  },
+  {
+    "name": "innocent_secret_mention",
+    "input": "secret: my-aws-deploy-key",
+    "should_redact": false
+  },
+  {
+    "name": "stripe_test_key",
+    "input": "export STRIPE_KEY=sk_test_abcdefghijklmnopqrstuvwxyz",
+    "should_redact": true
+  },
+  {
+    "name": "github_pat",
+    "input": "GITHUB_TOKEN=ghp_1234567890abcdefghijklmnopqrstuvwxyz12",
+    "should_redact": true
+  },
+  {
+    "name": "gitleaks_allow_suppresses",
+    "input": "GITHUB_TOKEN=ghp_1234567890abcdefghijklmnopqrstuvwxyz12 gitleaks:allow",
+    "should_redact": false
+  },
+  {
+    "name": "global_stopword_suppresses",
+    "input": "token=allowlisted",
+    "should_redact": false,
+    "config": "[allowlist]\nstopwords = [\"allowlisted\"]\n[[rules]]\nid = \"token\"\nregex = '''token=([a-z]+)'''\nkeywords = [\"token\"]"
+  },
+  {
+    "name": "low_entropy_rejected",
+    "input": "token=aaaa",
+    "should_redact": false,
+    "config": "[[rules]]\nid = \"entropy-gate\"\nregex = '''token=([a-z]+)'''\nentropy = 4.0\nkeywords = [\"token\"]"
+  },
+  {
+    "name": "rule_allowlist_stopword",
+    "input": "token=not-a-real-secret",
+    "should_redact": false,
+    "config": "[[rules]]\nid = \"allowlisted\"\nregex = '''token=([a-z-]+)'''\nkeywords = [\"token\"]\n[[rules.allowlists]]\nstopwords = [\n \"not-a-real-secret\"\n]"
+  }
+]

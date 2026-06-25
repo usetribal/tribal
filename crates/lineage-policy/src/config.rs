@@ -1,6 +1,6 @@
 use lineage_core::LineageRepoConfig;
 
-use crate::rules::{ExcludeKind, ExcludePattern, RedactionRule};
+use crate::rules::{ExcludeKind, ExcludePattern};
 use crate::PolicyConfig;
 
 pub fn policy_from_repo_config(repo: &LineageRepoConfig) -> PolicyConfig {
@@ -19,7 +19,7 @@ pub fn policy_from_repo_config(repo: &LineageRepoConfig) -> PolicyConfig {
     }
 
     PolicyConfig {
-        redaction_rules: vec![RedactionRule::api_key(), RedactionRule::env_file()],
+        redaction_rules: Vec::new(),
         exclude_patterns,
         strip_private: repo.strip_private_on_export,
     }

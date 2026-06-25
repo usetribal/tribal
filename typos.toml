@@ -3,6 +3,7 @@ extend-exclude = [
     "tests/fixtures/**",
     "extensions/vscode/package-lock.json",
     "target/**",
+    "crates/lineage-policy/assets/gitleaks.toml",
 ]
 
 [default.extend-words]

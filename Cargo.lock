@@ -885,9 +885,11 @@ dependencies = [
 name = "lineage-policy"
 version = "0.1.0"
 dependencies = [
+ "aho-corasick",
  "lineage-core",
  "regex",
  "serde",
+ "serde_json",
  "thiserror",
 ]
 
