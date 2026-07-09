@@ -147,6 +147,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Import no longer panics when resolving line numbers for edits whose matched text ends in a multibyte character (e.g. an em dash in transcript content): `line_number_at` floors the byte offset to a char boundary before slicing
 - `git lineage delete` now overwrites git notes instead of merging, so session and line-object IDs are actually removed from commit notes
 
 ### Known limitations
