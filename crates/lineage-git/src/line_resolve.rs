@@ -189,8 +189,15 @@ fn parse_unified_hunk_header(line: &str) -> Option<[u32; 2]> {
 }
 
 pub fn line_number_at(content: &str, byte_pos: usize) -> u32 {
-    let slice = &content[..byte_pos.min(content.len())];
-    (slice.matches('\n').count() as u32) + 1
+    // Callers pass byte offsets like `match + old_string.len() - 1`, which can
+    // land inside a multibyte character (e.g. an em dash in transcript content)
+    // and would panic the slice below. Floor to the previous char boundary —
+    // newlines are single-byte, so the count is unaffected.
+    let mut pos = byte_pos.min(content.len());
+    while !content.is_char_boundary(pos) {
+        pos -= 1;
+    }
+    (content[..pos].matches('\n').count() as u32) + 1
 }
 
 pub fn git_file_at_commit(
@@ -278,6 +285,25 @@ mod tests {
         let ranges = resolve_old_string(content, "foo");
         assert_eq!(ranges.len(), 2);
         assert!(ranges.iter().all(|(_, c)| *c == Confidence::Heuristic));
+    }
+
+    #[test]
+    fn resolves_old_string_ending_in_multibyte_char() {
+        // Regression: the end-of-match offset points at the last *byte* of the
+        // match, which is mid-character when old_string ends in a multibyte
+        // char; this used to panic on the char-boundary slice.
+        let content = "line1\nfix — done\nline3";
+        let ranges = resolve_old_string(content, "fix —");
+        assert_eq!(ranges.len(), 1);
+        assert_eq!(ranges[0].0, [2, 2]);
+    }
+
+    #[test]
+    fn line_number_at_mid_char_byte_offset() {
+        let content = "a\n—\nb";
+        // Byte 3 is inside the em dash (bytes 2..5); the line is still line 2.
+        assert_eq!(line_number_at(content, 3), 2);
+        assert_eq!(line_number_at(content, content.len()), 3);
     }
 
     #[test]
