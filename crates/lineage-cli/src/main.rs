@@ -106,12 +106,18 @@ enum Commands {
         #[arg(long, default_value = "json")]
         format: String,
     },
-    /// Push redacted sessions to a Lineage server
-    Sync {
-        /// Server base URL (e.g. http://localhost:3000/api)
+    /// Sign in to a Lineage server (browser device flow)
+    Login {
+        /// Server base URL (e.g. https://api.uselineage.io/api)
         #[arg(long)]
         server: String,
-        /// Bearer token; falls back to the LINEAGE_TOKEN env var
+    },
+    /// Push redacted sessions to a Lineage server
+    Sync {
+        /// Server base URL; defaults to the server stored by `login`
+        #[arg(long)]
+        server: Option<String>,
+        /// Bearer token; falls back to LINEAGE_TOKEN, then the stored login
         #[arg(long)]
         token: Option<String>,
         /// Git remote whose URL identifies the repo to the server
@@ -234,11 +240,12 @@ fn main() -> ExitCode {
             HookAction::PostCommit => hooks_cmd::post_commit(&repo_path),
         },
         Commands::Export { redact, format } => commands::export(&repo_path, redact, &format),
+        Commands::Login { server } => commands::login(&server),
         Commands::Sync {
             server,
             token,
             remote,
-        } => commands::sync(&repo_path, &server, token.as_deref(), &remote),
+        } => commands::sync(&repo_path, server.as_deref(), token.as_deref(), &remote),
         Commands::Search { query } => commands::search(&repo_path, &query),
         Commands::RebuildIndex => commands::rebuild_index(&repo_path),
         Commands::Link {

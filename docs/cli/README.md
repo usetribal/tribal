@@ -110,14 +110,25 @@ See [LFS](../lfs.md).
 
 | Command | Description |
 |---------|-------------|
-| `git lineage sync --server URL [--token TOKEN] [--remote origin]` | Push redacted sessions to a Lineage server |
+| `git lineage login --server URL` | Sign in to a Lineage server (browser device flow) |
+| `git lineage sync [--server URL] [--token TOKEN] [--remote origin]` | Push redacted sessions to a Lineage server |
 
-Redacts and drops private sessions before anything crosses the wire, assembles a
-`sync-batch-v0` (conversations with embedded turns, line objects, decomposed
-commit links, and a blob manifest), uploads referenced blobs, and POSTs the
-batch. The server resolves the repo from the `--remote` URL and root commit; its
-returned id is cached in local git config (`lineage.serverRepoId`). The token
-falls back to the `LINEAGE_TOKEN` environment variable. Implements
+`login` prints a verification URL and code, waits for the browser approval, and
+stores an opaque session handle in `~/.config/lineage/credentials.json` (0600;
+`XDG_CONFIG_HOME` respected, `LINEAGE_CONFIG_DIR` overrides). The handle is the
+durable credential — short-lived access tokens are minted from it per command,
+and the identity-provider refresh token never leaves the server. Signing in to
+the server's web app once beforehand is required (the server maps the login to
+an existing account). If a stored login expires or is revoked, the next sync
+says to run `login` again.
+
+`sync` redacts and drops private sessions before anything crosses the wire,
+assembles a `sync-batch-v0` (conversations with embedded turns, line objects,
+decomposed commit links, and a blob manifest), uploads referenced blobs, and
+POSTs the batch. The server resolves the repo from the `--remote` URL and root
+commit; its returned id is cached in local git config (`lineage.serverRepoId`).
+`--server` defaults to the server stored by `login`; the token comes from
+`--token`, then `LINEAGE_TOKEN`, then the stored login. Implements
 [sync-protocol-v0](../../specs/sync-protocol-v0.md).
 
 ### Hooks

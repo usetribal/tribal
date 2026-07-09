@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod commands;
 pub mod hooks_cmd;
 pub mod init_cmd;

@@ -21,6 +21,8 @@ use lineage_policy::{
 };
 use lineage_search::{LineageIndex, SearchHit};
 
+use crate::auth;
+
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 pub fn doctor(repo_path: &Path) -> Result<()> {
@@ -499,25 +501,76 @@ pub fn export(repo_path: &Path, redact: bool, format: &str) -> Result<()> {
     Ok(())
 }
 
-// Resolves the bearer token from an explicit flag, falling back to the
-// LINEAGE_TOKEN env var. Real token issuance (device flow) is owned by the
-// server; the flag/env seam is the stand-in for it until that lands.
-fn resolve_sync_token(token: Option<&str>) -> Result<String> {
-    token
+/// Runs the device login against a Lineage server: prints the verification URL
+/// and code, polls until the browser approval completes the login server-side,
+/// and stores the returned session handle (the durable credential — the JWT it
+/// mints is short-lived and re-minted per command).
+pub fn login(server: &str) -> Result<()> {
+    let start = auth::device_start(server)?;
+    println!("To sign in, open this URL in a browser:");
+    println!();
+    println!("  {}", start.verification_uri_complete);
+    println!();
+    println!(
+        "and confirm code {} (or enter it at {}).",
+        start.user_code, start.verification_uri
+    );
+    println!("Waiting for approval…");
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(start.expires_in);
+    let mut interval = start.interval;
+    loop {
+        match auth::device_poll(server, &start.device_code)? {
+            auth::DevicePollResponse::Pending { slow_down } => {
+                if slow_down {
+                    // OAuth device-flow rule: back off by 5s when told to slow down.
+                    interval += 5;
+                }
+            }
+            auth::DevicePollResponse::Complete { session_handle, .. } => {
+                auth::store_login(server, session_handle)?;
+                println!(
+                    "Logged in. Credentials stored in {}.",
+                    auth::credentials_path()?.display()
+                );
+                return Ok(());
+            }
+        }
+        if std::time::Instant::now() >= deadline {
+            return Err("sign-in request expired before it was approved: run login again".into());
+        }
+        std::thread::sleep(std::time::Duration::from_secs(interval));
+    }
+}
+
+// Explicit flag / LINEAGE_TOKEN bypass the stored login entirely (CI, scripts);
+// otherwise the stored session handle is exchanged for a fresh 15-minute JWT,
+// which comfortably outlives a sync run — no mid-run refresh needed.
+fn resolve_sync_token(server: &str, token: Option<&str>) -> Result<String> {
+    let explicit = token
         .map(str::to_string)
         .filter(|t| !t.is_empty())
         .or_else(|| {
             std::env::var("LINEAGE_TOKEN")
                 .ok()
                 .filter(|t| !t.is_empty())
-        })
-        .ok_or_else(|| "no auth token: pass --token or set LINEAGE_TOKEN".into())
+        });
+    match explicit {
+        Some(token) => Ok(token),
+        None => auth::access_token_for(server),
+    }
 }
 
-pub fn sync(repo_path: &Path, server: &str, token: Option<&str>, remote: &str) -> Result<()> {
+pub fn sync(
+    repo_path: &Path,
+    server: Option<&str>,
+    token: Option<&str>,
+    remote: &str,
+) -> Result<()> {
     let repo = open_repo(repo_path)?;
     let inner = repo.inner();
-    let token = resolve_sync_token(token)?;
+    let server = auth::resolve_server(server)?;
+    let token = resolve_sync_token(&server, token)?;
 
     // Redact and drop private sessions before anything crosses the wire — the
     // same guarantee the export path provides (sync-protocol-v0 "Privacy").
@@ -545,7 +598,7 @@ pub fn sync(repo_path: &Path, server: &str, token: Option<&str>, remote: &str) -
         batch.blobs.len()
     );
 
-    let report = sync_push(inner, server, &token, &batch)?;
+    let report = sync_push(inner, &server, &token, &batch)?;
     println!(
         "synced to repo {} ({} accepted, {} noop, {} rejected, {} pending, {} blob(s) uploaded)",
         report.repo_id,
