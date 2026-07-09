@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `git lineage login --server URL` — sign in to a Lineage server via the browser device flow; stores an opaque session handle in `~/.config/lineage/credentials.json` (0600) and makes it the default server. `git lineage sync` now works without flags after a login: `--server` falls back to the stored default, and the bearer token falls back from `--token`/`LINEAGE_TOKEN` to a short-lived access token minted from the stored login; a 401 on that mint means the stored login was revoked or expired and `login` must be re-run
 - Generated contract bindings: `lineage-core` types emit JSON Schema (`specs/schema/`, snapshot-tested) and TypeScript zod bindings (`contracts/ts`, `@lineage/contracts`), each hop drift-checked; see `specs/decisions/0001-contract-bindings-pipeline.md`
 - Sync protocol v0 (`specs/sync-protocol-v0.md`): the local↔server wire protocol — object mapping, ULID identity + write rules, content hashing, blob transfer, privacy, repo binding — with wire types (`SyncBatch`, `SyncResponse`) in `lineage-core` and generated bindings
 - `git lineage sync --server URL [--token TOKEN] [--remote origin]` — push redacted sessions to a Lineage server: assembles a `sync-batch-v0` (conversations, line objects, decomposed commit links, blob manifest), uploads referenced blobs via `PUT /v0/blobs/{sha256}`, POSTs the batch, and caches the server-issued repo id in local git config; token falls back to `LINEAGE_TOKEN`; implements `specs/sync-protocol-v0.md`

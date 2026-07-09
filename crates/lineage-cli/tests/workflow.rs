@@ -186,15 +186,17 @@ fn cli_export_rejects_unknown_format() {
 }
 
 #[test]
-fn cli_sync_requires_a_token() {
+fn cli_sync_requires_a_token_or_login() {
     let dir = init_repo();
     commands::init_config(dir.path()).unwrap();
-    // No --token and no LINEAGE_TOKEN: the command must fail before touching the
-    // network, with a message naming the seam.
+    // No --token, no LINEAGE_TOKEN, and no stored login (credentials isolated to
+    // an empty temp dir): the command must fail pointing at `login`.
+    let config_dir = tempfile::tempdir().unwrap();
+    std::env::set_var(lineage_cli::auth::CONFIG_DIR_ENV, config_dir.path());
     std::env::remove_var("LINEAGE_TOKEN");
-    let err = commands::sync(dir.path(), "http://127.0.0.1:0", None, "origin")
-        .expect_err("sync without a token should fail");
-    assert!(err.to_string().contains("token"), "got: {err}");
+    let err = commands::sync(dir.path(), Some("http://127.0.0.1:0"), None, "origin")
+        .expect_err("sync without a token or login should fail");
+    assert!(err.to_string().contains("login"), "got: {err}");
 }
 
 #[test]
@@ -216,7 +218,7 @@ fn cli_sync_assembles_then_fails_on_unreachable_server() {
     // port-0 address is guaranteed unbindable, so the POST cannot connect.
     let err = commands::sync(
         dir.path(),
-        "http://127.0.0.1:0",
+        Some("http://127.0.0.1:0"),
         Some("dev-token"),
         "origin",
     )

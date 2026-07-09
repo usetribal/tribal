@@ -832,6 +832,7 @@ dependencies = [
  "tempfile",
  "tracing",
  "tracing-subscriber",
+ "ureq",
 ]
 
 [[package]]
