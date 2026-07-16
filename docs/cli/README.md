@@ -127,8 +127,13 @@ assembles a `sync-batch-v0` (conversations with embedded turns, line objects,
 decomposed commit links, and a blob manifest), uploads referenced blobs, and
 POSTs the batch. The server resolves the repo from the `--remote` URL and root
 commit; its returned id is cached in local git config (`lineage.serverRepoId`).
-`--server` defaults to the server stored by `login`; the token comes from
-`--token`, then `LINEAGE_TOKEN`, then the stored login. Implements
+The data always lands in the workspace that owns the remote's namespace (the
+`<owner>` in `github.com/<owner>/<name>`), never a different workspace you also
+belong to. A sync into a namespace you have no membership in is rejected with
+the owner named in the error — sign in to the server's web app again if your
+memberships are stale, or check the `--remote` URL. `--server` defaults to the
+server stored by `login`; the token comes from `--token`, then `LINEAGE_TOKEN`,
+then the stored login. Implements
 [sync-protocol-v0](../../specs/sync-protocol-v0.md).
 
 ### Hooks
