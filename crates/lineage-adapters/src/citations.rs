@@ -20,7 +20,7 @@ pub fn extract_citations_from_text(text: &str) -> Vec<Artifact> {
         let start = i + tick_run;
         let mut end = start;
         while end < bytes.len() {
-            if tick_run == 3 && end + 2 < bytes.len() && bytes[end..end + 3] == [b'`', b'`', b'`'] {
+            if tick_run == 3 && end + 2 < bytes.len() && bytes[end..end + 3] == *b"```" {
                 break;
             }
             if tick_run == 1 && bytes[end] == b'`' {
