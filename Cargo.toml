@@ -9,6 +9,7 @@ members = [
     "crates/lineage-adapters",
     "crates/lineage-cli",
     "crates/lineage-search",
+    "crates/lineage-oracle",
     "crates/lineage-mcp",
 ]
 
@@ -34,6 +35,7 @@ lineage-git = { path = "crates/lineage-git" }
 lineage-agent = { path = "crates/lineage-agent" }
 lineage-adapters = { path = "crates/lineage-adapters" }
 lineage-search = { path = "crates/lineage-search" }
+lineage-oracle = { path = "crates/lineage-oracle" }
 
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
