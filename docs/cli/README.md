@@ -106,6 +106,21 @@ See [Rebase](../rebase.md) and [Maintenance](../maintenance.md).
 
 See [LFS](../lfs.md).
 
+### Context injection
+
+| Command | Description |
+|---------|-------------|
+| `git lineage context hook claude` | Agent-hook endpoint (Claude Code PostToolUse on stdin); emits injection JSON or nothing |
+| `git lineage context log [--limit N]` | Show recorded context injections, newest last |
+
+`context hook` is wired into the agent harness, not run by hand: when the agent
+reads a file with provenance, a digest (attribution, line ranges, session
+summary) is appended to the tool result — deterministically, without spending
+an agent turn. It fails open: on any error, missing provenance, or private
+sessions it prints nothing and exits 0. Every injection is recorded locally in
+`.git/lineage/context-log.jsonl` (never synced); `context log` is the surface
+to see exactly what your agent was told. See `specs/context-injection-v0.md`.
+
 ### Sync
 
 | Command | Description |

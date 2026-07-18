@@ -51,7 +51,10 @@ pub use refs::{
 };
 pub use remap::{remap_orphaned_commits, RemapReport};
 pub use repo::{find_repo, open_repo, LineageRepo};
-pub use sync::{assemble_batch, normalize_remote_url, sync_push, SyncReport, SERVER_REPO_ID_KEY};
+pub use sync::{
+    assemble_batch, normalize_remote_url, resolve_repo_binding, sync_push, SyncReport,
+    SERVER_REPO_ID_KEY,
+};
 pub use write::{
     link_session_to_commit, materialize_session_at_commit, persist_conversation, persist_import,
 };

@@ -161,8 +161,9 @@ fn read_note(repo: &Repository, annotated: git2::Oid) -> Result<Option<GitNote>,
 }
 
 /// Builds the repo identity hints the server resolves against, caching any
-/// previously-issued `server_repo_id` from local git config.
-fn resolve_repo_binding(repo: &Repository, remote: &str) -> Result<RepoBinding, LineageError> {
+/// previously-issued `server_repo_id` from local git config. Public because
+/// the context-injection hook builds the same identity for its queries.
+pub fn resolve_repo_binding(repo: &Repository, remote: &str) -> Result<RepoBinding, LineageError> {
     Ok(RepoBinding {
         normalized_remote_url: normalized_remote_url(repo, remote)?,
         root_commit_sha: root_commit_sha(repo)?,
