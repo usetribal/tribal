@@ -890,6 +890,7 @@ dependencies = [
  "lineage-core",
  "lineage-git",
  "lineage-search",
+ "rusqlite",
  "serde",
  "serde_json",
  "tempfile",
