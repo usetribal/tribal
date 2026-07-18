@@ -4,7 +4,7 @@ use std::path::Path;
 use inquire::ui::{Color, RenderConfig, StyleSheet, Styled};
 use inquire::{Confirm, MultiSelect};
 
-use crate::{commands, hooks_cmd, skill_cmd};
+use crate::{commands, context_cmd, hooks_cmd, skill_cmd};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -94,11 +94,13 @@ fn run_non_interactive(repo_path: &Path, options: &InitOptions) -> Result<()> {
     println!();
 
     commands::init_config(repo_path)?;
-    match skill_targets_for_init(options) {
+    let skill_targets = skill_targets_for_init(options);
+    match skill_targets {
         None => println!("agent skill: skipped"),
         Some(ref targets) => skill_cmd::init_skill(repo_path, targets, true)?,
     }
     install_hooks_with_retry(repo_path, options.force_hooks, false)?;
+    install_claude_agent_hook_for_targets(repo_path, skill_targets.as_deref(), false)?;
     if !options.no_import {
         println!("running: git lineage import --agent all --incremental");
         commands::import(repo_path, &["all".into()], None, true, true)?;
@@ -147,6 +149,8 @@ fn run_interactive(repo_path: &Path, options: &InitOptions) -> Result<()> {
     install_hooks_with_retry(repo_path, options.force_hooks, true)?;
     println!();
 
+    install_claude_agent_hook_for_targets(repo_path, skill_targets.as_deref(), true)?;
+
     step_heading(
         "Initial import",
         Some("import your agent transcripts into refs/lineage/*"),
@@ -162,6 +166,35 @@ fn run_interactive(repo_path: &Path, options: &InitOptions) -> Result<()> {
     println!();
 
     print_footer();
+    Ok(())
+}
+
+/// The agent hook follows the Claude skill choice: a repo whose engineer
+/// skipped Claude tooling should not grow a `.claude/` directory.
+fn install_claude_agent_hook_for_targets(
+    repo_path: &Path,
+    targets: Option<&[String]>,
+    interactive: bool,
+) -> Result<()> {
+    let claude_selected = targets
+        .is_some_and(|t| skill_cmd::resolve_targets(t).contains(&skill_cmd::SkillTarget::Claude));
+    if !claude_selected {
+        return Ok(());
+    }
+
+    let installed = context_cmd::install_claude_agent_hook(repo_path)?;
+    let message = if installed {
+        "context hook wired into .claude/settings.json (PostToolUse on Read)"
+    } else {
+        "context hook already present in .claude/settings.json"
+    };
+    if interactive {
+        step_heading("Context hook", Some("inject provenance on file reads"));
+        step_item(false, message);
+        println!();
+    } else {
+        println!("{message}");
+    }
     Ok(())
 }
 

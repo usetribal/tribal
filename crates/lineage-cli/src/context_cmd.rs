@@ -222,3 +222,80 @@ pub fn print_log(repo_path: &Path, limit: usize) -> Result<()> {
     }
     Ok(())
 }
+
+const CLAUDE_SETTINGS_FILE: &str = ".claude/settings.json";
+const HOOK_COMMAND: &str = "git lineage context hook claude";
+
+/// Wires the injection endpoint into Claude Code's project settings.
+/// Idempotent, and merges into existing settings rather than replacing them —
+/// the file is shared user configuration, not ours.
+pub fn install_claude_agent_hook(repo_path: &Path) -> Result<bool> {
+    let path = repo_path.join(CLAUDE_SETTINGS_FILE);
+    let mut settings: serde_json::Value = match fs::read_to_string(&path) {
+        Ok(contents) => serde_json::from_str(&contents)
+            .map_err(|e| format!("{CLAUDE_SETTINGS_FILE} is not valid JSON: {e}"))?,
+        Err(_) => serde_json::json!({}),
+    };
+
+    let post_tool_use = settings
+        .as_object_mut()
+        .ok_or(format!("{CLAUDE_SETTINGS_FILE} root is not an object"))?
+        .entry("hooks")
+        .or_insert_with(|| serde_json::json!({}))
+        .as_object_mut()
+        .ok_or("settings 'hooks' is not an object")?
+        .entry("PostToolUse")
+        .or_insert_with(|| serde_json::json!([]));
+    let groups = post_tool_use
+        .as_array_mut()
+        .ok_or("settings 'hooks.PostToolUse' is not an array")?;
+
+    if groups.iter().any(group_has_lineage_hook) {
+        return Ok(false);
+    }
+
+    groups.push(serde_json::json!({
+        "matcher": "Read",
+        "hooks": [{ "type": "command", "command": HOOK_COMMAND }],
+    }));
+
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(&path, format!("{:#}\n", settings))?;
+    Ok(true)
+}
+
+/// Removes only lineage-owned wiring; everything else in the file survives.
+pub fn uninstall_claude_agent_hook(repo_path: &Path) -> Result<bool> {
+    let path = repo_path.join(CLAUDE_SETTINGS_FILE);
+    let Ok(contents) = fs::read_to_string(&path) else {
+        return Ok(false);
+    };
+    let mut settings: serde_json::Value = serde_json::from_str(&contents)?;
+
+    let Some(groups) = settings
+        .get_mut("hooks")
+        .and_then(|h| h.get_mut("PostToolUse"))
+        .and_then(|p| p.as_array_mut())
+    else {
+        return Ok(false);
+    };
+
+    let before = groups.len();
+    groups.retain(|group| !group_has_lineage_hook(group));
+    if groups.len() == before {
+        return Ok(false);
+    }
+
+    fs::write(&path, format!("{:#}\n", settings))?;
+    Ok(true)
+}
+
+fn group_has_lineage_hook(group: &serde_json::Value) -> bool {
+    group["hooks"].as_array().into_iter().flatten().any(|hook| {
+        hook["command"]
+            .as_str()
+            .is_some_and(|c| c.contains("git lineage context hook"))
+    })
+}

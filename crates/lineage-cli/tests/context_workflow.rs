@@ -161,3 +161,52 @@ fn private_sessions_stay_silent_through_the_full_hook_path() {
         None
     );
 }
+
+#[test]
+fn agent_hook_install_is_idempotent_and_merge_preserving() {
+    let dir = init_repo();
+    let settings_path = dir.path().join(".claude/settings.json");
+    fs::create_dir_all(dir.path().join(".claude")).unwrap();
+    fs::write(
+        &settings_path,
+        r#"{"model": "opus", "hooks": {"PostToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "echo hi"}]}]}}"#,
+    )
+    .unwrap();
+
+    assert!(context_cmd::install_claude_agent_hook(dir.path()).unwrap());
+    // Second install is a no-op, not a duplicate entry.
+    assert!(!context_cmd::install_claude_agent_hook(dir.path()).unwrap());
+
+    let settings: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&settings_path).unwrap()).unwrap();
+    assert_eq!(settings["model"], "opus");
+    let groups = settings["hooks"]["PostToolUse"].as_array().unwrap();
+    assert_eq!(groups.len(), 2);
+    assert_eq!(groups[0]["matcher"], "Bash");
+    assert_eq!(
+        groups[1]["hooks"][0]["command"],
+        "git lineage context hook claude"
+    );
+}
+
+#[test]
+fn agent_hook_uninstall_removes_only_lineage_wiring() {
+    let dir = init_repo();
+    let settings_path = dir.path().join(".claude/settings.json");
+    fs::create_dir_all(dir.path().join(".claude")).unwrap();
+    fs::write(
+        &settings_path,
+        r#"{"hooks": {"PostToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "echo hi"}]}]}}"#,
+    )
+    .unwrap();
+    context_cmd::install_claude_agent_hook(dir.path()).unwrap();
+
+    assert!(context_cmd::uninstall_claude_agent_hook(dir.path()).unwrap());
+    // Nothing of ours left; the user's own hook untouched.
+    assert!(!context_cmd::uninstall_claude_agent_hook(dir.path()).unwrap());
+    let settings: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&settings_path).unwrap()).unwrap();
+    let groups = settings["hooks"]["PostToolUse"].as_array().unwrap();
+    assert_eq!(groups.len(), 1);
+    assert_eq!(groups[0]["matcher"], "Bash");
+}
