@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use lineage_cli::{commands, hooks_cmd, init_cmd, skill_cmd};
+use lineage_cli::{commands, context_cmd, hooks_cmd, init_cmd, skill_cmd};
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
@@ -99,6 +99,11 @@ enum Commands {
         #[command(subcommand)]
         action: HookAction,
     },
+    /// Context oracle: agent-hook injection endpoint and injection log
+    Context {
+        #[command(subcommand)]
+        action: ContextAction,
+    },
     /// Export sessions (optionally redacted)
     Export {
         #[arg(long)]
@@ -179,6 +184,20 @@ enum HookAction {
     PostCommit,
 }
 
+#[derive(Subcommand)]
+enum ContextAction {
+    /// Agent-hook endpoint: read a hook event on stdin, emit injection JSON
+    Hook {
+        /// Harness whose hook payload is on stdin (only: claude)
+        harness: String,
+    },
+    /// Show recorded context injections, newest last
+    Log {
+        #[arg(long, default_value_t = 20)]
+        limit: usize,
+    },
+}
+
 fn parse_agent(s: &str) -> Result<String, String> {
     match s.to_lowercase().as_str() {
         "cursor" | "claude" | "codex" | "all" => Ok(s.to_lowercase()),
@@ -238,6 +257,27 @@ fn main() -> ExitCode {
         Commands::UninstallHook => hooks_cmd::uninstall_hook(&repo_path),
         Commands::Hook { action } => match action {
             HookAction::PostCommit => hooks_cmd::post_commit(&repo_path),
+        },
+        Commands::Context { action } => match action {
+            ContextAction::Hook { harness } => {
+                // Fail open unconditionally: this runs inside an agent's tool
+                // call, where a nonzero exit or stderr noise breaks a session
+                // that context injection exists to help.
+                if harness == "claude" {
+                    let mut input = String::new();
+                    use std::io::Read as _;
+                    let _ = std::io::stdin().read_to_string(&mut input);
+                    let now_unix = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs() as i64)
+                        .unwrap_or(0);
+                    if let Some(output) = context_cmd::hook_claude(&repo_path, &input, now_unix) {
+                        println!("{output}");
+                    }
+                }
+                Ok(())
+            }
+            ContextAction::Log { limit } => context_cmd::print_log(&repo_path, limit),
         },
         Commands::Export { redact, format } => commands::export(&repo_path, redact, &format),
         Commands::Login { server } => commands::login(&server),

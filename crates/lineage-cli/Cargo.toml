@@ -28,9 +28,11 @@ lineage-adapters = { workspace = true }
 lineage-agent = { workspace = true }
 lineage-core = { workspace = true }
 lineage-git = { workspace = true }
+lineage-oracle = { workspace = true }
 lineage-policy = { workspace = true }
 lineage-search = { workspace = true }
 serde = { workspace = true }
+sha2 = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 ureq = { workspace = true }
@@ -38,4 +40,5 @@ tracing-subscriber = { workspace = true }
 inquire = { workspace = true }
 
 [dev-dependencies]
+git2 = { workspace = true }
 tempfile = { workspace = true }
