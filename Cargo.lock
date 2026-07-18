@@ -886,9 +886,13 @@ dependencies = [
 name = "lineage-oracle"
 version = "0.1.0"
 dependencies = [
+ "git2",
  "lineage-core",
+ "lineage-git",
+ "lineage-search",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
 ]
 

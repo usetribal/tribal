@@ -1,0 +1,194 @@
+use std::collections::{BTreeMap, HashSet};
+use std::time::Instant;
+
+use git2::Repository;
+use lineage_core::{
+    generate_architecture_summary, normalize_repo_path, Confidence, Conversation, LineageId,
+};
+use lineage_git::{read_conversation, read_conversation_stored, read_line_object};
+use lineage_search::LineageIndex;
+
+use crate::retriever::{OracleError, Result, Retriever};
+use crate::types::{strength_for, ContextQuery, Evidence, EvidenceTier, Retrieval};
+
+const LINE_OBJECT_REF_GLOB: &str = "refs/lineage/lines/*";
+
+/// Solo-mode retriever: answers from the repo's own lineage refs and search
+/// index, in-process. Team mode swaps in a server-backed implementation
+/// behind the same `Retriever` trait.
+pub struct LocalRetriever<'a> {
+    repo: &'a Repository,
+    index: &'a LineageIndex,
+}
+
+/// Line-object evidence for one session before it becomes wire `Evidence`.
+struct LineMatches {
+    ranges: Vec<[u32; 2]>,
+    confidence: Confidence,
+}
+
+impl<'a> LocalRetriever<'a> {
+    pub fn new(repo: &'a Repository, index: &'a LineageIndex) -> Self {
+        Self { repo, index }
+    }
+
+    /// All line objects for the queried file, grouped per session. Enumerates
+    /// every line-object ref; per-query cost is acceptable because the cache
+    /// in front of retrieval absorbs repeats (spec: Cache).
+    fn line_matches_for_file(&self, file_path: &str) -> Result<BTreeMap<String, LineMatches>> {
+        let refs = self
+            .repo
+            .references_glob(LINE_OBJECT_REF_GLOB)
+            .map_err(|e| OracleError::Retrieval(e.to_string()))?;
+
+        let mut by_session: BTreeMap<String, LineMatches> = BTreeMap::new();
+        for reference in refs {
+            let reference = reference.map_err(|e| OracleError::Retrieval(e.to_string()))?;
+            let Some(name) = reference.name() else {
+                continue;
+            };
+            let Some(id) = name.rsplit('/').next() else {
+                continue;
+            };
+            let object = read_line_object(self.repo, &LineageId::from(id))
+                .map_err(|e| OracleError::Retrieval(e.to_string()))?;
+            let Some(object) = object else { continue };
+            if normalize_repo_path(&object.file_path, None) != file_path {
+                continue;
+            }
+
+            let entry = by_session
+                .entry(object.conversation_id.as_str().to_string())
+                .or_insert(LineMatches {
+                    ranges: Vec::new(),
+                    confidence: object.confidence,
+                });
+            entry.ranges.push(object.line_range);
+            // A session's match confidence is its best one: any exact/manual
+            // line object outranks heuristic ones for the strength mapping.
+            if matches!(object.confidence, Confidence::Exact | Confidence::Manual) {
+                entry.confidence = object.confidence;
+            }
+        }
+
+        for matches in by_session.values_mut() {
+            matches.ranges.sort_unstable();
+            matches.ranges.dedup();
+        }
+        Ok(by_session)
+    }
+
+    /// Privacy is enforced here, before caching or selection: a private
+    /// conversation — or one whose parent chain reaches a private one — is
+    /// never evidence (spec: Privacy).
+    fn is_private_or_private_ancestor(&self, conversation: &Conversation) -> Result<bool> {
+        if conversation.private {
+            return Ok(true);
+        }
+
+        let mut seen: HashSet<String> = HashSet::new();
+        seen.insert(conversation.id.as_str().to_string());
+        let mut next = conversation.parent_session_id.clone();
+        while let Some(parent_id) = next {
+            // A cycle cannot arise from correct fork data, but a corrupt ref
+            // must degrade to "not private", never to an infinite loop.
+            if !seen.insert(parent_id.as_str().to_string()) {
+                return Ok(false);
+            }
+            let parent = read_conversation_stored(self.repo, &parent_id)
+                .map_err(|e| OracleError::Retrieval(e.to_string()))?;
+            let Some(parent) = parent else {
+                // An unsynced/absent parent is unknown, and unknown does not
+                // reach a private conversation.
+                return Ok(false);
+            };
+            if parent.private {
+                return Ok(true);
+            }
+            next = parent.parent_session_id;
+        }
+        Ok(false)
+    }
+
+    fn evidence_for_session(
+        &self,
+        session_id: &str,
+        line_matches: Option<LineMatches>,
+    ) -> Result<Option<Evidence>> {
+        let id = LineageId::from(session_id.to_string());
+        let conversation =
+            read_conversation(self.repo, &id).map_err(|e| OracleError::Retrieval(e.to_string()))?;
+        let Some(conversation) = conversation else {
+            return Ok(None);
+        };
+        if self.is_private_or_private_ancestor(&conversation)? {
+            return Ok(None);
+        }
+
+        let summary = generate_architecture_summary(&conversation);
+        let attribution = format!(
+            "{} session {}, {}",
+            conversation.agent.as_str(),
+            conversation.id.as_str(),
+            conversation.started_at.format("%Y-%m-%d"),
+        );
+
+        let (tier, match_confidence, line_ranges) = match line_matches {
+            Some(matches) => (
+                EvidenceTier::LineObjects,
+                Some(matches.confidence),
+                matches.ranges,
+            ),
+            None => (EvidenceTier::FilesTouched, None, Vec::new()),
+        };
+
+        Ok(Some(Evidence {
+            session_id: conversation.id,
+            tier,
+            strength: strength_for(tier, match_confidence),
+            match_confidence,
+            line_ranges,
+            summary,
+            attribution,
+        }))
+    }
+}
+
+impl Retriever for LocalRetriever<'_> {
+    fn retrieve(&self, query: &ContextQuery) -> Result<Retrieval> {
+        let started = Instant::now();
+        let file_path = normalize_repo_path(&query.file_path, None);
+
+        let mut line_matches = self.line_matches_for_file(&file_path)?;
+
+        // Candidate order matters under a tight budget: line-object sessions
+        // first so the strongest evidence survives an early stop.
+        let mut candidates: Vec<String> = line_matches.keys().cloned().collect();
+        for session_id in self
+            .index
+            .sessions_for_file(&file_path)
+            .map_err(|e| OracleError::Retrieval(e.to_string()))?
+        {
+            if !line_matches.contains_key(&session_id) {
+                candidates.push(session_id);
+            }
+        }
+
+        let mut evidence = Vec::new();
+        for session_id in candidates {
+            if let Some(budget_ms) = query.budget_ms {
+                // Spec: return what we have rather than overrun the caller's
+                // budget — partial evidence beats a blown deadline.
+                if started.elapsed().as_millis() >= u128::from(budget_ms) {
+                    break;
+                }
+            }
+            let matches = line_matches.remove(&session_id);
+            if let Some(entry) = self.evidence_for_session(&session_id, matches)? {
+                evidence.push(entry);
+            }
+        }
+
+        Ok(Retrieval::from_evidence(evidence))
+    }
+}
