@@ -883,6 +883,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "lineage-oracle"
+version = "0.1.0"
+dependencies = [
+ "lineage-core",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "lineage-policy"
 version = "0.1.0"
 dependencies = [
