@@ -38,11 +38,12 @@ fn run_claude_hook(repo_path: &Path, input: &str, now_unix: i64) -> Result<Optio
     let Some(file_path) = event["tool_input"]["file_path"].as_str() else {
         return Ok(None);
     };
-    // Only a plain-text tool response can be appended to faithfully; any
-    // other shape means silence rather than a mangled tool result.
-    let Some(original_output) = event["tool_response"].as_str() else {
+    // Only shapes we can append to faithfully are handled; anything else
+    // means silence rather than a mangled tool result. Checked before
+    // retrieval so unappendable events cost nothing.
+    if !response_is_appendable(&event["tool_response"]) {
         return Ok(None);
-    };
+    }
 
     let repo = open_repo(repo_path)?;
     let workdir = repo.workdir().to_path_buf();
@@ -90,6 +91,9 @@ fn run_claude_hook(repo_path: &Path, input: &str, now_unix: i64) -> Result<Optio
     }
 
     let digest = render_digest(&relative_path, &selected);
+    let Some(updated) = append_digest_to_response(&event["tool_response"], &digest) else {
+        return Ok(None);
+    };
     append_injection_log(
         &git_dir,
         &relative_path,
@@ -101,10 +105,30 @@ fn run_claude_hook(repo_path: &Path, input: &str, now_unix: i64) -> Result<Optio
     let output = serde_json::json!({
         "hookSpecificOutput": {
             "hookEventName": "PostToolUse",
-            "updatedToolOutput": format!("{original_output}\n\n{digest}"),
+            "updatedToolOutput": updated,
         }
     });
     Ok(Some(output.to_string()))
+}
+
+/// Claude Code's Read returns `{"type":"text","file":{"content",…}}` (observed
+/// live, 2026-07-18); older/simpler payloads may carry a bare string. Both are
+/// appended to in place so the tool result stays shape-identical.
+fn response_is_appendable(response: &serde_json::Value) -> bool {
+    response.is_string() || response["file"]["content"].is_string()
+}
+
+fn append_digest_to_response(
+    response: &serde_json::Value,
+    digest: &str,
+) -> Option<serde_json::Value> {
+    if let Some(text) = response.as_str() {
+        return Some(serde_json::Value::String(format!("{text}\n\n{digest}")));
+    }
+    let content = response["file"]["content"].as_str()?;
+    let mut updated = response.clone();
+    updated["file"]["content"] = serde_json::Value::String(format!("{content}\n\n{digest}"));
+    Some(updated)
 }
 
 /// A repo with no remote still gets local retrieval; the binding only

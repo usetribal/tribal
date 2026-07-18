@@ -38,9 +38,14 @@ harness-agnostic.
 - **Input:** the hook's stdin JSON; the adapter extracts the tool's `file_path`
   and the file content the agent just received.
 - **Output on evidence:** `hookSpecificOutput.updatedToolOutput` — the original
-  tool output with the digest appended. This is the channel that reaches model
-  context without spending an agent turn. (`PreToolUse`
-  `additionalContext` is not injected into model context and MUST NOT be used.)
+  tool output with the digest appended, preserving the response's shape. Read
+  responses observed live (2026-07-18) are
+  `{"type": "text", "file": {"content", …}}`; the digest is appended to
+  `file.content`. A bare-string response is appended to directly. Any other
+  shape MUST produce silence, never a reshaped tool result. This is the
+  channel that reaches model context without spending an agent turn.
+  (`PreToolUse` `additionalContext` is not injected into model context and
+  MUST NOT be used.)
 - **Output on no evidence, error, or deadline overrun:** exit 0 with no
   output. A conforming adapter MUST fail open — nothing the injection path
   does may ever surface an error inside the agent session or block the tool

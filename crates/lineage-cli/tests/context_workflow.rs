@@ -210,3 +210,39 @@ fn agent_hook_uninstall_removes_only_lineage_wiring() {
     assert_eq!(groups.len(), 1);
     assert_eq!(groups[0]["matcher"], "Bash");
 }
+
+#[test]
+fn structured_read_response_gets_digest_inside_file_content() {
+    let dir = init_repo();
+    let file = dir.path().join("main.rs");
+    fs::write(&file, "fn main() {}\n").unwrap();
+    store_session_touching(dir.path(), "main.rs");
+
+    // The shape Claude Code actually sends for Read (observed live).
+    let input = serde_json::json!({
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Read",
+        "tool_input": { "file_path": file.to_string_lossy() },
+        "tool_response": {
+            "type": "text",
+            "file": {
+                "filePath": file.to_string_lossy(),
+                "content": "fn main() {}\n",
+                "numLines": 2,
+                "startLine": 1,
+                "totalLines": 2
+            }
+        },
+    })
+    .to_string();
+
+    let output = context_cmd::hook_claude(dir.path(), &input, 0).expect("should inject");
+    let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+    let updated = &parsed["hookSpecificOutput"]["updatedToolOutput"];
+    // Shape preserved, digest inside file.content.
+    assert_eq!(updated["type"], "text");
+    assert_eq!(updated["file"]["numLines"], 2);
+    let content = updated["file"]["content"].as_str().unwrap();
+    assert!(content.starts_with("fn main() {}\n"));
+    assert!(content.contains("Lineage: 1 past session(s) touched main.rs"));
+}
