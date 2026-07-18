@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Diagnostics v0 (`specs/diagnostics-v0.md`): spec for a local event log
+  (`.git/lineage/events.jsonl`, versioned per-operation entries) and a grown
+  `git lineage doctor --json` contract (setup, capture, materialization, links,
+  activity sections) that external developer tooling will consume; narrative
+  contract only, not part of the schema/bindings pipeline
 - Context oracle (`specs/context-injection-v0.md`): `git lineage context hook claude` — a Claude Code PostToolUse hook endpoint that deterministically appends provenance digests (attribution, line ranges, session summary, graded strength) to file-read results, backed by a new `lineage-oracle` crate (transport-neutral `Retriever` trait, tiered local retrieval over line objects and files-touched sessions, content-hash-keyed cache with negative caching); private sessions and forks of private sessions are never injected, and every injection is recorded in `.git/lineage/context-log.jsonl`, viewable via `git lineage context log`
 
 - `git lineage login --server URL` — sign in to a Lineage server via the browser device flow; stores an opaque session handle in `~/.config/lineage/credentials.json` (0600) and makes it the default server. `git lineage sync` now works without flags after a login: `--server` falls back to the stored default, and the bearer token falls back from `--token`/`LINEAGE_TOKEN` to a short-lived access token minted from the stored login; a 401 on that mint means the stored login was revoked or expired and `login` must be re-run
