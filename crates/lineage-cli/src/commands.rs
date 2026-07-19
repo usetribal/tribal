@@ -805,3 +805,89 @@ fn parse_blame_target(target: &str) -> Result<(String, u32)> {
     }
     Ok((target.to_string(), 1))
 }
+
+/// Rebuild the whole derived layer (notes, line objects, search index) from
+/// stored conversations × git history under current code, then replay manual
+/// links from the event log — they are user intent, not derivable, so the
+/// wipe must not lose them. Pre-event-log manual links cannot be identified
+/// and are dropped (reported).
+pub fn rebuild(repo_path: &Path) -> Result<()> {
+    let repo = open_repo(repo_path)?;
+    let report = lineage_git::rebuild_links(repo.inner())?;
+
+    let log = EventLog::for_git_dir(&repo.git_dir());
+    for (sha, link) in &report.linked_commits {
+        let sessions: Vec<serde_json::Value> = link
+            .linked
+            .iter()
+            .map(|s| {
+                serde_json::json!({
+                    "session_id": s.session_id.as_str(),
+                    "line_objects": s.line_objects,
+                    "basis": s.basis.as_str(),
+                })
+            })
+            .collect();
+        log.append(
+            Utc::now(),
+            "link",
+            Outcome::Ok,
+            serde_json::json!({
+                "commit_sha": sha,
+                "sessions": sessions,
+                "trigger": "rebuild",
+            }),
+        );
+    }
+
+    let mut manual_replayed = 0usize;
+    for event in log.read_entries() {
+        if event["op"] != "link" || event["detail"]["trigger"] != "manual" {
+            continue;
+        }
+        let Some(commit_sha) = event["detail"]["commit_sha"].as_str() else {
+            continue;
+        };
+        for session in event["detail"]["sessions"].as_array().into_iter().flatten() {
+            let Some(session_id) = session["session_id"].as_str() else {
+                continue;
+            };
+            let id = LineageId::from(session_id);
+            if link_session_to_commit(repo.inner(), &id, commit_sha).is_ok() {
+                manual_replayed += 1;
+            }
+        }
+    }
+
+    let index = LineageIndex::open(repo.git_dir().join("lineage").join("index.db"))?;
+    let sessions_indexed = index.rebuild(repo.inner())?;
+
+    println!(
+        "rebuilt derived state: {} commit(s) scanned, {} link(s) written ({} manual replayed), {} line object(s), index: {} session(s)",
+        report.commits_scanned,
+        report.links_written,
+        manual_replayed,
+        report.line_objects,
+        sessions_indexed,
+    );
+    println!(
+        "wiped {} note(s) and {} line-object ref(s); manual links predating the event log are not recoverable",
+        report.notes_deleted, report.line_object_refs_deleted,
+    );
+
+    log.append(
+        Utc::now(),
+        "rebuild",
+        Outcome::Ok,
+        serde_json::json!({
+            "commits_scanned": report.commits_scanned,
+            "links_written": report.links_written,
+            "manual_replayed": manual_replayed,
+            "line_objects": report.line_objects,
+            "notes_deleted": report.notes_deleted,
+            "line_object_refs_deleted": report.line_object_refs_deleted,
+            "sessions_indexed": sessions_indexed,
+        }),
+    );
+    Ok(())
+}

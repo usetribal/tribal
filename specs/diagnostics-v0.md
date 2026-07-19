@@ -44,6 +44,7 @@ One entry per command invocation.
 | `link` | `{ "commit_sha": "...", "sessions": [{ "session_id": "...", "line_objects": count, "basis": "line_objects" \| "file_overlap" }], "skipped_no_overlap": ["session_id"], "trigger": "manual" \| "post_commit" }` — automatic linking is gated: a session is linked only with evidence (materialized line objects, or written-file overlap with the commit); refused sessions appear in `skipped_no_overlap`. Manual `link` is ungated and carries no `basis` |
 | `materialize` | `{ "commit_sha": "...", "sessions": [{ "session_id": "...", "line_objects": count }] }` |
 | `rebuild_index` | `{ "sessions_indexed": count }` |
+| `rebuild` | `{ "commits_scanned": count, "links_written": count, "manual_replayed": count, "line_objects": count, "notes_deleted": count, "line_object_refs_deleted": count, "sessions_indexed": count }` — full derived-layer rebuild: wipes notes and line objects, relinks every commit under the evidence gate, replays manual links from this log, rebuilds the index |
 | `sync` | `{ "server": "...", "remote": "...", "batch": { "conversations": count, "line_objects": count, "session_commit_links": count, "blobs": count }, "blobs_uploaded": count, "response": SyncResponse }` — `response` is the server's `sync-response-v0` object verbatim ([sync-protocol-v0](sync-protocol-v0.md)) |
 | `context_hook` | `{ "file_path": "...", "harness": "claude", "session_ids": [...], "strength": "..." }`; when `outcome` is `silent` or `error`, `session_ids`/`strength` are absent and a `reason` field is present |
 

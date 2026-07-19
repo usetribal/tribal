@@ -140,7 +140,13 @@ enum Commands {
     },
     /// Search indexed sessions
     Search { query: String },
-    /// Rebuild search index from git refs
+    /// Rebuild derived state (links, line objects, index) from stored sessions
+    Rebuild {
+        #[command(subcommand)]
+        target: Option<RebuildTarget>,
+    },
+    /// Deprecated alias for `rebuild index`
+    #[command(hide = true)]
     RebuildIndex,
     /// Link a session to a commit
     Link {
@@ -194,6 +200,12 @@ enum HookAction {
 }
 
 #[derive(Subcommand)]
+enum RebuildTarget {
+    /// Rebuild only the search index
+    Index,
+}
+
+#[derive(Subcommand)]
 enum ContextAction {
     /// Agent-hook endpoint: read a hook event on stdin, emit injection JSON
     Hook {
@@ -204,6 +216,17 @@ enum ContextAction {
     Log {
         #[arg(long, default_value_t = 20)]
         limit: usize,
+    },
+    /// Wire the context hook into Claude Code settings
+    Install {
+        /// Install user-level (~/.claude/settings.json) — covers every repo
+        #[arg(long)]
+        user: bool,
+    },
+    /// Remove lineage context-hook wiring from Claude Code settings
+    Uninstall {
+        #[arg(long)]
+        user: bool,
     },
 }
 
@@ -305,6 +328,36 @@ fn main() -> ExitCode {
                 Ok(())
             }
             ContextAction::Log { limit } => context_cmd::print_log(&repo_path, limit),
+            ContextAction::Install { user } => {
+                let installed = if user {
+                    context_cmd::install_claude_agent_hook_user()
+                } else {
+                    context_cmd::install_claude_agent_hook(&repo_path)
+                };
+                installed.map(|fresh| {
+                    println!(
+                        "context hook {}",
+                        if fresh {
+                            "installed"
+                        } else {
+                            "already present"
+                        }
+                    );
+                })
+            }
+            ContextAction::Uninstall { user } => {
+                let removed = if user {
+                    context_cmd::uninstall_claude_agent_hook_user()
+                } else {
+                    context_cmd::uninstall_claude_agent_hook(&repo_path)
+                };
+                removed.map(|did| {
+                    println!(
+                        "context hook {}",
+                        if did { "removed" } else { "not present" }
+                    );
+                })
+            }
         },
         Commands::Export { redact, format } => commands::export(&repo_path, redact, &format),
         Commands::Login { server } => commands::login(&server),
@@ -314,6 +367,10 @@ fn main() -> ExitCode {
             remote,
         } => commands::sync(&repo_path, server.as_deref(), token.as_deref(), &remote),
         Commands::Search { query } => commands::search(&repo_path, &query),
+        Commands::Rebuild { target } => match target {
+            None => commands::rebuild(&repo_path),
+            Some(RebuildTarget::Index) => commands::rebuild_index(&repo_path),
+        },
         Commands::RebuildIndex => commands::rebuild_index(&repo_path),
         Commands::Link {
             session_id,
