@@ -261,7 +261,10 @@ fn links_section(
         let trigger = event["detail"]["trigger"].as_str().unwrap_or("unknown");
         for session in event["detail"]["sessions"].as_array().into_iter().flatten() {
             if let Some(id) = session["session_id"].as_str() {
-                triggers.insert((commit.into(), id.into()), trigger.into());
+                // The link basis (evidence) is more informative than the
+                // trigger (mechanism); fall back for events predating basis.
+                let established = session["basis"].as_str().unwrap_or(trigger);
+                triggers.insert((commit.into(), id.into()), established.into());
             }
         }
     }

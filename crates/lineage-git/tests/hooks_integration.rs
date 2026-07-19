@@ -71,13 +71,15 @@ fn hooks_link_sessions_to_head() {
     });
     persist_conversation(inner, &conv).unwrap();
 
-    let linked = link_all_sessions_to_head(inner).unwrap();
-    assert_eq!(linked.len(), 1);
-    assert_eq!(linked[0].session_id, conv.id);
+    let report = link_all_sessions_to_head(inner).unwrap();
+    assert_eq!(report.linked.len(), 1);
+    assert_eq!(report.linked[0].session_id, conv.id);
     assert!(
-        linked[0].line_objects > 0,
+        report.linked[0].line_objects > 0,
         "linked session should report its materialized line objects"
     );
+    assert_eq!(report.linked[0].basis, lineage_git::LinkBasis::LineObjects);
+    assert!(report.skipped_no_overlap.is_empty());
 
     write_last_import(
         inner,
@@ -85,7 +87,7 @@ fn hooks_link_sessions_to_head() {
     )
     .unwrap();
     let recent = link_recent_sessions_to_head(inner).unwrap();
-    assert_eq!(recent.len(), 1);
+    assert_eq!(recent.linked.len(), 1);
 
     let note = lineage_git::read_note_for_commit(inner, &sha)
         .unwrap()
@@ -101,4 +103,69 @@ fn hooks_link_sessions_to_head() {
         .expect("line object ref should resolve");
     assert_eq!(obj.file_path, "lib.rs");
     assert_eq!(obj.line_range, [1, 1]);
+}
+
+fn conversation_with_artifact(root: &str, path: &str, kind: ArtifactKind) -> Conversation {
+    let mut conv = Conversation::new(AgentKind::Claude, root);
+    conv.turns.push(Turn {
+        id: LineageId::new(),
+        role: Role::Assistant,
+        content: String::new(),
+        tool_calls: vec![],
+        model: None,
+        timestamp: None,
+        artifacts: vec![Artifact {
+            kind,
+            path: path.into(),
+            blob_ref: None,
+            content_hash: None,
+            mime_type: None,
+            preview_data_url: None,
+            line_range: None,
+            resolve: None,
+        }],
+    });
+    conv
+}
+
+#[test]
+fn linking_refuses_sessions_without_evidence() {
+    let dir = init_repo();
+    let repo = open_repo(dir.path()).unwrap();
+    let inner = repo.inner();
+    let sha = inner
+        .head()
+        .unwrap()
+        .peel_to_commit()
+        .unwrap()
+        .id()
+        .to_string();
+    let root = dir.path().display().to_string();
+
+    // The gap 8 scenario: a session that edited a completely different file
+    // was merely in the import batch when this commit landed.
+    let unrelated = conversation_with_artifact(&root, "docs/other.md", ArtifactKind::FileEdit);
+    persist_conversation(inner, &unrelated).unwrap();
+
+    // A session that wrote the committed file, but whose artifact carries no
+    // resolve payload — no line objects materialize, yet authorship overlap
+    // is real evidence.
+    let overlapping = conversation_with_artifact(&root, "lib.rs", ArtifactKind::FileEdit);
+    persist_conversation(inner, &overlapping).unwrap();
+
+    let report = link_all_sessions_to_head(inner).unwrap();
+
+    assert_eq!(report.skipped_no_overlap, vec![unrelated.id.clone()]);
+    assert_eq!(report.linked.len(), 1);
+    assert_eq!(report.linked[0].session_id, overlapping.id);
+    assert_eq!(report.linked[0].basis, lineage_git::LinkBasis::FileOverlap);
+
+    let note = lineage_git::read_note_for_commit(inner, &sha)
+        .unwrap()
+        .unwrap();
+    assert!(note.session_ids.contains(&overlapping.id));
+    assert!(
+        !note.session_ids.contains(&unrelated.id),
+        "no-overlap session must not become commit provenance"
+    );
 }

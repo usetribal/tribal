@@ -11,7 +11,7 @@ pub use config::{
     CommitMappingMode, LargeBlobBackend, LfsTransport, LineageRepoConfig, LINEAGE_CONFIG_SCHEMA,
 };
 pub use conversation_util::{
-    conversation_modified_code, files_touched, generate_architecture_summary,
+    conversation_modified_code, files_touched, files_written, generate_architecture_summary,
 };
 pub use error::{LineageError, Result};
 pub use ids::{derive_line_object_id, derive_session_id, LineageId};

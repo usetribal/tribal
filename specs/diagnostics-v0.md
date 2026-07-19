@@ -41,7 +41,7 @@ One entry per command invocation.
 | `install_skill` | `{ "targets": [...] }` |
 | `install_claude_agent_hook` | `{ "already_installed": bool }` |
 | `import` | `{ "agents": [...], "discovered": {"<agent>": count}, "imported": count, "skipped": count, "errors": count, "session_ids": [...], "line_objects_written": count }` |
-| `link` | `{ "commit_sha": "...", "sessions": [{ "session_id": "...", "line_objects": count }], "trigger": "manual" \| "post_commit" }` |
+| `link` | `{ "commit_sha": "...", "sessions": [{ "session_id": "...", "line_objects": count, "basis": "line_objects" \| "file_overlap" }], "skipped_no_overlap": ["session_id"], "trigger": "manual" \| "post_commit" }` — automatic linking is gated: a session is linked only with evidence (materialized line objects, or written-file overlap with the commit); refused sessions appear in `skipped_no_overlap`. Manual `link` is ungated and carries no `basis` |
 | `materialize` | `{ "commit_sha": "...", "sessions": [{ "session_id": "...", "line_objects": count }] }` |
 | `rebuild_index` | `{ "sessions_indexed": count }` |
 | `sync` | `{ "server": "...", "remote": "...", "batch": { "conversations": count, "line_objects": count, "session_commit_links": count, "blobs": count }, "blobs_uploaded": count, "response": SyncResponse }` — `response` is the server's `sync-response-v0` object verbatim ([sync-protocol-v0](sync-protocol-v0.md)) |
@@ -151,13 +151,15 @@ Session↔commit links and how each was established.
 [
   {
     "commit_sha": "abc123",
-    "sessions": [{ "session_id": "01HQ…", "established_by": "post_commit" }]
+    "sessions": [{ "session_id": "01HQ…", "established_by": "line_objects" }]
   }
 ]
 ```
 
-`established_by` is `post_commit`, `manual`, `auto_match`, or `unknown` when
-no event-log entry exists for the link.
+`established_by` prefers the link's evidence basis (`line_objects`,
+`file_overlap`) when the event log recorded one; otherwise it falls back to
+the trigger (`post_commit`, `manual`), `auto_match`, or `unknown` when no
+event-log entry exists for the link (links predating basis recording).
 
 ### `activity`
 
