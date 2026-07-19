@@ -18,6 +18,7 @@ mod line_resolve;
 mod media;
 mod notes;
 pub mod patch_id;
+mod rebuild;
 mod refs;
 mod remap;
 mod repo;
@@ -32,7 +33,8 @@ pub use delete::{delete_session, DeleteReport};
 pub use doctor::{run_doctor, run_doctor_refs, DoctorReport};
 pub use funnel::{audit_materialization, MaterializationFunnel};
 pub use hooks::{
-    link_all_sessions_to_head, link_recent_sessions_to_head, LinkBasis, LinkReport, LinkedSession,
+    link_all_sessions_to_head, link_recent_sessions_to_head, link_sessions_to_commit, LinkBasis,
+    LinkReport, LinkedSession,
 };
 pub use hydrate::{hydrate_conversation, hydrate_media_artifacts, indexable_body, HydrateReport};
 pub use identity::{
@@ -48,6 +50,7 @@ pub use lfs_refs::{
 pub use lfs_worktree::{ensure_gitattributes, LINEAGE_MEDIA_DIR};
 pub use line_resolve::materialize_line_objects;
 pub use notes::{list_notes, map_commit_to_sessions, read_note_for_commit, write_note_for_commit};
+pub use rebuild::{rebuild_links, RebuildReport};
 pub use refs::{
     list_line_objects, list_session_ids, read_conversation, read_conversation_stored,
     read_line_object, read_manifest, session_ref, write_conversation, write_line_object,
