@@ -69,9 +69,9 @@ pub fn uninstall_hook(repo_path: &Path) -> Result<()> {
 
 pub fn post_commit(repo_path: &Path) -> Result<()> {
     let repo = open_repo(repo_path)?;
-    let linked = link_recent_sessions_to_head(repo.inner())?;
-    if !linked.is_empty() {
-        eprintln!("lineage: linked {} session(s) to HEAD", linked.len());
+    let report = link_recent_sessions_to_head(repo.inner())?;
+    if !report.linked.is_empty() {
+        eprintln!("lineage: linked {} session(s) to HEAD", report.linked.len());
     }
 
     let head_sha = repo
@@ -80,14 +80,21 @@ pub fn post_commit(repo_path: &Path) -> Result<()> {
         .ok()
         .and_then(|h| h.peel_to_commit().ok())
         .map(|c| c.id().to_string());
-    let sessions: Vec<serde_json::Value> = linked
+    let sessions: Vec<serde_json::Value> = report
+        .linked
         .iter()
         .map(|s| {
             serde_json::json!({
                 "session_id": s.session_id.as_str(),
                 "line_objects": s.line_objects,
+                "basis": s.basis.as_str(),
             })
         })
+        .collect();
+    let skipped: Vec<&str> = report
+        .skipped_no_overlap
+        .iter()
+        .map(|id| id.as_str())
         .collect();
     EventLog::for_git_dir(&repo.git_dir()).append(
         Utc::now(),
@@ -96,6 +103,7 @@ pub fn post_commit(repo_path: &Path) -> Result<()> {
         serde_json::json!({
             "commit_sha": head_sha,
             "sessions": sessions,
+            "skipped_no_overlap": skipped,
             "trigger": "post_commit",
         }),
     );

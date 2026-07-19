@@ -38,6 +38,24 @@ pub fn turn_modified_code(turn: &Turn) -> bool {
     false
 }
 
+/// Paths the conversation *wrote* (edit/diff artifacts only) — the authorship
+/// signal, deliberately excluding tool-call reads so consumers like link
+/// gating are not polluted by files the session merely consulted.
+pub fn files_written(conv: &Conversation) -> Vec<String> {
+    let mut paths: Vec<String> = conv
+        .turns
+        .iter()
+        .flat_map(|t| &t.artifacts)
+        .filter(|a| {
+            matches!(a.kind, ArtifactKind::FileEdit | ArtifactKind::Diff) && !a.path.is_empty()
+        })
+        .map(|a| a.path.clone())
+        .collect();
+    paths.sort();
+    paths.dedup();
+    paths
+}
+
 /// Repo-relative or logical paths touched by code-changing artifacts and tools.
 pub fn files_touched(conv: &Conversation) -> Vec<String> {
     let mut paths = Vec::new();

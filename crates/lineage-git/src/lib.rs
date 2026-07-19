@@ -31,7 +31,9 @@ pub use config::{read_repo_config, write_repo_config, LINEAGE_CONFIG_REF};
 pub use delete::{delete_session, DeleteReport};
 pub use doctor::{run_doctor, run_doctor_refs, DoctorReport};
 pub use funnel::{audit_materialization, MaterializationFunnel};
-pub use hooks::{link_all_sessions_to_head, link_recent_sessions_to_head, LinkedSession};
+pub use hooks::{
+    link_all_sessions_to_head, link_recent_sessions_to_head, LinkBasis, LinkReport, LinkedSession,
+};
 pub use hydrate::{hydrate_conversation, hydrate_media_artifacts, indexable_body, HydrateReport};
 pub use identity::{
     repo_git_identity, stamp_prompted_by, GitIdentity, PROMPTED_BY_EMAIL, PROMPTED_BY_NAME,

@@ -6,21 +6,49 @@ use crate::notes::write_note_for_commit;
 use crate::patch_id::patch_id_for_commit;
 use crate::refs::{list_session_ids, read_conversation_stored};
 
+/// How a session↔commit link was established. Ordered by evidential weight;
+/// batch recency is deliberately absent — being in the import window when
+/// someone committed is not evidence (context-oracle-followups gap 8).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LinkBasis {
+    LineObjects,
+    FileOverlap,
+}
+
+impl LinkBasis {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            LinkBasis::LineObjects => "line_objects",
+            LinkBasis::FileOverlap => "file_overlap",
+        }
+    }
+}
+
 /// Per-session outcome of a link-to-HEAD pass, carried back so callers (the
 /// post-commit hook's event-log entry, diagnostics-v0 `link`) can report which
-/// sessions were linked and how many line objects each materialized.
+/// sessions were linked, on what basis, and how many line objects each
+/// materialized.
 #[derive(Debug, Clone)]
 pub struct LinkedSession {
     pub session_id: LineageId,
     pub line_objects: usize,
+    pub basis: LinkBasis,
 }
 
-pub fn link_all_sessions_to_head(repo: &Repository) -> Result<Vec<LinkedSession>, LineageError> {
+/// Linked sessions plus the ones the gate refused — skips are reported, never
+/// silent, so doctor can show why a session is absent from a commit's note.
+#[derive(Debug, Clone, Default)]
+pub struct LinkReport {
+    pub linked: Vec<LinkedSession>,
+    pub skipped_no_overlap: Vec<LineageId>,
+}
+
+pub fn link_all_sessions_to_head(repo: &Repository) -> Result<LinkReport, LineageError> {
     let ids = list_session_ids(repo)?;
     link_sessions_to_head(repo, &ids)
 }
 
-pub fn link_recent_sessions_to_head(repo: &Repository) -> Result<Vec<LinkedSession>, LineageError> {
+pub fn link_recent_sessions_to_head(repo: &Repository) -> Result<LinkReport, LineageError> {
     let state = crate::import_state::read_last_import(repo)?;
     if state.session_ids.is_empty() {
         return link_all_sessions_to_head(repo);
@@ -28,10 +56,7 @@ pub fn link_recent_sessions_to_head(repo: &Repository) -> Result<Vec<LinkedSessi
     link_sessions_to_head(repo, &state.session_ids)
 }
 
-fn link_sessions_to_head(
-    repo: &Repository,
-    ids: &[LineageId],
-) -> Result<Vec<LinkedSession>, LineageError> {
+fn link_sessions_to_head(repo: &Repository, ids: &[LineageId]) -> Result<LinkReport, LineageError> {
     let head = repo
         .head()
         .map_err(|e| LineageError::Other(e.to_string()))?
@@ -39,30 +64,67 @@ fn link_sessions_to_head(
         .map_err(|e| LineageError::Other(e.to_string()))?;
 
     let sha = head.id().to_string();
-    let mut linked = Vec::new();
+    let mut report = LinkReport::default();
 
     for id in ids {
-        if let Some(line_objects) = link_session_to_head(repo, &sha, id)? {
-            linked.push(LinkedSession {
+        match link_session_to_head(repo, &sha, id)? {
+            LinkAttempt::Linked {
+                line_objects,
+                basis,
+            } => report.linked.push(LinkedSession {
                 session_id: id.clone(),
                 line_objects,
-            });
+                basis,
+            }),
+            LinkAttempt::SkippedNoOverlap => report.skipped_no_overlap.push(id.clone()),
+            LinkAttempt::SessionMissing => {}
         }
     }
-    Ok(linked)
+    Ok(report)
+}
+
+enum LinkAttempt {
+    Linked {
+        line_objects: usize,
+        basis: LinkBasis,
+    },
+    SkippedNoOverlap,
+    SessionMissing,
 }
 
 fn link_session_to_head(
     repo: &Repository,
     commit_sha: &str,
     session_id: &LineageId,
-) -> Result<Option<usize>, LineageError> {
+) -> Result<LinkAttempt, LineageError> {
     let Some(conversation) = read_conversation_stored(repo, session_id)? else {
-        return Ok(None);
+        return Ok(LinkAttempt::SessionMissing);
     };
 
     let line_objects =
         materialize_line_objects(repo, &conversation, commit_sha, Confidence::Heuristic)?;
+
+    // The gate (gap 8): a link needs evidence. Materialized line objects are
+    // the strongest; failing that, the session must have *written* a file this
+    // commit changed — reads don't count, so a session that only consulted a
+    // changed file never becomes commit provenance. Manual `git lineage link`
+    // bypasses this path entirely and stays authoritative.
+    let basis = if line_objects.is_empty() {
+        let workspace =
+            lineage_core::workspace_root_for(&conversation.workspace_root, repo.workdir());
+        let changed = crate::line_resolve::files_changed_in_commit(repo, commit_sha)?;
+        let overlaps = lineage_core::files_written(&conversation)
+            .iter()
+            .map(|p| lineage_core::normalize_repo_path(p, Some(&workspace)))
+            .any(|p| changed.contains(&p));
+        if !overlaps {
+            return Ok(LinkAttempt::SkippedNoOverlap);
+        }
+        LinkBasis::FileOverlap
+    } else {
+        LinkBasis::LineObjects
+    };
+
     let mut line_ids: Vec<LineageId> = line_objects.iter().map(|o| o.id.clone()).collect();
 
     for obj in &line_objects {
@@ -92,7 +154,10 @@ fn link_session_to_head(
         &line_ids,
         patch_id.as_deref(),
     )?;
-    Ok(Some(line_objects.len()))
+    Ok(LinkAttempt::Linked {
+        line_objects: line_objects.len(),
+        basis,
+    })
 }
 
 fn merge_line_ids(target: &mut Vec<LineageId>, more: Vec<LineageId>) {

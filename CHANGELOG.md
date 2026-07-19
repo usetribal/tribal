@@ -129,6 +129,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Automatic session↔commit linking is now evidence-gated (context provenance precision): the post-commit hook links a session only when line objects materialized or the session wrote a file the commit changed; refused sessions are recorded as `skipped_no_overlap` in the event log and links carry a `basis` (`line_objects`/`file_overlap`) surfaced by doctor as `established_by`. Manual `git lineage link` is unchanged and stays ungated
+
 - Import-time secret redaction now uses vendored [gitleaks](https://github.com/gitleaks/gitleaks) rules (regex, entropy, allowlists) instead of broad `api_key`/`env_var` regexes — fewer false positives on agent prose while keeping high-confidence secret detection
 - Gitleaks config parser reads `[[rules.allowlists]]` (plural) and triple-quoted path arrays; conformance fixtures cover identification edge cases
 - README repositioned as agent-first engineering context memory; primary setup is `git lineage init` (replaces four-command flow)
