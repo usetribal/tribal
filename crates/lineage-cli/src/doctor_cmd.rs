@@ -9,7 +9,7 @@ use std::path::Path;
 use lineage_core::Conversation;
 use lineage_git::{
     audit_materialization, list_notes, list_session_ids, open_repo, read_conversation_stored,
-    run_doctor, LineageRepo,
+    run_doctor, run_doctor_refs, LineageRepo,
 };
 
 use crate::context_cmd;
@@ -38,8 +38,7 @@ pub fn run(repo_path: &Path, args: &DoctorArgs) -> Result<()> {
         }
     }
 
-    let report = doctor_report(repo_path, args.activity_limit)?;
-    let report = filter_sections(report, &args.sections);
+    let report = doctor_report_sections(repo_path, &args.sections, args.activity_limit)?;
     if args.json {
         println!("{}", serde_json::to_string_pretty(&report)?);
         return Ok(());
@@ -50,19 +49,51 @@ pub fn run(repo_path: &Path, args: &DoctorArgs) -> Result<()> {
 
 /// The full `--json` object, unfiltered. Also the MCP `lineage_doctor` payload.
 pub fn doctor_report(repo_path: &Path, activity_limit: usize) -> Result<serde_json::Value> {
-    let repo = open_repo(repo_path)?;
-    let base = run_doctor(&repo)?;
-    let conversations = load_conversations(&repo)?;
-    let events = EventLog::for_git_dir(&repo.git_dir()).read_entries();
+    doctor_report_sections(repo_path, &[], activity_limit)
+}
 
-    Ok(serde_json::json!({
-        "schema_version": DOCTOR_SCHEMA_VERSION,
-        "setup": setup_section(&repo, &base, &conversations),
-        "capture": capture_section(&repo, &base, &conversations, &events),
-        "materialization": materialization_section(&repo)?,
-        "links": links_section(&repo, &conversations, &events)?,
-        "activity": activity_tail(&events, activity_limit),
-    }))
+/// Builds only the requested sections (empty = all): `--section` filtering
+/// happens before the work, not after, so a cheap section is a cheap command —
+/// capture's per-session LFS scan and materialization's commit diffs are the
+/// expensive passes and must not run when their section is filtered out.
+fn doctor_report_sections(
+    repo_path: &Path,
+    sections: &[String],
+    activity_limit: usize,
+) -> Result<serde_json::Value> {
+    let wants = |name: &str| sections.is_empty() || sections.iter().any(|section| section == name);
+    let repo = open_repo(repo_path)?;
+
+    let conversations = if wants("setup") || wants("capture") || wants("links") {
+        load_conversations(&repo)?
+    } else {
+        Vec::new()
+    };
+    let events = if wants("capture") || wants("links") || wants("activity") {
+        EventLog::for_git_dir(&repo.git_dir()).read_entries()
+    } else {
+        Vec::new()
+    };
+
+    let mut report = serde_json::json!({ "schema_version": DOCTOR_SCHEMA_VERSION });
+    if wants("setup") {
+        let refs = run_doctor_refs(&repo)?;
+        report["setup"] = setup_section(&repo, &refs, &conversations);
+    }
+    if wants("capture") {
+        let full = run_doctor(&repo)?;
+        report["capture"] = capture_section(&repo, &full, &conversations, &events);
+    }
+    if wants("materialization") {
+        report["materialization"] = materialization_section(&repo)?;
+    }
+    if wants("links") {
+        report["links"] = links_section(&repo, &conversations, &events)?;
+    }
+    if wants("activity") {
+        report["activity"] = activity_tail(&events, activity_limit);
+    }
+    Ok(report)
 }
 
 fn load_conversations(repo: &LineageRepo) -> Result<Vec<Conversation>> {
@@ -280,19 +311,6 @@ fn canonical(path: &Path) -> String {
         .unwrap_or_else(|_| path.to_path_buf())
         .display()
         .to_string()
-}
-
-fn filter_sections(report: serde_json::Value, sections: &[String]) -> serde_json::Value {
-    if sections.is_empty() {
-        return report;
-    }
-    let mut filtered = serde_json::json!({
-        "schema_version": report["schema_version"],
-    });
-    for section in sections {
-        filtered[section] = report[section].clone();
-    }
-    filtered
 }
 
 fn render_text(report: &serde_json::Value) {

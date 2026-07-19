@@ -26,7 +26,9 @@ impl DoctorReport {
     }
 }
 
-pub fn run_doctor(repo: &LineageRepo) -> Result<DoctorReport, LineageError> {
+/// Ref/config checks only — cheap (no session reads, no LFS scans), for
+/// callers that don't need the per-session integrity pass in `run_doctor`.
+pub fn run_doctor_refs(repo: &LineageRepo) -> Result<DoctorReport, LineageError> {
     let inner = repo.inner();
     let mut report = DoctorReport {
         is_git_repo: true,
@@ -61,6 +63,13 @@ pub fn run_doctor(repo: &LineageRepo) -> Result<DoctorReport, LineageError> {
             config.large_blob_threshold_bytes
         ));
     }
+
+    Ok(report)
+}
+
+pub fn run_doctor(repo: &LineageRepo) -> Result<DoctorReport, LineageError> {
+    let mut report = run_doctor_refs(repo)?;
+    let inner = repo.inner();
 
     let session_ids = list_session_ids(inner)?;
     report.session_count = session_ids.len();
