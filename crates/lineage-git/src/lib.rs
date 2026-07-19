@@ -29,7 +29,7 @@ pub use commit_map::{best_commit_for_conversation, map_conversation_to_commits, 
 pub use config::{read_repo_config, write_repo_config, LINEAGE_CONFIG_REF};
 pub use delete::{delete_session, DeleteReport};
 pub use doctor::{run_doctor, DoctorReport};
-pub use hooks::{link_all_sessions_to_head, link_recent_sessions_to_head};
+pub use hooks::{link_all_sessions_to_head, link_recent_sessions_to_head, LinkedSession};
 pub use hydrate::{hydrate_conversation, hydrate_media_artifacts, indexable_body, HydrateReport};
 pub use identity::{
     repo_git_identity, stamp_prompted_by, GitIdentity, PROMPTED_BY_EMAIL, PROMPTED_BY_NAME,
@@ -52,7 +52,7 @@ pub use refs::{
 pub use remap::{remap_orphaned_commits, RemapReport};
 pub use repo::{find_repo, open_repo, LineageRepo};
 pub use sync::{
-    assemble_batch, normalize_remote_url, resolve_repo_binding, sync_push, SyncReport,
+    assemble_batch, normalize_remote_url, resolve_repo_binding, sync_push, SyncOutcome, SyncReport,
     SERVER_REPO_ID_KEY,
 };
 pub use write::{

@@ -6,12 +6,21 @@ use crate::notes::write_note_for_commit;
 use crate::patch_id::patch_id_for_commit;
 use crate::refs::{list_session_ids, read_conversation_stored};
 
-pub fn link_all_sessions_to_head(repo: &Repository) -> Result<usize, LineageError> {
+/// Per-session outcome of a link-to-HEAD pass, carried back so callers (the
+/// post-commit hook's event-log entry, diagnostics-v0 `link`) can report which
+/// sessions were linked and how many line objects each materialized.
+#[derive(Debug, Clone)]
+pub struct LinkedSession {
+    pub session_id: LineageId,
+    pub line_objects: usize,
+}
+
+pub fn link_all_sessions_to_head(repo: &Repository) -> Result<Vec<LinkedSession>, LineageError> {
     let ids = list_session_ids(repo)?;
     link_sessions_to_head(repo, &ids)
 }
 
-pub fn link_recent_sessions_to_head(repo: &Repository) -> Result<usize, LineageError> {
+pub fn link_recent_sessions_to_head(repo: &Repository) -> Result<Vec<LinkedSession>, LineageError> {
     let state = crate::import_state::read_last_import(repo)?;
     if state.session_ids.is_empty() {
         return link_all_sessions_to_head(repo);
@@ -19,7 +28,10 @@ pub fn link_recent_sessions_to_head(repo: &Repository) -> Result<usize, LineageE
     link_sessions_to_head(repo, &state.session_ids)
 }
 
-fn link_sessions_to_head(repo: &Repository, ids: &[LineageId]) -> Result<usize, LineageError> {
+fn link_sessions_to_head(
+    repo: &Repository,
+    ids: &[LineageId],
+) -> Result<Vec<LinkedSession>, LineageError> {
     let head = repo
         .head()
         .map_err(|e| LineageError::Other(e.to_string()))?
@@ -27,11 +39,15 @@ fn link_sessions_to_head(repo: &Repository, ids: &[LineageId]) -> Result<usize, 
         .map_err(|e| LineageError::Other(e.to_string()))?;
 
     let sha = head.id().to_string();
-    let mut linked = 0usize;
+    let mut linked = Vec::new();
 
     for id in ids {
-        link_session_to_head(repo, &sha, id)?;
-        linked += 1;
+        if let Some(line_objects) = link_session_to_head(repo, &sha, id)? {
+            linked.push(LinkedSession {
+                session_id: id.clone(),
+                line_objects,
+            });
+        }
     }
     Ok(linked)
 }
@@ -40,9 +56,9 @@ fn link_session_to_head(
     repo: &Repository,
     commit_sha: &str,
     session_id: &LineageId,
-) -> Result<(), LineageError> {
+) -> Result<Option<usize>, LineageError> {
     let Some(conversation) = read_conversation_stored(repo, session_id)? else {
-        return Ok(());
+        return Ok(None);
     };
 
     let line_objects =
@@ -76,7 +92,7 @@ fn link_session_to_head(
         &line_ids,
         patch_id.as_deref(),
     )?;
-    Ok(())
+    Ok(Some(line_objects.len()))
 }
 
 fn merge_line_ids(target: &mut Vec<LineageId>, more: Vec<LineageId>) {

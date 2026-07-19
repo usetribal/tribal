@@ -22,6 +22,7 @@ use lineage_policy::{
 use lineage_search::{LineageIndex, SearchHit};
 
 use crate::auth;
+use crate::events::{EventLog, Outcome};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -111,12 +112,14 @@ pub fn import(
     let mut conversations = Vec::new();
     let mut errors = 0usize;
     let mut skipped = 0usize;
+    let mut discovered = std::collections::BTreeMap::new();
 
     for (kind, adapter) in adapters {
         if !wanted.contains(&kind) {
             continue;
         }
         let sessions = adapter.discover()?;
+        discovered.insert(kind.as_str().to_string(), sessions.len());
         println!("discovered {} {} session(s)", sessions.len(), kind.as_str());
         for session in sessions {
             if let Some(since_dt) = since_dt {
@@ -225,6 +228,20 @@ pub fn import(
         line_objects,
         skipped,
         errors
+    );
+    EventLog::for_git_dir(&lineage_repo.git_dir()).append(
+        Utc::now(),
+        "import",
+        Outcome::Ok,
+        serde_json::json!({
+            "agents": wanted.iter().map(|k| k.as_str()).collect::<Vec<_>>(),
+            "discovered": discovered,
+            "imported": results.len(),
+            "skipped": skipped,
+            "errors": errors,
+            "session_ids": results.iter().map(|r| r.session_id.as_str()).collect::<Vec<_>>(),
+            "line_objects_written": line_objects,
+        }),
     );
     for r in results {
         println!(
@@ -598,7 +615,8 @@ pub fn sync(
         batch.blobs.len()
     );
 
-    let report = sync_push(inner, &server, &token, &batch)?;
+    let outcome = sync_push(inner, &server, &token, &batch)?;
+    let report = &outcome.report;
     println!(
         "synced to repo {} ({} accepted, {} noop, {} rejected, {} pending, {} blob(s) uploaded)",
         report.repo_id,
@@ -607,6 +625,29 @@ pub fn sync(
         report.rejected,
         report.pending,
         report.blobs_uploaded
+    );
+    EventLog::for_git_dir(&repo.git_dir()).append(
+        Utc::now(),
+        "sync",
+        // A rejected object is a failed sync from the user's point of view
+        // (the command exits nonzero below), and the event should agree.
+        if report.rejected > 0 {
+            Outcome::Error
+        } else {
+            Outcome::Ok
+        },
+        serde_json::json!({
+            "server": server,
+            "remote": remote,
+            "batch": {
+                "conversations": batch.conversations.len(),
+                "line_objects": batch.line_objects.len(),
+                "session_commit_links": batch.session_commit_links.len(),
+                "blobs": batch.blobs.len(),
+            },
+            "blobs_uploaded": report.blobs_uploaded,
+            "response": serde_json::to_value(&outcome.response).unwrap_or_default(),
+        }),
     );
     if report.rejected > 0 {
         return Err(format!("{} object(s) rejected by server", report.rejected).into());
@@ -645,8 +686,14 @@ pub fn rebuild_index(repo_path: &Path) -> Result<()> {
     let repo = open_repo(repo_path)?;
     let inner = repo.inner();
     let index = LineageIndex::open(repo.git_dir().join("lineage").join("index.db"))?;
-    index.rebuild(inner)?;
+    let indexed = index.rebuild(inner)?;
     println!("index rebuilt");
+    EventLog::for_git_dir(&repo.git_dir()).append(
+        Utc::now(),
+        "rebuild_index",
+        Outcome::Ok,
+        serde_json::json!({ "sessions_indexed": indexed }),
+    );
     Ok(())
 }
 
@@ -655,6 +702,16 @@ pub fn link(repo_path: &Path, session_id: &str, commit_sha: &str) -> Result<()> 
     let id = LineageId::from(session_id);
     let lines = link_session_to_commit(repo.inner(), &id, commit_sha)?;
     println!("linked {session_id} -> {commit_sha} ({lines} line object(s))");
+    EventLog::for_git_dir(&repo.git_dir()).append(
+        Utc::now(),
+        "link",
+        Outcome::Ok,
+        serde_json::json!({
+            "commit_sha": commit_sha,
+            "sessions": [{ "session_id": session_id, "line_objects": lines }],
+            "trigger": "manual",
+        }),
+    );
     Ok(())
 }
 
@@ -681,12 +738,20 @@ pub fn materialize(repo_path: &Path, commit: Option<&str>, session: Option<&str>
     };
 
     let mut total = 0usize;
+    let mut sessions = Vec::new();
     for id in session_ids {
         let count = materialize_session_at_commit(inner, &id, &commit_sha)?;
         println!("materialized {count} line object(s) for {id} @ {commit_sha}");
+        sessions.push(serde_json::json!({ "session_id": id.as_str(), "line_objects": count }));
         total += count;
     }
     println!("done ({total} line object(s))");
+    EventLog::for_git_dir(&repo.git_dir()).append(
+        Utc::now(),
+        "materialize",
+        Outcome::Ok,
+        serde_json::json!({ "commit_sha": commit_sha, "sessions": sessions }),
+    );
     Ok(())
 }
 

@@ -117,9 +117,11 @@ See [LFS](../lfs.md).
 reads a file with provenance, a digest (attribution, line ranges, session
 summary) is appended to the tool result — deterministically, without spending
 an agent turn. It fails open: on any error, missing provenance, or private
-sessions it prints nothing and exits 0. Every injection is recorded locally in
-`.git/lineage/context-log.jsonl` (never synced); `context log` is the surface
-to see exactly what your agent was told. See `specs/context-injection-v0.md`.
+sessions it prints nothing and exits 0. Every injection — and every
+fired-but-silent outcome, with its reason — is recorded locally in the event
+log at `.git/lineage/events.jsonl` (never synced); `context log` is the surface
+to see exactly what your agent was told. See `specs/context-injection-v0.md`
+and `specs/diagnostics-v0.md`.
 
 ### Sync
 

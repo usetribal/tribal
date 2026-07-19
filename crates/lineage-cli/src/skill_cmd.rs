@@ -2,6 +2,10 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use chrono::Utc;
+
+use crate::events::{EventLog, Outcome};
+
 const SKILL_MD: &str = include_str!("../assets/skills/lineage/SKILL.md");
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -124,7 +128,7 @@ fn init_skill_impl(repo_path: &Path, targets: &[String], force: bool, verbose: b
     if verbose {
         println!("installing lineage agent skill:");
     }
-    for target in resolved {
+    for target in &resolved {
         let path = target.skill_path(repo_path);
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
@@ -136,6 +140,16 @@ fn init_skill_impl(repo_path: &Path, targets: &[String], force: bool, verbose: b
     }
     if verbose {
         println!("Agents can use lineage to search sessions, blame lines, and show conversations.");
+    }
+
+    if let Some(log) = EventLog::for_repo_path(repo_path) {
+        let targets: Vec<&str> = resolved.iter().map(|t| t.id()).collect();
+        log.append(
+            Utc::now(),
+            "install_skill",
+            Outcome::Ok,
+            serde_json::json!({ "targets": targets }),
+        );
     }
     Ok(())
 }
