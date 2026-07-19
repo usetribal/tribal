@@ -63,7 +63,17 @@ fn link_sessions_to_head(repo: &Repository, ids: &[LineageId]) -> Result<LinkRep
         .peel_to_commit()
         .map_err(|e| LineageError::Other(e.to_string()))?;
 
-    let sha = head.id().to_string();
+    link_sessions_to_commit(repo, ids, &head.id().to_string())
+}
+
+/// Evidence-gated linking of a session set against one commit — the unit both
+/// the post-commit hook (HEAD) and `rebuild` (every commit) are built on.
+pub fn link_sessions_to_commit(
+    repo: &Repository,
+    ids: &[LineageId],
+    commit_sha: &str,
+) -> Result<LinkReport, LineageError> {
+    let sha = commit_sha.to_string();
     let mut report = LinkReport::default();
 
     for id in ids {
@@ -101,25 +111,27 @@ fn link_session_to_head(
         return Ok(LinkAttempt::SessionMissing);
     };
 
+    // The gate (gap 8): a link needs evidence — the session must have
+    // *written* a file this commit changed. Reads don't count, so a session
+    // that only consulted a changed file never becomes commit provenance.
+    // Overlap is checked before materialization because materialization is
+    // itself filtered by the commit's changed files: no overlap ⇒ no line
+    // objects, so skipping early is equivalent and cheap enough to run across
+    // whole histories (rebuild). Manual `git lineage link` bypasses this path
+    // entirely and stays authoritative.
+    let workspace = lineage_core::workspace_root_for(&conversation.workspace_root, repo.workdir());
+    let changed = crate::line_resolve::files_changed_in_commit(repo, commit_sha)?;
+    let overlaps = lineage_core::files_written(&conversation)
+        .iter()
+        .map(|p| lineage_core::normalize_repo_path(p, Some(&workspace)))
+        .any(|p| changed.contains(&p));
+    if !overlaps {
+        return Ok(LinkAttempt::SkippedNoOverlap);
+    }
+
     let line_objects =
         materialize_line_objects(repo, &conversation, commit_sha, Confidence::Heuristic)?;
-
-    // The gate (gap 8): a link needs evidence. Materialized line objects are
-    // the strongest; failing that, the session must have *written* a file this
-    // commit changed — reads don't count, so a session that only consulted a
-    // changed file never becomes commit provenance. Manual `git lineage link`
-    // bypasses this path entirely and stays authoritative.
     let basis = if line_objects.is_empty() {
-        let workspace =
-            lineage_core::workspace_root_for(&conversation.workspace_root, repo.workdir());
-        let changed = crate::line_resolve::files_changed_in_commit(repo, commit_sha)?;
-        let overlaps = lineage_core::files_written(&conversation)
-            .iter()
-            .map(|p| lineage_core::normalize_repo_path(p, Some(&workspace)))
-            .any(|p| changed.contains(&p));
-        if !overlaps {
-            return Ok(LinkAttempt::SkippedNoOverlap);
-        }
         LinkBasis::FileOverlap
     } else {
         LinkBasis::LineObjects

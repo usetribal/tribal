@@ -63,6 +63,17 @@ fn write_note_json(
     Ok(())
 }
 
+pub fn delete_note_for_commit(repo: &Repository, commit_sha: &str) -> Result<(), LineageError> {
+    let commit_oid = Oid::from_str(commit_sha)
+        .map_err(|e| LineageError::Other(format!("invalid commit: {e}")))?;
+    let sig = repo
+        .signature()
+        .map_err(|e| LineageError::Other(e.to_string()))?;
+    repo.note_delete(commit_oid, Some(LINEAGE_NOTES_REF), &sig, &sig)
+        .map_err(|e| LineageError::Other(e.to_string()))?;
+    Ok(())
+}
+
 pub fn read_note_for_commit(
     repo: &Repository,
     commit_sha: &str,
