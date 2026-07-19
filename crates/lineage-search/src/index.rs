@@ -33,6 +33,57 @@ pub struct LineageIndex {
     conn: Connection,
 }
 
+#[derive(Debug, Clone)]
+pub struct IndexSchemaInfo {
+    pub has_session_files: bool,
+    pub has_index_meta: bool,
+    pub generation: i64,
+}
+
+/// Read-only schema introspection for diagnostics. `open` applies DDL, so an
+/// index written by an older binary would be silently repaired by inspecting
+/// through it — this reports the file as it is on disk instead.
+pub fn inspect_schema(path: impl AsRef<Path>) -> Result<IndexSchemaInfo> {
+    if !path.as_ref().exists() {
+        return Ok(IndexSchemaInfo {
+            has_session_files: false,
+            has_index_meta: false,
+            generation: 0,
+        });
+    }
+    let conn = Connection::open_with_flags(
+        path,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )?;
+    let table_exists = |name: &str| -> Result<bool> {
+        let count: i64 = conn.query_row(
+            "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+            params![name],
+            |row| row.get(0),
+        )?;
+        Ok(count > 0)
+    };
+    let has_session_files = table_exists("session_files")?;
+    let has_index_meta = table_exists("index_meta")?;
+    let generation = if has_index_meta {
+        conn.query_row(
+            "SELECT value FROM index_meta WHERE key = 'corpus_generation'",
+            [],
+            |row| row.get::<_, String>(0),
+        )
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0)
+    } else {
+        0
+    };
+    Ok(IndexSchemaInfo {
+        has_session_files,
+        has_index_meta,
+        generation,
+    })
+}
+
 impl LineageIndex {
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         if let Some(parent) = path.as_ref().parent() {

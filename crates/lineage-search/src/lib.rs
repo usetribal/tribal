@@ -1,3 +1,3 @@
 mod index;
 
-pub use index::{LineageIndex, SearchHit};
+pub use index::{inspect_schema, IndexSchemaInfo, LineageIndex, SearchHit};

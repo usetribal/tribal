@@ -385,6 +385,23 @@ pub fn uninstall_claude_agent_hook(repo_path: &Path) -> Result<bool> {
     Ok(true)
 }
 
+/// `(settings_present, hook_registered)` for the Claude settings at `root` —
+/// doctor's view of whether a session opened at that directory loads the hook.
+pub(crate) fn claude_hook_status(root: &Path) -> (bool, bool) {
+    let Ok(contents) = fs::read_to_string(root.join(CLAUDE_SETTINGS_FILE)) else {
+        return (false, false);
+    };
+    let Ok(settings) = serde_json::from_str::<serde_json::Value>(&contents) else {
+        return (true, false);
+    };
+    let registered = settings["hooks"]["PostToolUse"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .any(group_has_lineage_hook);
+    (true, registered)
+}
+
 fn group_has_lineage_hook(group: &serde_json::Value) -> bool {
     group["hooks"].as_array().into_iter().flatten().any(|hook| {
         hook["command"]

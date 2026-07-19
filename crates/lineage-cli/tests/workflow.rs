@@ -127,7 +127,15 @@ fn cli_import_and_hooks() {
 fn cli_workflow_covers_commands() {
     let dir = init_repo();
     commands::init_config(dir.path()).unwrap();
-    commands::doctor(dir.path()).unwrap();
+    lineage_cli::doctor_cmd::run(
+        dir.path(),
+        &lineage_cli::doctor_cmd::DoctorArgs {
+            json: false,
+            sections: vec![],
+            activity_limit: 20,
+        },
+    )
+    .unwrap();
 
     let session_id = seed_session(&dir);
     let sha = open_repo(dir.path())

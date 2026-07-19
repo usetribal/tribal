@@ -90,3 +90,21 @@ pub fn map_commit_to_sessions(
         .map(|n| n.session_ids)
         .unwrap_or_default())
 }
+
+/// Every lineage note in the repo. Unparseable notes are skipped, not errors:
+/// diagnostics over a partially broken repo must still see the rest.
+pub fn list_notes(repo: &Repository) -> Result<Vec<GitNote>, LineageError> {
+    let Ok(notes) = repo.notes(Some(LINEAGE_NOTES_REF)) else {
+        return Ok(Vec::new());
+    };
+    let mut out = Vec::new();
+    for entry in notes {
+        let Ok((_note_oid, annotated)) = entry else {
+            continue;
+        };
+        if let Ok(Some(note)) = read_note_for_commit(repo, &annotated.to_string()) {
+            out.push(note);
+        }
+    }
+    Ok(out)
+}

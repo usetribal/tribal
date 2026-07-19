@@ -5,6 +5,7 @@ mod compact;
 mod config;
 mod delete;
 mod doctor;
+mod funnel;
 mod hooks;
 mod hydrate;
 mod identity;
@@ -29,6 +30,7 @@ pub use commit_map::{best_commit_for_conversation, map_conversation_to_commits, 
 pub use config::{read_repo_config, write_repo_config, LINEAGE_CONFIG_REF};
 pub use delete::{delete_session, DeleteReport};
 pub use doctor::{run_doctor, DoctorReport};
+pub use funnel::{audit_materialization, MaterializationFunnel};
 pub use hooks::{link_all_sessions_to_head, link_recent_sessions_to_head, LinkedSession};
 pub use hydrate::{hydrate_conversation, hydrate_media_artifacts, indexable_body, HydrateReport};
 pub use identity::{
@@ -43,11 +45,11 @@ pub use lfs_refs::{
 };
 pub use lfs_worktree::{ensure_gitattributes, LINEAGE_MEDIA_DIR};
 pub use line_resolve::materialize_line_objects;
-pub use notes::{map_commit_to_sessions, read_note_for_commit, write_note_for_commit};
+pub use notes::{list_notes, map_commit_to_sessions, read_note_for_commit, write_note_for_commit};
 pub use refs::{
-    list_session_ids, read_conversation, read_conversation_stored, read_line_object, read_manifest,
-    session_ref, write_conversation, write_line_object, write_manifest, LINEAGE_INDEX_REF,
-    LINEAGE_NOTES_REF,
+    list_line_objects, list_session_ids, read_conversation, read_conversation_stored,
+    read_line_object, read_manifest, session_ref, write_conversation, write_line_object,
+    write_manifest, LINEAGE_INDEX_REF, LINEAGE_NOTES_REF,
 };
 pub use remap::{remap_orphaned_commits, RemapReport};
 pub use repo::{find_repo, open_repo, LineageRepo};

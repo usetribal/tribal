@@ -113,6 +113,8 @@ Whether the sessions that should be in lineage are in lineage.
 | `sessions_discovered` | object | Per-agent counts from the most recent `import` event |
 | `sessions_imported` | int | Sessions stored in lineage refs |
 | `workspace_mismatches` | object[] | `[{ "session_id": "...", "workspace_root": "...", "repo_root": "..." }]` — sessions whose recorded workspace is not this repository (e.g. a parent directory), meaning they were captured against the wrong root |
+| `broken_sessions` | string[] | Session ids whose stored conversation can no longer be read |
+| `missing_lfs_blobs` | string[] | Blob ids referenced by sessions but absent from local storage |
 
 ### `materialization`
 
@@ -127,8 +129,8 @@ reasons.
   "line_objects": 0,
   "failure_reasons": {
     "no_resolve_payload": 0,
-    "old_string_not_found_post_edit": 0,
-    "missing_new_string": 0,
+    "missing_old_string": 0,
+    "old_string_not_found": 0,
     "commit_not_linked": 0
   }
 }
@@ -137,9 +139,9 @@ reasons.
 | Reason | Meaning |
 |--------|---------|
 | `no_resolve_payload` | Edit artifact carries no content to resolve against |
-| `old_string_not_found_post_edit` | The artifact's pre-edit text no longer exists in the file |
-| `missing_new_string` | The artifact never captured the replacement text |
-| `commit_not_linked` | The edit landed in a commit the session is not linked to |
+| `missing_old_string` | The artifact's resolve strategy needs the pre-edit text, which was never captured |
+| `old_string_not_found` | The artifact's pre-edit text no longer exists in the file at the linked commit |
+| `commit_not_linked` | The session is not linked to any commit that touched the file |
 
 ### `links`
 

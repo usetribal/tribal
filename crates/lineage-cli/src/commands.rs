@@ -12,9 +12,8 @@ use lineage_git::{
     ensure_gitattributes, hydrate_media_artifacts, lfs_fetch, lfs_push, lfs_status,
     link_session_to_commit, list_session_ids, map_commit_to_sessions,
     materialize_session_at_commit, open_repo, persist_import, purge_orphans, read_conversation,
-    read_conversation_stored, read_repo_config, remap_orphaned_commits, run_doctor,
-    stamp_prompted_by, sync_push, write_last_import, write_repo_config, PROMPTED_BY_EMAIL,
-    PROMPTED_BY_NAME,
+    read_conversation_stored, read_repo_config, remap_orphaned_commits, stamp_prompted_by,
+    sync_push, write_last_import, write_repo_config, PROMPTED_BY_EMAIL, PROMPTED_BY_NAME,
 };
 use lineage_policy::{
     apply_policy, is_private_session, policy_from_repo_config, prepare_for_export, PolicyConfig,
@@ -25,40 +24,6 @@ use crate::auth;
 use crate::events::{EventLog, Outcome};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
-
-pub fn doctor(repo_path: &Path) -> Result<()> {
-    let repo = open_repo(repo_path)?;
-    let report = run_doctor(&repo)?;
-
-    println!("Lineage doctor");
-    println!("  git repo:        {}", report.is_git_repo);
-    println!("  notes ref:       {}", report.notes_ref_ok);
-    println!("  index ref:       {}", report.index_ref_ok);
-    println!("  config ref:      {}", report.config_ref_ok);
-    println!("  sessions:        {}", report.session_count);
-    if !report.missing_lfs_blobs.is_empty() {
-        println!("  missing LFS:     {}", report.missing_lfs_blobs.len());
-        for b in report.missing_lfs_blobs.iter().take(5) {
-            println!("    - {b}");
-        }
-    }
-    if !report.broken_sessions.is_empty() {
-        println!("  broken sessions: {}", report.broken_sessions.len());
-        for s in &report.broken_sessions {
-            println!("    - {s}");
-        }
-    }
-    for w in &report.warnings {
-        println!("  warning: {w}");
-    }
-
-    if report.ok() {
-        println!("status: ok");
-    } else {
-        println!("status: issues found");
-    }
-    Ok(())
-}
 
 pub fn init_config(repo_path: &Path) -> Result<()> {
     init_config_impl(repo_path, true)

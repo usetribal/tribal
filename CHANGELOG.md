@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `git lineage doctor` grew from a flat check list into the five-section diagnostics-v0 report — setup (binary/index schema versions, Claude hook wiring including whether the hook is loadable from every session root, git hooks), capture (discovered vs imported, workspace mismatches), materialization (artifact→line-object funnel with per-stage loss reasons), links (per-commit sessions with how each link was established), activity (event-log tail) — with `--json`, repeatable `--section` filters, and `--activity-limit`; the MCP `lineage_doctor` tool now returns the same object
 - Local event log (`.git/lineage/events.jsonl`): every operation the tool performs — init, skill/hook install, import, link, materialize, rebuild-index, sync (with the server's full per-object response), and every context-hook fire including fired-but-silent outcomes with an explicit reason (`no_evidence`, `below_floor`, `over_budget`, `unappendable_shape`, `error`) — appends a versioned entry. Written best-effort: a failed log write never fails the operation. `context log` now reads from it and `.git/lineage/context-log.jsonl` is retired; `retrieval-v0` gains an optional `truncated` flag so budget-truncated retrievals are distinguishable from empty ones
 - Diagnostics v0 (`specs/diagnostics-v0.md`): spec for a local event log
   (`.git/lineage/events.jsonl`, versioned per-operation entries) and a grown

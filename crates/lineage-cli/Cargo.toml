@@ -41,4 +41,5 @@ inquire = { workspace = true }
 
 [dev-dependencies]
 git2 = { workspace = true }
+rusqlite = { workspace = true }
 tempfile = { workspace = true }
