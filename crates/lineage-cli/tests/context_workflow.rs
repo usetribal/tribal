@@ -78,11 +78,22 @@ fn covered_file_injects_attributed_digest_and_logs_it() {
     assert!(updated.contains("claude session"));
     assert!(updated.contains("Introduce rate limiting on login"));
 
-    let log = fs::read_to_string(dir.path().join(".git/lineage/context-log.jsonl")).unwrap();
-    let entry: serde_json::Value = serde_json::from_str(log.lines().next().unwrap()).unwrap();
-    assert_eq!(entry["file_path"], "src/auth.rs");
-    assert_eq!(entry["ts"], 1_753_000_000);
-    assert_eq!(entry["strength"], "low");
+    // The injection is recorded in the event log (diagnostics-v0), not a
+    // separate context-log file.
+    let log = fs::read_to_string(dir.path().join(".git/lineage/events.jsonl")).unwrap();
+    let entry: serde_json::Value = serde_json::from_str(log.lines().last().unwrap()).unwrap();
+    assert_eq!(entry["schema_version"], "lineage-events-v0");
+    assert_eq!(entry["op"], "context_hook");
+    assert_eq!(entry["outcome"], "ok");
+    assert_eq!(
+        entry["ts"],
+        chrono::DateTime::from_timestamp(1_753_000_000, 0)
+            .unwrap()
+            .to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+    );
+    assert_eq!(entry["detail"]["file_path"], "src/auth.rs");
+    assert_eq!(entry["detail"]["strength"], "low");
+    assert!(!dir.path().join(".git/lineage/context-log.jsonl").exists());
 }
 
 #[test]
@@ -105,7 +116,7 @@ fn uncovered_file_and_foreign_events_stay_silent() {
     fs::write(&file, "// nothing\n").unwrap();
     store_session_touching(dir.path(), "src/auth.rs");
 
-    // No provenance for this file.
+    // No provenance for this file: silent, with the reason on record.
     assert_eq!(
         context_cmd::hook_claude(dir.path(), &hook_input(&file), 0),
         None
@@ -121,8 +132,40 @@ fn uncovered_file_and_foreign_events_stay_silent() {
 
     // Malformed payloads fail open, never error.
     assert_eq!(context_cmd::hook_claude(dir.path(), "not json", 0), None);
-    // Silence leaves no log behind.
-    assert!(!dir.path().join(".git/lineage/context-log.jsonl").exists());
+
+    // A fired-but-silent hook logs its reason; not-lineage-relevant fires
+    // (non-Read tool, malformed payload) leave no entry at all
+    // (diagnostics-v0 "Silent-fire reasons").
+    let log = fs::read_to_string(dir.path().join(".git/lineage/events.jsonl")).unwrap();
+    let entries: Vec<serde_json::Value> = log
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .filter(|e: &serde_json::Value| e["op"] == "context_hook")
+        .collect();
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0]["outcome"], "silent");
+    assert_eq!(entries[0]["detail"]["reason"], "no_evidence");
+}
+
+#[test]
+fn unappendable_response_shape_is_silent_with_reason() {
+    let dir = init_repo();
+    let file = dir.path().join("lib.rs");
+    fs::write(&file, "pub fn f() {}\n").unwrap();
+    store_session_touching(dir.path(), "lib.rs");
+
+    let mut event: serde_json::Value = serde_json::from_str(&hook_input(&file)).unwrap();
+    event["tool_response"] = serde_json::json!({ "unexpected": true });
+    assert_eq!(
+        context_cmd::hook_claude(dir.path(), &event.to_string(), 0),
+        None
+    );
+
+    let log = fs::read_to_string(dir.path().join(".git/lineage/events.jsonl")).unwrap();
+    let entry: serde_json::Value = serde_json::from_str(log.lines().last().unwrap()).unwrap();
+    assert_eq!(entry["op"], "context_hook");
+    assert_eq!(entry["outcome"], "silent");
+    assert_eq!(entry["detail"]["reason"], "unappendable_shape");
 }
 
 #[test]

@@ -1,9 +1,11 @@
 use std::io::{self, IsTerminal};
 use std::path::Path;
 
+use chrono::Utc;
 use inquire::ui::{Color, RenderConfig, StyleSheet, Styled};
 use inquire::{Confirm, MultiSelect};
 
+use crate::events::{EventLog, Outcome};
 use crate::{commands, context_cmd, hooks_cmd, skill_cmd};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -99,7 +101,7 @@ fn run_non_interactive(repo_path: &Path, options: &InitOptions) -> Result<()> {
         None => println!("agent skill: skipped"),
         Some(ref targets) => skill_cmd::init_skill(repo_path, targets, true)?,
     }
-    install_hooks_with_retry(repo_path, options.force_hooks, false)?;
+    let hooks_installed = install_hooks_with_retry(repo_path, options.force_hooks, false)?;
     install_claude_agent_hook_for_targets(repo_path, skill_targets.as_deref(), false)?;
     if !options.no_import {
         println!("running: git lineage import --agent all --incremental");
@@ -109,7 +111,43 @@ fn run_non_interactive(repo_path: &Path, options: &InitOptions) -> Result<()> {
     }
     println!();
     print_footer();
+    log_init_event(
+        repo_path,
+        skill_targets.as_deref(),
+        hooks_installed,
+        !options.no_import,
+    );
     Ok(())
+}
+
+fn log_init_event(
+    repo_path: &Path,
+    skill_targets: Option<&[String]>,
+    hooks_installed: bool,
+    import_run: bool,
+) {
+    let Some(log) = EventLog::for_repo_path(repo_path) else {
+        return;
+    };
+    let targets: Vec<&str> = skill_targets
+        .map(|t| {
+            skill_cmd::resolve_targets(t)
+                .into_iter()
+                .map(|t| t.id())
+                .collect()
+        })
+        .unwrap_or_default();
+    log.append(
+        Utc::now(),
+        "init",
+        Outcome::Ok,
+        serde_json::json!({
+            "targets": targets,
+            "skill_installed": skill_targets.is_some(),
+            "hooks_installed": hooks_installed,
+            "import_run": import_run,
+        }),
+    );
 }
 
 fn run_interactive(repo_path: &Path, options: &InitOptions) -> Result<()> {
@@ -146,7 +184,7 @@ fn run_interactive(repo_path: &Path, options: &InitOptions) -> Result<()> {
         "Git hooks",
         Some("pre-commit import and post-commit linking"),
     );
-    install_hooks_with_retry(repo_path, options.force_hooks, true)?;
+    let hooks_installed = install_hooks_with_retry(repo_path, options.force_hooks, true)?;
     println!();
 
     install_claude_agent_hook_for_targets(repo_path, skill_targets.as_deref(), true)?;
@@ -166,6 +204,12 @@ fn run_interactive(repo_path: &Path, options: &InitOptions) -> Result<()> {
     println!();
 
     print_footer();
+    log_init_event(
+        repo_path,
+        skill_targets.as_deref(),
+        hooks_installed,
+        run_import,
+    );
     Ok(())
 }
 
@@ -198,7 +242,9 @@ fn install_claude_agent_hook_for_targets(
     Ok(())
 }
 
-fn install_hooks_with_retry(repo_path: &Path, force: bool, quiet: bool) -> Result<()> {
+/// Returns whether the hooks were actually installed (a declined overwrite is
+/// `Ok(false)`), so the `init` event can record the truth.
+fn install_hooks_with_retry(repo_path: &Path, force: bool, quiet: bool) -> Result<bool> {
     let install = |force: bool| {
         if quiet {
             hooks_cmd::install_hook_quiet(repo_path, force)
@@ -213,7 +259,7 @@ fn install_hooks_with_retry(repo_path: &Path, force: bool, quiet: bool) -> Resul
                 step_item(true, "pre-commit (incremental import)");
                 step_item(false, "post-commit (link sessions to HEAD)");
             }
-            Ok(())
+            Ok(true)
         }
         Err(e) if !force && stdin_is_tty() => {
             if quiet {
@@ -227,14 +273,14 @@ fn install_hooks_with_retry(repo_path: &Path, force: bool, quiet: bool) -> Resul
                     step_item(true, "pre-commit (incremental import)");
                     step_item(false, "post-commit (link sessions to HEAD)");
                 }
-                Ok(())
+                Ok(true)
             } else {
                 if quiet {
                     step_item(false, "skipped hook install");
                 } else {
                     println!("  skipped hook install");
                 }
-                Ok(())
+                Ok(false)
             }
         }
         Err(e) => Err(e),

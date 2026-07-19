@@ -42,6 +42,15 @@ pub struct SyncReport {
     pub pending: usize,
 }
 
+/// Tallied summary plus the untouched wire response, so callers can record the
+/// server's per-object verdicts verbatim (diagnostics-v0 `sync` event) instead
+/// of only the client-side counts.
+#[derive(Debug)]
+pub struct SyncOutcome {
+    pub report: SyncReport,
+    pub response: SyncResponse,
+}
+
 /// Assembles the up-sync batch from `conversations` (already redacted and
 /// private-filtered by the caller) plus the repo's line-object refs and notes.
 /// Line objects and commit links belonging to a non-synced conversation are
@@ -223,7 +232,7 @@ pub fn sync_push(
     server_url: &str,
     token: &str,
     batch: &SyncBatch,
-) -> Result<SyncReport, LineageError> {
+) -> Result<SyncOutcome, LineageError> {
     let base = server_url.trim_end_matches('/');
     let lfs = LfsStore::new(repo.path());
 
@@ -239,7 +248,7 @@ pub fn sync_push(
     report.repo_id = response.repo_id.clone();
 
     write_git_config(repo, SERVER_REPO_ID_KEY, &response.repo_id)?;
-    Ok(report)
+    Ok(SyncOutcome { report, response })
 }
 
 fn tally(response: &SyncResponse, report: &mut SyncReport) {

@@ -179,11 +179,13 @@ impl Retriever for LocalRetriever<'_> {
         }
 
         let mut evidence = Vec::new();
+        let mut truncated = false;
         for session_id in candidates {
             if let Some(budget_ms) = query.budget_ms {
                 // Spec: return what we have rather than overrun the caller's
                 // budget — partial evidence beats a blown deadline.
                 if started.elapsed().as_millis() >= u128::from(budget_ms) {
+                    truncated = true;
                     break;
                 }
             }
@@ -193,6 +195,8 @@ impl Retriever for LocalRetriever<'_> {
             }
         }
 
-        Ok(Retrieval::from_evidence(evidence))
+        let mut retrieval = Retrieval::from_evidence(evidence);
+        retrieval.truncated = truncated;
+        Ok(retrieval)
     }
 }

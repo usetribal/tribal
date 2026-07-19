@@ -4,7 +4,10 @@ use std::path::Path;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
+use chrono::Utc;
 use lineage_git::{link_recent_sessions_to_head, open_repo};
+
+use crate::events::{EventLog, Outcome};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -26,6 +29,13 @@ fn install_hook_impl(repo_path: &Path, force: bool, verbose: bool) -> Result<()>
 
     install_one(&hooks_dir.join("pre-commit"), PRE_COMMIT_HOOK, force)?;
     install_one(&hooks_dir.join("post-commit"), POST_COMMIT_HOOK, force)?;
+
+    EventLog::for_git_dir(&repo.git_dir()).append(
+        Utc::now(),
+        "install_hook",
+        Outcome::Ok,
+        serde_json::json!({ "hooks": ["pre-commit", "post-commit"], "forced": force }),
+    );
 
     if verbose {
         println!("installed lineage hooks:");
@@ -59,10 +69,36 @@ pub fn uninstall_hook(repo_path: &Path) -> Result<()> {
 
 pub fn post_commit(repo_path: &Path) -> Result<()> {
     let repo = open_repo(repo_path)?;
-    let count = link_recent_sessions_to_head(repo.inner())?;
-    if count > 0 {
-        eprintln!("lineage: linked {count} session(s) to HEAD");
+    let linked = link_recent_sessions_to_head(repo.inner())?;
+    if !linked.is_empty() {
+        eprintln!("lineage: linked {} session(s) to HEAD", linked.len());
     }
+
+    let head_sha = repo
+        .inner()
+        .head()
+        .ok()
+        .and_then(|h| h.peel_to_commit().ok())
+        .map(|c| c.id().to_string());
+    let sessions: Vec<serde_json::Value> = linked
+        .iter()
+        .map(|s| {
+            serde_json::json!({
+                "session_id": s.session_id.as_str(),
+                "line_objects": s.line_objects,
+            })
+        })
+        .collect();
+    EventLog::for_git_dir(&repo.git_dir()).append(
+        Utc::now(),
+        "link",
+        Outcome::Ok,
+        serde_json::json!({
+            "commit_sha": head_sha,
+            "sessions": sessions,
+            "trigger": "post_commit",
+        }),
+    );
     Ok(())
 }
 

@@ -72,7 +72,12 @@ fn hooks_link_sessions_to_head() {
     persist_conversation(inner, &conv).unwrap();
 
     let linked = link_all_sessions_to_head(inner).unwrap();
-    assert_eq!(linked, 1);
+    assert_eq!(linked.len(), 1);
+    assert_eq!(linked[0].session_id, conv.id);
+    assert!(
+        linked[0].line_objects > 0,
+        "linked session should report its materialized line objects"
+    );
 
     write_last_import(
         inner,
@@ -80,7 +85,7 @@ fn hooks_link_sessions_to_head() {
     )
     .unwrap();
     let recent = link_recent_sessions_to_head(inner).unwrap();
-    assert_eq!(recent, 1);
+    assert_eq!(recent.len(), 1);
 
     let note = lineage_git::read_note_for_commit(inner, &sha)
         .unwrap()

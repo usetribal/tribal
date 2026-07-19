@@ -194,20 +194,24 @@ impl LineageIndex {
         Ok(value.and_then(|v| v.parse().ok()).unwrap_or(0))
     }
 
-    pub fn rebuild(&self, repo: &Repository) -> Result<()> {
+    /// Returns the number of sessions indexed so callers can report it
+    /// (diagnostics-v0 `rebuild_index` event) without re-listing refs.
+    pub fn rebuild(&self, repo: &Repository) -> Result<usize> {
         self.conn.execute("DELETE FROM sessions", [])?;
         self.conn.execute("DELETE FROM session_files", [])?;
 
         let ids = list_session_ids(repo).map_err(SearchError::Lineage)?;
+        let mut indexed = 0usize;
         for id in ids {
             if let Some(mut conv) =
                 read_conversation_stored(repo, &id).map_err(SearchError::Lineage)?
             {
                 hydrate_conversation(repo, &mut conv).map_err(SearchError::Lineage)?;
                 self.index_conversation(&conv)?;
+                indexed += 1;
             }
         }
-        Ok(())
+        Ok(indexed)
     }
 }
 

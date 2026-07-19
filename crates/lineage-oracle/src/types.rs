@@ -52,6 +52,12 @@ pub struct Evidence {
 pub struct Retrieval {
     pub evidence: Vec<Evidence>,
     pub strength: Strength,
+    /// True when retrieval stopped early on `budget_ms`, so an empty result
+    /// means "ran out of time", not "nothing known" (diagnostics-v0
+    /// `over_budget`). Defaults false for cache entries written before the
+    /// field existed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub truncated: bool,
 }
 
 impl Retrieval {
@@ -60,6 +66,7 @@ impl Retrieval {
         Self {
             evidence: Vec::new(),
             strength: Strength::None,
+            truncated: false,
         }
     }
 
@@ -72,7 +79,11 @@ impl Retrieval {
             .map(|e| e.strength)
             .max()
             .unwrap_or(Strength::None);
-        Self { evidence, strength }
+        Self {
+            evidence,
+            strength,
+            truncated: false,
+        }
     }
 }
 

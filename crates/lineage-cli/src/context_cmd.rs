@@ -1,7 +1,7 @@
 use std::fs;
-use std::io::Write;
 use std::path::Path;
 
+use chrono::{DateTime, Utc};
 use lineage_core::{normalize_repo_path, RepoBinding};
 use lineage_git::{open_repo, resolve_repo_binding};
 use lineage_oracle::{
@@ -10,6 +10,8 @@ use lineage_oracle::{
 };
 use lineage_search::LineageIndex;
 use sha2::{Digest, Sha256};
+
+use crate::events::{EventLog, Outcome};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -21,13 +23,53 @@ const MIN_STRENGTH: Strength = Strength::Low;
 const MAX_EVIDENCE_ENTRIES: usize = 3;
 const MAX_DIGEST_BYTES: usize = 4096;
 
-const CONTEXT_LOG_FILE: &str = "context-log.jsonl";
+const HOOK_HARNESS: &str = "claude";
 
 /// Claude Code PostToolUse endpoint. Any error, unmatched input, or empty
 /// selection returns `None` — the adapter MUST fail open (spec: Trigger
-/// protocol); the caller prints nothing and exits 0.
+/// protocol); the caller prints nothing and exits 0. Every fired-but-silent
+/// outcome is recorded in the event log with its reason (diagnostics-v0
+/// "Silent-fire reasons"), so silence stays distinguishable from a hook that
+/// never ran.
 pub fn hook_claude(repo_path: &Path, input: &str, now_unix: i64) -> Option<String> {
-    run_claude_hook(repo_path, input, now_unix).unwrap_or_default()
+    match run_claude_hook(repo_path, input, now_unix) {
+        Ok(output) => output,
+        Err(e) => {
+            log_hook_error(repo_path, input, now_unix, e.as_ref());
+            None
+        }
+    }
+}
+
+/// An `Err` from the hook still exits 0 and prints nothing; the reason and
+/// message land in the event log instead. Reparses the input for the file
+/// path because the error may have struck before any state was available.
+fn log_hook_error(repo_path: &Path, input: &str, now_unix: i64, error: &dyn std::error::Error) {
+    let Ok(event) = serde_json::from_str::<serde_json::Value>(input) else {
+        return;
+    };
+    let Some(file_path) = event["tool_input"]["file_path"].as_str() else {
+        return;
+    };
+    let Some(log) = EventLog::for_repo_path(repo_path) else {
+        return;
+    };
+    log.append(
+        hook_timestamp(now_unix),
+        "context_hook",
+        Outcome::Error,
+        serde_json::json!({
+            "file_path": file_path,
+            "harness": HOOK_HARNESS,
+            "reason": "error",
+            "error": error.to_string(),
+        }),
+    );
+}
+
+/// The hook's injected clock is unix seconds; the event log speaks RFC 3339.
+fn hook_timestamp(now_unix: i64) -> DateTime<Utc> {
+    DateTime::from_timestamp(now_unix, 0).unwrap_or_default()
 }
 
 fn run_claude_hook(repo_path: &Path, input: &str, now_unix: i64) -> Result<Option<String>> {
@@ -40,8 +82,11 @@ fn run_claude_hook(repo_path: &Path, input: &str, now_unix: i64) -> Result<Optio
     };
     // Only shapes we can append to faithfully are handled; anything else
     // means silence rather than a mangled tool result. Checked before
-    // retrieval so unappendable events cost nothing.
+    // retrieval so unappendable events cost only the event-log write.
     if !response_is_appendable(&event["tool_response"]) {
+        if let Some(log) = EventLog::for_repo_path(repo_path) {
+            log_silent(&log, file_path, now_unix, "unappendable_shape");
+        }
         return Ok(None);
     }
 
@@ -85,22 +130,38 @@ fn run_claude_hook(repo_path: &Path, input: &str, now_unix: i64) -> Result<Optio
         }
     };
 
+    let log = EventLog::for_git_dir(&git_dir);
     let selected = select(&retrieval);
     if selected.is_empty() {
+        // Truncation only explains an empty result; a nonempty one that all
+        // fell below the floor is below_floor even if time also ran out.
+        let reason = if !retrieval.evidence.is_empty() {
+            "below_floor"
+        } else if retrieval.truncated {
+            "over_budget"
+        } else {
+            "no_evidence"
+        };
+        log_silent(&log, &relative_path, now_unix, reason);
         return Ok(None);
     }
 
     let digest = render_digest(&relative_path, &selected);
     let Some(updated) = append_digest_to_response(&event["tool_response"], &digest) else {
+        log_silent(&log, &relative_path, now_unix, "unappendable_shape");
         return Ok(None);
     };
-    append_injection_log(
-        &git_dir,
-        &relative_path,
-        &selected,
-        retrieval.strength,
-        now_unix,
-    )?;
+    log.append(
+        hook_timestamp(now_unix),
+        "context_hook",
+        Outcome::Ok,
+        serde_json::json!({
+            "file_path": relative_path,
+            "harness": HOOK_HARNESS,
+            "session_ids": selected.iter().map(|e| e.session_id.as_str()).collect::<Vec<_>>(),
+            "strength": retrieval.strength,
+        }),
+    );
 
     let output = serde_json::json!({
         "hookSpecificOutput": {
@@ -109,6 +170,19 @@ fn run_claude_hook(repo_path: &Path, input: &str, now_unix: i64) -> Result<Optio
         }
     });
     Ok(Some(output.to_string()))
+}
+
+fn log_silent(log: &EventLog, file_path: &str, now_unix: i64, reason: &str) {
+    log.append(
+        hook_timestamp(now_unix),
+        "context_hook",
+        Outcome::Silent,
+        serde_json::json!({
+            "file_path": file_path,
+            "harness": HOOK_HARNESS,
+            "reason": reason,
+        }),
+    );
 }
 
 /// Claude Code's Read returns `{"type":"text","file":{"content",…}}` (observed
@@ -186,48 +260,26 @@ fn truncate_to_bytes(text: &str, max_bytes: usize) -> String {
     format!("{}…", &text[..end])
 }
 
-/// Append-only local record of every injection — the "no shadow
-/// improvements" surface (spec: Injection log). Never syncs.
-fn append_injection_log(
-    git_dir: &Path,
-    file_path: &str,
-    selected: &[&Evidence],
-    strength: Strength,
-    now_unix: i64,
-) -> Result<()> {
-    let entry = serde_json::json!({
-        "ts": now_unix,
-        "file_path": file_path,
-        "session_ids": selected.iter().map(|e| e.session_id.as_str()).collect::<Vec<_>>(),
-        "strength": strength,
-    });
-    let dir = git_dir.join("lineage");
-    fs::create_dir_all(&dir)?;
-    let mut file = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(dir.join(CONTEXT_LOG_FILE))?;
-    writeln!(file, "{entry}")?;
-    Ok(())
-}
-
-/// `git lineage context log` — what was injected, newest last.
+/// `git lineage context log` — what was injected, newest last. The injection
+/// log required by context-injection-v0 is a view over the event log's
+/// `context_hook` entries with `outcome: "ok"` (spec: diagnostics-v0), not a
+/// separate file.
 pub fn print_log(repo_path: &Path, limit: usize) -> Result<()> {
     let repo = open_repo(repo_path)?;
-    let path = repo.inner().path().join("lineage").join(CONTEXT_LOG_FILE);
-    if !path.exists() {
+    let injections: Vec<serde_json::Value> = EventLog::for_git_dir(&repo.git_dir())
+        .read_entries()
+        .into_iter()
+        .filter(|e| e["op"] == "context_hook" && e["outcome"] == "ok")
+        .collect();
+    if injections.is_empty() {
         println!("no context injections recorded");
         return Ok(());
     }
 
-    let contents = fs::read_to_string(path)?;
-    let lines: Vec<&str> = contents.lines().collect();
-    let start = lines.len().saturating_sub(limit);
-    for line in &lines[start..] {
-        let Ok(entry) = serde_json::from_str::<serde_json::Value>(line) else {
-            continue;
-        };
-        let sessions = entry["session_ids"]
+    let start = injections.len().saturating_sub(limit);
+    for entry in &injections[start..] {
+        let detail = &entry["detail"];
+        let sessions = detail["session_ids"]
             .as_array()
             .map(|ids| {
                 ids.iter()
@@ -238,9 +290,9 @@ pub fn print_log(repo_path: &Path, limit: usize) -> Result<()> {
             .unwrap_or_default();
         println!(
             "{}  {}  [{}]  sessions: {}",
-            entry["ts"],
-            entry["file_path"].as_str().unwrap_or("?"),
-            entry["strength"].as_str().unwrap_or("?"),
+            entry["ts"].as_str().unwrap_or("?"),
+            detail["file_path"].as_str().unwrap_or("?"),
+            detail["strength"].as_str().unwrap_or("?"),
             sessions,
         );
     }
@@ -275,6 +327,14 @@ pub fn install_claude_agent_hook(repo_path: &Path) -> Result<bool> {
         .ok_or("settings 'hooks.PostToolUse' is not an array")?;
 
     if groups.iter().any(group_has_lineage_hook) {
+        if let Some(log) = EventLog::for_repo_path(repo_path) {
+            log.append(
+                Utc::now(),
+                "install_claude_agent_hook",
+                Outcome::Ok,
+                serde_json::json!({ "already_installed": true }),
+            );
+        }
         return Ok(false);
     }
 
@@ -287,6 +347,15 @@ pub fn install_claude_agent_hook(repo_path: &Path) -> Result<bool> {
         fs::create_dir_all(parent)?;
     }
     fs::write(&path, format!("{:#}\n", settings))?;
+
+    if let Some(log) = EventLog::for_repo_path(repo_path) {
+        log.append(
+            Utc::now(),
+            "install_claude_agent_hook",
+            Outcome::Ok,
+            serde_json::json!({ "already_installed": false }),
+        );
+    }
     Ok(true)
 }
 

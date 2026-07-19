@@ -72,6 +72,7 @@ the same shapes. The wire encoding is JSON with `snake_case` fields.
 |-------|------|----------|---------|
 | `evidence` | array | yes | Zero or more evidence entries, strongest first |
 | `strength` | string | yes | Overall grade: max of entries, or `none` when empty |
+| `truncated` | boolean | no | Retrieval stopped early on the query's `budget_ms`; absent means false |
 
 An empty `evidence` array is a first-class answer ("honestly nothing"), and it
 is cached like any other (see [Cache](#cache)).
