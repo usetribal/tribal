@@ -2,7 +2,7 @@
 
 Lineage is a Rust monorepo for **git-native AI agent provenance**: it imports sessions from Cursor, Claude Code, and Codex into git refs and notes, links them to commits and lines, and exposes that context through a CLI, MCP server, and VS Code extension. No external database — data lives in `refs/lineage/*` and `refs/notes/lineage`.
 
-Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for crate boundaries and import flow before changing behavior. **Release status: pre-release, unpublished — simplicity beats backwards compatibility; see [docs/release-status.md](docs/release-status.md) before preserving old behavior "for compatibility".** `lineage-core` has no `git2`; git I/O stays in `lineage-git`.
+Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for crate boundaries and import flow before changing behavior. **Release status: pre-release, unpublished — simplicity beats backwards compatibility; no data migrations or deprecation aliases required (re-import/rebuild is the upgrade path). The full policy lives in the enclosing workspace until publication.** `lineage-core` has no `git2`; git I/O stays in `lineage-git`.
 
 ## Setup
 
