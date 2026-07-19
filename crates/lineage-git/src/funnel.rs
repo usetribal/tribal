@@ -57,6 +57,10 @@ pub fn audit_materialization(repo: &Repository) -> Result<MaterializationFunnel,
         line_objects: line_objects.len(),
         ..Default::default()
     };
+    // Commit diffs are the expensive step and sessions share commits, so each
+    // sha is diffed at most once across the whole audit.
+    let mut changed_by_commit: BTreeMap<String, Option<std::collections::HashSet<String>>> =
+        BTreeMap::new();
 
     for id in list_session_ids(repo)? {
         let Some(conv) = read_conversation_stored(repo, &id)? else {
@@ -103,7 +107,12 @@ pub fn audit_materialization(repo: &Repository) -> Result<MaterializationFunnel,
                     continue;
                 }
 
-                if !file_reachable_from_links(repo, &linked_commits, &file_path) {
+                if !file_reachable_from_links(
+                    repo,
+                    &linked_commits,
+                    &file_path,
+                    &mut changed_by_commit,
+                ) {
                     funnel.commit_not_linked += 1;
                     continue;
                 }
@@ -116,15 +125,19 @@ pub fn audit_materialization(repo: &Repository) -> Result<MaterializationFunnel,
 }
 
 /// Mirrors materialization's commit filter: an empty changed-set means the
-/// commit imposes no file filter.
+/// commit imposes no file filter. Diff failures cache as `None` (unreachable).
 fn file_reachable_from_links(
     repo: &Repository,
     linked_commits: &[String],
     file_path: &str,
+    changed_by_commit: &mut BTreeMap<String, Option<std::collections::HashSet<String>>>,
 ) -> bool {
     linked_commits.iter().any(|sha| {
-        files_changed_in_commit(repo, sha)
-            .map(|changed| changed.is_empty() || changed.contains(file_path))
-            .unwrap_or(false)
+        let changed = changed_by_commit
+            .entry(sha.clone())
+            .or_insert_with(|| files_changed_in_commit(repo, sha).ok());
+        changed
+            .as_ref()
+            .is_some_and(|files| files.is_empty() || files.contains(file_path))
     })
 }
