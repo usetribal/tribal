@@ -158,6 +158,7 @@ fn materialize_absolute_path_session_writes_line_objects() {
             resolve: Some(ArtifactResolve {
                 strategy: ResolveStrategy::OldString,
                 old_string: Some("pub fn validate() {}".into()),
+                new_string: None,
                 patch: None,
             }),
         }],

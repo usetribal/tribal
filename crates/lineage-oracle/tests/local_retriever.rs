@@ -186,3 +186,42 @@ fn absolute_tool_paths_match_repo_relative_queries() {
     assert_eq!(retrieval.evidence.len(), 1);
     assert_eq!(retrieval.evidence[0].session_id, conv.id);
 }
+
+#[test]
+fn read_only_sessions_are_not_evidence() {
+    let f = fixture();
+
+    // A session that only *read* the file: path in tool_calls, no artifacts.
+    let mut reader = Conversation::new(AgentKind::Claude, "/repo");
+    reader.turns.push(Turn {
+        id: LineageId::new(),
+        role: Role::Assistant,
+        content: String::new(),
+        tool_calls: vec![lineage_core::ToolCall {
+            id: "t".into(),
+            name: "Read".into(),
+            arguments: "{\"file_path\": \"src/auth.rs\"}".into(),
+            result: None,
+        }],
+        model: None,
+        timestamp: None,
+        artifacts: vec![],
+    });
+    store(&f, &reader);
+
+    let retriever = LocalRetriever::new(&f.repo, &f.index);
+    let retrieval = retriever.retrieve(&query_for("src/auth.rs")).unwrap();
+    // The read-only session never surfaces — a session that merely consulted
+    // a file must not become its provenance (gap 9's echo-chamber rule).
+    assert!(retrieval.evidence.is_empty());
+
+    let writer = conversation_touching("/repo", &["src/auth.rs"]);
+    store(&f, &writer);
+    let retrieval = retriever.retrieve(&query_for("src/auth.rs")).unwrap();
+    let sessions: Vec<&str> = retrieval
+        .evidence
+        .iter()
+        .map(|e| e.session_id.as_str())
+        .collect();
+    assert_eq!(sessions, vec![writer.id.as_str()]);
+}

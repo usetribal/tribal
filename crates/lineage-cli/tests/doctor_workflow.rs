@@ -164,6 +164,7 @@ fn edit_artifacts_resolving_to_zero_show_their_loss_reason() {
             Some(ArtifactResolve {
                 strategy: ResolveStrategy::OldString,
                 old_string: Some("text that is not in the file".into()),
+                new_string: None,
                 patch: None,
             }),
         )],
@@ -179,6 +180,7 @@ fn edit_artifacts_resolving_to_zero_show_their_loss_reason() {
             Some(ArtifactResolve {
                 strategy: ResolveStrategy::OldString,
                 old_string: Some("hello".into()),
+                new_string: None,
                 patch: None,
             }),
         )],
