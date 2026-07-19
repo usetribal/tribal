@@ -90,10 +90,11 @@ async fn mcp_tool_calls_on_repo_with_session() {
     )
     .await
     .unwrap();
-    assert!(doctor["content"][0]["text"]
-        .as_str()
-        .unwrap()
-        .contains("sessions"));
+    let doctor_report: serde_json::Value =
+        serde_json::from_str(doctor["content"][0]["text"].as_str().unwrap()).unwrap();
+    assert_eq!(doctor_report["schema_version"], "lineage-doctor-v0");
+    assert_eq!(doctor_report["capture"]["sessions_imported"], 1);
+    assert!(doctor_report["materialization"]["failure_reasons"].is_object());
 
     let list = handle_request(
         dir.path(),

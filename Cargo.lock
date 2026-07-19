@@ -829,6 +829,7 @@ dependencies = [
  "lineage-oracle",
  "lineage-policy",
  "lineage-search",
+ "rusqlite",
  "serde",
  "serde_json",
  "sha2",
@@ -873,6 +874,7 @@ dependencies = [
 name = "lineage-mcp"
 version = "0.1.0"
 dependencies = [
+ "lineage-cli",
  "lineage-core",
  "lineage-git",
  "lineage-policy",
