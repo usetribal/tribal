@@ -22,6 +22,7 @@ name = "lineage-mcp"
 path = "src/main.rs"
 
 [dependencies]
+lineage-cli = { workspace = true }
 lineage-core = { workspace = true }
 lineage-git = { workspace = true }
 lineage-policy = { workspace = true }

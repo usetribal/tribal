@@ -4,7 +4,7 @@ use std::path::Path;
 use lineage_core::LineageId;
 use lineage_git::{
     blame_with_lineage, list_session_ids, materialize_session_at_commit, open_repo,
-    read_conversation, read_repo_config, remap_orphaned_commits, run_doctor,
+    read_conversation, read_repo_config, remap_orphaned_commits,
 };
 use lineage_policy::{apply_policy, policy_from_repo_config, prepare_for_export};
 use lineage_search::LineageIndex;
@@ -230,16 +230,14 @@ async fn handle_tool_call(repo_path: &Path, params: &Value) -> Result<Value, Str
             serde_json::to_string_pretty(&hits).unwrap()
         }
         "lineage_doctor" => {
-            let report = run_doctor(&repo).map_err(|e| e.to_string())?;
-            serde_json::to_string_pretty(&json!({
-                "is_git_repo": report.is_git_repo,
-                "notes_ref_ok": report.notes_ref_ok,
-                "index_ref_ok": report.index_ref_ok,
-                "session_count": report.session_count,
-                "broken_sessions": report.broken_sessions,
-                "warnings": report.warnings,
-            }))
-            .unwrap()
+            // The full diagnostics-v0 report, unfiltered — same object as
+            // `git lineage doctor --json`.
+            let report = lineage_cli::doctor_cmd::doctor_report(
+                repo_path,
+                lineage_cli::doctor_cmd::DEFAULT_ACTIVITY_LIMIT,
+            )
+            .map_err(|e| e.to_string())?;
+            serde_json::to_string_pretty(&report).unwrap()
         }
         "lineage_materialize" => {
             let session_id = args.get("session_id").and_then(|v| v.as_str());
