@@ -81,7 +81,8 @@ See [Import](../import.md).
 | `git lineage show <id> [--json] [--hydrate-images]` | Show conversation |
 | `git lineage blame <path>[:line] [--json]` | Lineage for a file line |
 | `git lineage search <query>` | Full-text search (auto-rebuilds stale index) |
-| `git lineage rebuild-index` | Rebuild search index from refs |
+| `git lineage rebuild` | Rebuild all derived state (links, line objects, index) from stored sessions |
+| `git lineage rebuild index` | Rebuild only the search index (`rebuild-index` is a deprecated alias) |
 | `git lineage export [--redact] [--format json\|jsonl]` | Export sessions |
 
 See [Explore](../explore.md).
@@ -112,6 +113,8 @@ See [LFS](../lfs.md).
 |---------|-------------|
 | `git lineage context hook claude` | Agent-hook endpoint (Claude Code PostToolUse on stdin); emits injection JSON or nothing |
 | `git lineage context log [--limit N]` | Show recorded context injections, newest last |
+| `git lineage context install [--user]` | Wire the context hook per-repo or user-level (all repos) |
+| `git lineage context uninstall [--user]` | Remove lineage context-hook wiring |
 
 `context hook` is wired into the agent harness, not run by hand: when the agent
 reads a file with provenance, a digest (attribution, line ranges, session

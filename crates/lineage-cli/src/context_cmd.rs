@@ -90,7 +90,16 @@ fn run_claude_hook(repo_path: &Path, input: &str, now_unix: i64) -> Result<Optio
         return Ok(None);
     }
 
-    let repo = open_repo(repo_path)?;
+    // The repo is derived from the file the agent read, not from cwd: hooks
+    // may be installed user-level and sessions opened from a parent workspace,
+    // where cwd is the wrong (or no) repo — gap 7. `repo_path` remains the
+    // fallback for relative tool paths.
+    let discover_from = Path::new(file_path)
+        .parent()
+        .filter(|p| p.is_absolute())
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| repo_path.to_path_buf());
+    let repo = open_repo(&discover_from)?;
     let workdir = repo.workdir().to_path_buf();
 
     let content = fs::read(
@@ -306,7 +315,37 @@ const HOOK_COMMAND: &str = "git lineage context hook claude";
 /// Idempotent, and merges into existing settings rather than replacing them —
 /// the file is shared user configuration, not ours.
 pub fn install_claude_agent_hook(repo_path: &Path) -> Result<bool> {
-    let path = repo_path.join(CLAUDE_SETTINGS_FILE);
+    let installed = install_claude_agent_hook_at(&repo_path.join(CLAUDE_SETTINGS_FILE))?;
+    if let Some(log) = EventLog::for_repo_path(repo_path) {
+        log.append(
+            Utc::now(),
+            "install_claude_agent_hook",
+            Outcome::Ok,
+            serde_json::json!({ "already_installed": !installed }),
+        );
+    }
+    Ok(installed)
+}
+
+/// User-level install (`~/.claude/settings.json`): one wiring covers every
+/// repo, because the hook derives its repo from the file the agent read and
+/// fails open outside lineage repos — the gap 7 answer for parent-workspace
+/// sessions whose project root never loads a nested repo's settings.
+pub fn install_claude_agent_hook_user() -> Result<bool> {
+    install_claude_agent_hook_at(&user_settings_path()?)
+}
+
+pub fn uninstall_claude_agent_hook_user() -> Result<bool> {
+    uninstall_claude_agent_hook_at(&user_settings_path()?)
+}
+
+fn user_settings_path() -> Result<std::path::PathBuf> {
+    let home = std::env::var_os("HOME").ok_or("HOME is not set")?;
+    Ok(Path::new(&home).join(CLAUDE_SETTINGS_FILE))
+}
+
+fn install_claude_agent_hook_at(path: &Path) -> Result<bool> {
+    let path = path.to_path_buf();
     let mut settings: serde_json::Value = match fs::read_to_string(&path) {
         Ok(contents) => serde_json::from_str(&contents)
             .map_err(|e| format!("{CLAUDE_SETTINGS_FILE} is not valid JSON: {e}"))?,
@@ -327,14 +366,6 @@ pub fn install_claude_agent_hook(repo_path: &Path) -> Result<bool> {
         .ok_or("settings 'hooks.PostToolUse' is not an array")?;
 
     if groups.iter().any(group_has_lineage_hook) {
-        if let Some(log) = EventLog::for_repo_path(repo_path) {
-            log.append(
-                Utc::now(),
-                "install_claude_agent_hook",
-                Outcome::Ok,
-                serde_json::json!({ "already_installed": true }),
-            );
-        }
         return Ok(false);
     }
 
@@ -347,21 +378,16 @@ pub fn install_claude_agent_hook(repo_path: &Path) -> Result<bool> {
         fs::create_dir_all(parent)?;
     }
     fs::write(&path, format!("{:#}\n", settings))?;
-
-    if let Some(log) = EventLog::for_repo_path(repo_path) {
-        log.append(
-            Utc::now(),
-            "install_claude_agent_hook",
-            Outcome::Ok,
-            serde_json::json!({ "already_installed": false }),
-        );
-    }
     Ok(true)
 }
 
 /// Removes only lineage-owned wiring; everything else in the file survives.
 pub fn uninstall_claude_agent_hook(repo_path: &Path) -> Result<bool> {
-    let path = repo_path.join(CLAUDE_SETTINGS_FILE);
+    uninstall_claude_agent_hook_at(&repo_path.join(CLAUDE_SETTINGS_FILE))
+}
+
+fn uninstall_claude_agent_hook_at(path: &Path) -> Result<bool> {
+    let path = path.to_path_buf();
     let Ok(contents) = fs::read_to_string(&path) else {
         return Ok(false);
     };
