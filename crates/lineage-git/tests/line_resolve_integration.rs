@@ -85,6 +85,7 @@ fn materializes_old_string_line_objects() {
                 resolve: Some(ArtifactResolve {
                     strategy: ResolveStrategy::OldString,
                     old_string: Some("pub fn validate() {}".into()),
+                    new_string: None,
                     patch: None,
                 }),
             }],
@@ -147,6 +148,7 @@ fn materializes_citation_line_range() {
                 resolve: Some(ArtifactResolve {
                     strategy: ResolveStrategy::Citation,
                     old_string: None,
+                    new_string: None,
                     patch: None,
                 }),
             }],
@@ -202,6 +204,7 @@ fn materializes_absolute_path_artifacts() {
                 resolve: Some(ArtifactResolve {
                     strategy: ResolveStrategy::OldString,
                     old_string: Some("pub fn validate() {}".into()),
+                    new_string: None,
                     patch: None,
                 }),
             }],
@@ -270,4 +273,16 @@ fn skips_artifacts_for_files_not_in_commit_diff() {
         objects.is_empty(),
         "expected no line objects when file was not in commit diff"
     );
+}
+
+#[test]
+fn new_string_resolves_where_old_string_is_gone() {
+    // A real replacement: the committed file contains only the post-image.
+    let content = "fn setup() {}\nfn login(user: &User) {}\nfn teardown() {}\n";
+    // Pre-image no longer present:
+    assert!(lineage_git::resolve_old_string(content, "fn login() {}").is_empty());
+    // Post-image locates the edit exactly:
+    let matches = lineage_git::resolve_old_string(content, "fn login(user: &User) {}");
+    assert_eq!(matches.len(), 1);
+    assert_eq!(matches[0].0, [2, 2]);
 }
