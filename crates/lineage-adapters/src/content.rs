@@ -266,6 +266,7 @@ pub fn artifacts_from_tool_input(
                 ArtifactResolve {
                     strategy: ResolveStrategy::DiffHunk,
                     old_string: None,
+                    new_string: None,
                     patch: Some(patch.to_string()),
                 },
             )];
@@ -288,6 +289,7 @@ pub fn artifacts_from_tool_input(
                     ArtifactResolve {
                         strategy: ResolveStrategy::OldString,
                         old_string: Some(old_string),
+                        new_string: pick_string(input, &["new_string", "new_str", "newText"]),
                         patch: None,
                     },
                 )];
@@ -302,6 +304,7 @@ pub fn artifacts_from_tool_input(
                 ArtifactResolve {
                     strategy: ResolveStrategy::FullFile,
                     old_string: None,
+                    new_string: None,
                     patch: None,
                 },
             )];
@@ -327,6 +330,14 @@ pub fn artifacts_from_tool_input(
                 line_range: None,
                 resolve: None,
             }];
+        }
+
+        // Read-style tools produce no artifact: artifacts represent produced
+        // output, and counting reads as file_edit polluted authorship signals
+        // (files_written, the link gate, oracle evidence) and the
+        // materialization funnel (conversation-schema-v0 "Artifact").
+        if is_read_tool(&lower) {
+            return Vec::new();
         }
 
         let kind = if lower.contains("patch") || lower.eq_ignore_ascii_case("edit") {
@@ -373,6 +384,18 @@ fn is_edit_tool(name: &str) -> bool {
         name,
         "strreplace" | "edit" | "search_replace" | "replace" | "multiedit" | "edit_file"
     ) || name.contains("replace")
+}
+
+fn is_read_tool(name: &str) -> bool {
+    matches!(
+        name,
+        "read" | "read_file" | "readfile" | "cat" | "view" | "open" | "notebookread"
+    ) || name.contains("grep")
+        || name.contains("glob")
+        || name.contains("search")
+        || name.starts_with("read")
+        || name.starts_with("view")
+        || name.contains("list")
 }
 
 fn is_write_tool(name: &str) -> bool {
@@ -570,5 +593,34 @@ mod tests {
         assert_eq!(arts.len(), 1);
         assert_eq!(arts[0].path, "src/auth.rs");
         assert_eq!(arts[0].kind, ArtifactKind::Diff);
+    }
+
+    #[test]
+    fn edit_tools_capture_the_post_image() {
+        let input = json!({
+            "file_path": "src/auth.rs",
+            "old_string": "fn old() {}",
+            "new_string": "fn new() {}"
+        });
+        let arts = artifacts_from_tool_input("Edit", Some(&input), None);
+        assert_eq!(arts.len(), 1);
+        let resolve = arts[0].resolve.as_ref().unwrap();
+        assert_eq!(resolve.old_string.as_deref(), Some("fn old() {}"));
+        assert_eq!(resolve.new_string.as_deref(), Some("fn new() {}"));
+    }
+
+    #[test]
+    fn read_style_tools_produce_no_artifacts() {
+        for tool in ["Read", "Grep", "Glob", "NotebookRead", "codebase_search"] {
+            let input = json!({ "file_path": "src/auth.rs" });
+            let arts = artifacts_from_tool_input(tool, Some(&input), None);
+            assert!(arts.is_empty(), "{tool} must not produce an artifact");
+        }
+        // Unknown tools with a path keep the coverage-biased fallback.
+        let input = json!({ "file_path": "src/auth.rs" });
+        assert_eq!(
+            artifacts_from_tool_input("MysteryTool", Some(&input), None).len(),
+            1
+        );
     }
 }

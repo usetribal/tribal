@@ -63,6 +63,7 @@ fn parse_citation(inner: &str) -> Option<Artifact> {
         resolve: Some(ArtifactResolve {
             strategy: ResolveStrategy::Citation,
             old_string: None,
+            new_string: None,
             patch: None,
         }),
     })

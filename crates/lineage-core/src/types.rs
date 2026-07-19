@@ -90,6 +90,10 @@ pub struct ArtifactResolve {
     pub strategy: ResolveStrategy,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub old_string: Option<String>,
+    /// Post-edit text — the primary materialization anchor, since it is what
+    /// exists in the committed file (`old_string` was consumed by the edit).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub new_string: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub patch: Option<String>,
 }
