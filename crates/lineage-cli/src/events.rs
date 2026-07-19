@@ -78,7 +78,7 @@ impl EventLog {
         writeln!(file, "{entry}")
     }
 
-    /// All parseable entries, oldest first. Unparseable lines are skipped, not
+    /// All parseable entries, oldest first. Unparsable lines are skipped, not
     /// errors: a torn write from a crashed process must not make the whole log
     /// unreadable.
     pub fn read_entries(&self) -> Vec<serde_json::Value> {
