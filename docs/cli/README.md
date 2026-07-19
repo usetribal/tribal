@@ -58,7 +58,7 @@ Re-run with `--force` after upgrading the CLI to refresh skill content.
 
 | Command | Description |
 |---------|-------------|
-| `git lineage doctor` | Check config, refs, notes, and LFS integrity |
+| `git lineage doctor [--json] [--section NAME] [--activity-limit N]` | Five-section health report (setup, capture, materialization, links, activity); see `specs/diagnostics-v0.md` |
 | `git lineage init [options]` | Interactive setup: config, skill, hooks, optional import |
 | `git lineage init-config` | Write default `refs/lineage/config` |
 | `git lineage init-skill [options]` | Install bundled agent skill |

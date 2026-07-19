@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use lineage_cli::{commands, context_cmd, hooks_cmd, init_cmd, skill_cmd};
+use lineage_cli::{commands, context_cmd, doctor_cmd, hooks_cmd, init_cmd, skill_cmd};
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
@@ -23,8 +23,17 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Check repository lineage configuration
-    Doctor,
+    /// Check repository lineage health: setup, capture, materialization, links, activity
+    Doctor {
+        #[arg(long)]
+        json: bool,
+        /// Limit output to a section (repeatable): setup, capture, materialization, links, activity
+        #[arg(long = "section")]
+        section: Vec<String>,
+        /// How many event-log entries the activity section shows
+        #[arg(long, default_value_t = doctor_cmd::DEFAULT_ACTIVITY_LIMIT)]
+        activity_limit: usize,
+    },
     /// Interactive setup: config, skill, hooks, optional import
     Init {
         /// Non-interactive defaults (all skill targets, install hooks, run import)
@@ -215,7 +224,18 @@ fn main() -> ExitCode {
     let repo_path = cli.repo.unwrap_or_else(|| PathBuf::from("."));
 
     let result = match cli.command {
-        Commands::Doctor => commands::doctor(&repo_path),
+        Commands::Doctor {
+            json,
+            section,
+            activity_limit,
+        } => doctor_cmd::run(
+            &repo_path,
+            &doctor_cmd::DoctorArgs {
+                json,
+                sections: section,
+                activity_limit,
+            },
+        ),
         Commands::Init {
             yes,
             target,

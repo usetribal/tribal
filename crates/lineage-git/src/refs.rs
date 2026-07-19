@@ -137,3 +137,23 @@ pub fn write_manifest(repo: &Repository, manifest: &LineageManifest) -> Result<(
 pub fn list_session_ids(repo: &Repository) -> Result<Vec<LineageId>, LineageError> {
     Ok(read_manifest(repo)?.sessions)
 }
+
+/// Every stored line object. Unreadable refs are skipped, not errors, so
+/// diagnostics over a partially broken repo still see the rest.
+pub fn list_line_objects(repo: &Repository) -> Result<Vec<LineObject>, LineageError> {
+    const PREFIX: &str = "refs/lineage/lines/";
+    let mut out = Vec::new();
+    for reference in repo
+        .references_glob(&format!("{PREFIX}*"))
+        .map_err(|e| LineageError::Other(e.to_string()))?
+        .filter_map(|r| r.ok())
+    {
+        let Some(suffix) = reference.name().and_then(|n| n.strip_prefix(PREFIX)) else {
+            continue;
+        };
+        if let Ok(Some(obj)) = read_line_object(repo, &LineageId::from(suffix)) {
+            out.push(obj);
+        }
+    }
+    Ok(out)
+}
