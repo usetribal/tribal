@@ -154,6 +154,7 @@ fn blame_resolves_absolute_path_artifacts() {
             resolve: Some(ArtifactResolve {
                 strategy: ResolveStrategy::OldString,
                 old_string: Some("fn main() {}".into()),
+                new_string: None,
                 patch: None,
             }),
         }],

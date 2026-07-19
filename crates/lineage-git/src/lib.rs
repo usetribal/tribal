@@ -48,7 +48,7 @@ pub use lfs_refs::{
     write_lfs_pointer_ref, LFS_DATA_REF_PREFIX, LFS_POINTER_REF_PREFIX,
 };
 pub use lfs_worktree::{ensure_gitattributes, LINEAGE_MEDIA_DIR};
-pub use line_resolve::materialize_line_objects;
+pub use line_resolve::{materialize_line_objects, resolve_old_string};
 pub use notes::{list_notes, map_commit_to_sessions, read_note_for_commit, write_note_for_commit};
 pub use rebuild::{rebuild_links, RebuildReport};
 pub use refs::{

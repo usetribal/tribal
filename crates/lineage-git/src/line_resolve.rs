@@ -99,12 +99,23 @@ fn resolve_artifact_ranges(
     match resolve.strategy {
         ResolveStrategy::Citation => Ok(Vec::new()),
         ResolveStrategy::OldString => {
-            let Some(old_string) = resolve.old_string.as_ref() else {
-                return Ok(Vec::new());
-            };
             let content = match git_file_at_commit(repo, commit_sha, file_path)? {
                 Some(c) => c,
                 None => return Ok(Vec::new()),
+            };
+            // The post-edit text is the primary anchor: it is what exists in
+            // the committed file, whereas old_string was consumed by the edit
+            // and only survives for anchored insertions. old_string remains
+            // the fallback for transcripts captured before new_string existed
+            // (conversation-schema-v0 "Artifact").
+            if let Some(new_string) = resolve.new_string.as_ref() {
+                let matches = resolve_old_string(&content, new_string);
+                if !matches.is_empty() {
+                    return Ok(matches);
+                }
+            }
+            let Some(old_string) = resolve.old_string.as_ref() else {
+                return Ok(Vec::new());
             };
             Ok(resolve_old_string(&content, old_string))
         }
