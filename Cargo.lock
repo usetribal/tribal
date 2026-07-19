@@ -822,6 +822,7 @@ dependencies = [
  "clap",
  "git2",
  "inquire",
+ "libc",
  "lineage-adapters",
  "lineage-agent",
  "lineage-core",

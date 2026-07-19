@@ -215,6 +215,13 @@ fn parse_agent(s: &str) -> Result<String, String> {
 }
 
 fn main() -> ExitCode {
+    // Rust ignores SIGPIPE, so `doctor --json | head` would panic on EPIPE
+    // mid-print. Restore die-on-SIGPIPE so piping behaves like any other CLI.
+    #[cfg(unix)]
+    unsafe {
+        libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+    }
+
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
         .with_target(false)
