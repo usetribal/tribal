@@ -97,7 +97,7 @@ heuristics act on. It is derived, never asserted independently of its inputs:
 | Tier | Evidence | Strength |
 |------|----------|----------|
 | `line_objects` | A line object in this file links the session to specific lines | `exact`/`manual` match → `high`; `heuristic` match → `medium` |
-| `files_touched` | The session's tool calls touched this path; summary is heuristic | `low` |
+| `files_touched` | The session **wrote** this path (edit/diff artifacts); summary is heuristic. Read-only touches are never evidence — a session that merely consulted a file must not become its provenance (and oracle-triggered reads would otherwise feed back into the corpus as evidence) | `low` |
 
 `line-object-schema-v0`'s `confidence` is a match-quality scale, not an
 ordered relevance scale — `strength` exists because selection needs a total

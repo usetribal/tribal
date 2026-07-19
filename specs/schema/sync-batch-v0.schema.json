@@ -85,6 +85,13 @@
     },
     "ArtifactResolve": {
       "properties": {
+        "new_string": {
+          "description": "Post-edit text — the primary materialization anchor, since it is what\nexists in the committed file (`old_string` was consumed by the edit).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "old_string": {
           "type": [
             "string",

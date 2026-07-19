@@ -85,9 +85,26 @@ File edits and diffs are referenced by hash, not always inlined:
   "kind": "file_edit",
   "path": "src/auth.rs",
   "blob_ref": "sha256:abc...",
-  "line_range": [1, 42]
+  "line_range": [1, 42],
+  "resolve": {
+    "strategy": "old_string",
+    "old_string": "fn login() {}",
+    "new_string": "fn login(user: &User) {}"
+  }
 }
 ```
+
+`resolve` carries what line-object materialization needs to locate the edit in
+a committed tree. For `old_string`-strategy edits, `new_string` (optional; the
+post-edit text) is the primary anchor — it is what actually exists in the file
+after the edit — with `old_string` as the fallback for transcripts captured
+before `new_string` existed. `full_file` and `diff_hunk` strategies carry no
+strings (whole-file heuristic; unified-diff hunk headers respectively).
+
+Artifacts represent *produced* output. Read-style tool invocations (read,
+grep, glob, search, view) produce **no artifact** — the files they touched
+remain observable through the turn's `tool_calls`, but they are not edits and
+must not be counted as authorship.
 
 ## ID stability
 
