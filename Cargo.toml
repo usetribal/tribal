@@ -54,6 +54,7 @@ ulid = { version = "1", features = ["serde"] }
 walkdir = "2"
 glob = "0.3"
 inquire = "0.7"
+libc = "0.2"
 regex = "1"
 aho-corasick = "1"
 tempfile = "3"
