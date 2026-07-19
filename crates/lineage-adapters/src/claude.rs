@@ -4,7 +4,9 @@ use std::path::{Path, PathBuf};
 use crate::citations::enrich_turn_with_citations;
 use crate::content::{enrich_turn_with_images, extract_claude_content};
 use crate::metadata::{finalize_session_metadata, insert_str, normalize_model};
-use crate::path_util::{claude_project_dir, claude_project_key, paths_match_workspace};
+use crate::path_util::{
+    claude_project_dir, claude_project_key, paths_match_workspace, workspace_is_under_cwd,
+};
 use chrono::{DateTime, Utc};
 use lineage_agent::{AgentSource, SessionReader, SessionRef};
 use lineage_core::{
@@ -52,6 +54,23 @@ impl ClaudeAdapter {
             let scoped = claude_project_dir(&home, &self.workspace_root);
             if scoped.exists() {
                 dirs.push(scoped);
+            }
+            // Parent-workspace sessions (gap 7c): a session opened in an
+            // ancestor directory files its transcript under that ancestor's
+            // project key, invisible to the exact-key lookup above. The walk
+            // stops below $HOME: sessions run in the home directory itself
+            // are a firehose of unrelated work, and scanning that project
+            // dir on every discover would cost more than the rare capture
+            // is worth.
+            for ancestor in self.workspace_root.ancestors().skip(1) {
+                if ancestor == Path::new("/") || ancestor.as_os_str().is_empty() || ancestor == home
+                {
+                    break;
+                }
+                let dir = claude_project_dir(&home, ancestor);
+                if dir.exists() {
+                    dirs.push(dir);
+                }
             }
         }
 
@@ -145,6 +164,7 @@ impl SessionReader for ClaudeAdapter {
         };
 
         let mut turn_index = 0usize;
+        let mut ancestor_cwd: Option<String> = None;
         let mut session_id: Option<String> = None;
         let mut is_sidechain = false;
         let mut claude_code_version: Option<String> = None;
@@ -189,10 +209,16 @@ impl SessionReader for ClaudeAdapter {
             }
 
             if let Some(cwd) = v.get("cwd").and_then(|c| c.as_str()) {
-                if !paths_match_workspace(cwd, &self.workspace_root) {
+                if paths_match_workspace(cwd, &self.workspace_root) {
+                    conversation.workspace_root = cwd.to_string();
+                } else if workspace_is_under_cwd(cwd, &self.workspace_root) {
+                    // Parent-workspace entry: keep the repo as workspace_root
+                    // so downstream normalization stays repo-relative; where
+                    // the session actually ran is preserved as metadata below.
+                    ancestor_cwd = Some(cwd.to_string());
+                } else {
                     continue;
                 }
-                conversation.workspace_root = cwd.to_string();
             }
 
             let role = match entry_type {
@@ -253,6 +279,21 @@ impl SessionReader for ClaudeAdapter {
                 .insert("is_sidechain".into(), Value::Bool(true));
         }
 
+        if let Some(cwd) = ancestor_cwd {
+            // Adopt a parent-workspace session only if it actually touched
+            // this repo — extraction leaves repo-local paths relative and
+            // foreign ones absolute, so relevance is "any relative path".
+            // Otherwise every repo under the workspace would import it.
+            let touches_repo = lineage_core::files_touched(&conversation)
+                .iter()
+                .any(|p| Path::new(p).is_relative());
+            if touches_repo {
+                insert_str(&mut conversation.metadata, "session_cwd", Some(cwd));
+            } else {
+                conversation.turns.clear();
+            }
+        }
+
         insert_str(&mut conversation.metadata, "claude_session_id", session_id);
         insert_str(
             &mut conversation.metadata,
@@ -288,8 +329,13 @@ mod tests {
             .join("../../tests/fixtures/claude-code-history");
         let adapter = ClaudeAdapter::new(&fixture);
         let sessions = adapter.discover().unwrap();
-        assert!(!sessions.is_empty());
-        let conv = adapter.read(&sessions[0]).unwrap();
+        // Ancestor-dir discovery may surface unrelated transcripts on a real
+        // machine; assert on the fixture's own session, not position 0.
+        let fixture_session = sessions
+            .iter()
+            .find(|s| s.source_path.starts_with(&fixture))
+            .expect("fixture session discovered");
+        let conv = adapter.read(fixture_session).unwrap();
         assert_eq!(conv.agent, AgentKind::Claude);
         assert!(!conv.turns.is_empty());
         assert!(conv.turns.iter().any(|t| !t.tool_calls.is_empty()));
