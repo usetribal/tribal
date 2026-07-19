@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use git2::Repository;
-use lineage_core::{files_touched, normalize_repo_path, Conversation, LineageError};
+use lineage_core::{files_touched, files_written, normalize_repo_path, Conversation, LineageError};
 use lineage_git::{
     hydrate_conversation, indexable_body, list_session_ids, read_conversation_stored,
 };
@@ -123,6 +123,7 @@ impl LineageIndex {
             CREATE TABLE IF NOT EXISTS session_files (
                 file_path TEXT NOT NULL,
                 session_id TEXT NOT NULL,
+                wrote INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY (file_path, session_id)
             );
             CREATE TABLE IF NOT EXISTS index_meta (
@@ -131,6 +132,12 @@ impl LineageIndex {
             );
             "#,
         )?;
+        // Indexes created by binaries predating the read/write distinction
+        // lack the column; rows stay wrote=0 until the next (re)index.
+        let _ = self.conn.execute(
+            "ALTER TABLE session_files ADD COLUMN wrote INTEGER NOT NULL DEFAULT 0",
+            [],
+        );
         Ok(())
     }
 
@@ -155,14 +162,19 @@ impl LineageIndex {
             params![conversation.id.as_str()],
         )?;
         let workspace_root = Path::new(&conversation.workspace_root);
+        let written: std::collections::HashSet<String> = files_written(conversation)
+            .iter()
+            .map(|p| normalize_repo_path(p, Some(workspace_root)))
+            .collect();
         for path in files_touched(conversation) {
             let normalized = normalize_repo_path(&path, Some(workspace_root));
             if normalized.is_empty() {
                 continue;
             }
+            let wrote = written.contains(&normalized);
             self.conn.execute(
-                "INSERT OR IGNORE INTO session_files (file_path, session_id) VALUES (?1, ?2)",
-                params![normalized, conversation.id.as_str()],
+                "INSERT OR IGNORE INTO session_files (file_path, session_id, wrote) VALUES (?1, ?2, ?3)",
+                params![normalized, conversation.id.as_str(), wrote as i64],
             )?;
         }
 
@@ -213,6 +225,22 @@ impl LineageIndex {
 
     /// Sessions whose tool calls touched this repo-relative path, most useful
     /// as the files-touched evidence tier in lineage-oracle.
+    /// Sessions that *wrote* this path — the authorship signal the oracle's
+    /// evidence tier uses; read-only touches are not evidence (gap 9).
+    pub fn sessions_that_wrote_file(&self, file_path: &str) -> Result<Vec<String>> {
+        let normalized = normalize_repo_path(file_path, None);
+        let mut stmt = self.conn.prepare(
+            "SELECT session_id FROM session_files WHERE file_path = ?1 AND wrote = 1 ORDER BY session_id",
+        )?;
+        let rows = stmt.query_map(params![normalized], |row| row.get::<_, String>(0))?;
+
+        let mut sessions = Vec::new();
+        for row in rows {
+            sessions.push(row?);
+        }
+        Ok(sessions)
+    }
+
     pub fn sessions_for_file(&self, file_path: &str) -> Result<Vec<String>> {
         let normalized = normalize_repo_path(file_path, None);
         let mut stmt = self.conn.prepare(
@@ -354,5 +382,38 @@ mod tests {
 
         index.index_conversation(&conv).unwrap();
         assert!(index.generation().unwrap() > after_first);
+    }
+
+    #[test]
+    fn wrote_flag_separates_authorship_from_reads() {
+        let (_dir, index) = open_index();
+        // conversation_touching produces FileEdit artifacts (writes).
+        let writer = conversation_touching("/repo", &["src/a.rs"]);
+        index.index_conversation(&writer).unwrap();
+
+        // A read-only session: path present in tool_calls but no artifacts.
+        let mut reader = Conversation::new(lineage_core::AgentKind::Claude, "/repo");
+        reader.turns.push(lineage_core::Turn {
+            id: lineage_core::LineageId::new(),
+            role: lineage_core::Role::Assistant,
+            content: String::new(),
+            tool_calls: vec![lineage_core::ToolCall {
+                id: "t".into(),
+                name: "Read".into(),
+                arguments: "{\"file_path\": \"src/a.rs\"}".into(),
+                result: None,
+            }],
+            model: None,
+            timestamp: None,
+            artifacts: vec![],
+        });
+        index.index_conversation(&reader).unwrap();
+
+        // Both touched the file; only the writer is authorship.
+        assert_eq!(index.sessions_for_file("src/a.rs").unwrap().len(), 2);
+        assert_eq!(
+            index.sessions_that_wrote_file("src/a.rs").unwrap(),
+            vec![writer.id.as_str().to_string()]
+        );
     }
 }

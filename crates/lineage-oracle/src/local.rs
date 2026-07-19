@@ -15,7 +15,7 @@ const LINE_OBJECT_REF_GLOB: &str = "refs/lineage/lines/*";
 
 /// Cache-key component: bump on any change to what this retriever would
 /// answer for an unchanged repo (tiers, grouping, summary source).
-pub const LOCAL_RETRIEVER_VERSION: &str = "1";
+pub const LOCAL_RETRIEVER_VERSION: &str = "2";
 
 /// Solo-mode retriever: answers from the repo's own lineage refs and search
 /// index, in-process. Team mode swaps in a server-backed implementation
@@ -170,7 +170,7 @@ impl Retriever for LocalRetriever<'_> {
         let mut candidates: Vec<String> = line_matches.keys().cloned().collect();
         for session_id in self
             .index
-            .sessions_for_file(&file_path)
+            .sessions_that_wrote_file(&file_path)
             .map_err(|e| OracleError::Retrieval(e.to_string()))?
         {
             if !line_matches.contains_key(&session_id) {
