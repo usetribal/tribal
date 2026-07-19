@@ -34,6 +34,18 @@ pub fn cursor_transcripts_dir(home: &Path, workspace: &Path) -> PathBuf {
         .join("agent-transcripts")
 }
 
+/// True when the workspace (repo root) sits strictly *under* the session's
+/// recorded cwd — a parent-workspace session (e.g. cwd `~/src`, repo
+/// `~/src/repo`). Such sessions can belong to this repo if they touched it.
+pub fn workspace_is_under_cwd(stored_cwd: &str, workspace: &Path) -> bool {
+    let workspace_canonical =
+        fs::canonicalize(workspace).unwrap_or_else(|_| workspace.to_path_buf());
+    let Ok(cwd) = fs::canonicalize(stored_cwd) else {
+        return false;
+    };
+    workspace_canonical != cwd && workspace_canonical.starts_with(&cwd)
+}
+
 pub fn paths_match_workspace(stored_cwd: &str, workspace: &Path) -> bool {
     if stored_cwd == "." || stored_cwd == "./" {
         return true;

@@ -73,6 +73,11 @@ impl ImportPipeline {
         session_ref: &SessionRef,
     ) -> Result<Option<Conversation>, LineageError> {
         let conversation = reader.read(session_ref)?;
+        // Readers signal "not this repo's session" (e.g. a parent-workspace
+        // transcript that never touched this repo) by yielding no turns.
+        if conversation.turns.is_empty() {
+            return Ok(None);
+        }
         let policy_result = apply_policy(&self.policy, conversation);
         if policy_result.redactions_applied > 0 {
             warn!(
