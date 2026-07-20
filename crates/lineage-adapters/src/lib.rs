@@ -2,6 +2,7 @@ mod citations;
 mod content;
 mod metadata;
 mod path_util;
+mod shell_writes;
 
 pub use citations::{enrich_turn_with_citations, extract_citations_from_text};
 

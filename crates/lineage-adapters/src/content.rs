@@ -244,6 +244,12 @@ pub fn artifacts_from_tool_input(
         )];
     }
 
+    // Shell tools carry a `command`, not a file path — recover file writes
+    // (heredocs) from the command text; otherwise a terminal-command artifact.
+    if is_shell_tool(&lower) {
+        return shell_artifacts(input, workspace_root);
+    }
+
     let path = input
         .get("path")
         .or_else(|| input.get("file_path"))
@@ -310,28 +316,6 @@ pub fn artifacts_from_tool_input(
             )];
         }
 
-        if name.eq_ignore_ascii_case("shell")
-            || name.eq_ignore_ascii_case("bash")
-            || name.contains("terminal")
-            || name.eq_ignore_ascii_case("exec_command")
-        {
-            return vec![Artifact {
-                kind: ArtifactKind::TerminalCommand,
-                path: input
-                    .get("command")
-                    .or_else(|| input.get("cmd"))
-                    .and_then(|v| v.as_str())
-                    .unwrap_or(&path)
-                    .to_string(),
-                blob_ref: None,
-                content_hash: None,
-                mime_type: None,
-                preview_data_url: None,
-                line_range: None,
-                resolve: None,
-            }];
-        }
-
         // Read-style tools produce no artifact: artifacts represent produced
         // output, and counting reads as file_edit polluted authorship signals
         // (files_written, the link gate, oracle evidence) and the
@@ -359,6 +343,53 @@ pub fn artifacts_from_tool_input(
     }
 
     Vec::new()
+}
+
+fn is_shell_tool(name: &str) -> bool {
+    matches!(name, "shell" | "bash" | "exec_command") || name.contains("terminal")
+}
+
+/// A shell invocation yields either the file writes recovered from its command
+/// (heredocs — the post-image is in the text, so these materialize like any
+/// edit) or, failing that, a single terminal-command artifact preserving the
+/// command for context.
+fn shell_artifacts(input: &Value, workspace_root: Option<&Path>) -> Vec<Artifact> {
+    let command = input
+        .get("command")
+        .or_else(|| input.get("cmd"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    let writes = crate::shell_writes::parse_shell_writes(command);
+    if !writes.is_empty() {
+        return writes
+            .into_iter()
+            .map(|w| {
+                artifact_with_resolve(
+                    ArtifactKind::FileEdit,
+                    normalize_repo_path(&w.path, workspace_root),
+                    None,
+                    ArtifactResolve {
+                        strategy: w.strategy,
+                        old_string: None,
+                        new_string: Some(w.new_string),
+                        patch: None,
+                    },
+                )
+            })
+            .collect();
+    }
+
+    vec![Artifact {
+        kind: ArtifactKind::TerminalCommand,
+        path: command.to_string(),
+        blob_ref: None,
+        content_hash: None,
+        mime_type: None,
+        preview_data_url: None,
+        line_range: None,
+        resolve: None,
+    }]
 }
 
 fn artifact_with_resolve(
@@ -622,5 +653,37 @@ mod tests {
             artifacts_from_tool_input("MysteryTool", Some(&input), None).len(),
             1
         );
+    }
+
+    #[test]
+    fn bash_heredoc_becomes_a_materializable_file_edit() {
+        let input = json!({
+            "command": "cat > src/auth.rs << 'EOF'\nfn login() {}\nEOF"
+        });
+        let arts = artifacts_from_tool_input("Bash", Some(&input), None);
+        assert_eq!(arts.len(), 1);
+        assert_eq!(arts[0].kind, ArtifactKind::FileEdit);
+        assert_eq!(arts[0].path, "src/auth.rs");
+        let resolve = arts[0].resolve.as_ref().unwrap();
+        // new_string is the post-image the gap-11 resolver anchors on.
+        assert_eq!(resolve.new_string.as_deref(), Some("fn login() {}"));
+    }
+
+    #[test]
+    fn bash_without_a_write_stays_a_terminal_command() {
+        let input = json!({ "command": "cargo build && git status" });
+        let arts = artifacts_from_tool_input("Bash", Some(&input), None);
+        assert_eq!(arts.len(), 1);
+        assert_eq!(arts[0].kind, ArtifactKind::TerminalCommand);
+    }
+
+    #[test]
+    fn bash_commit_heredoc_produces_no_file_edit() {
+        // The false-positive trap end-to-end: no FileEdit for a commit message.
+        let input = json!({
+            "command": "git commit -m \"$(cat <<'EOF'\nfeat: x\nEOF\n)\""
+        });
+        let arts = artifacts_from_tool_input("Bash", Some(&input), None);
+        assert!(arts.iter().all(|a| a.kind != ArtifactKind::FileEdit));
     }
 }
