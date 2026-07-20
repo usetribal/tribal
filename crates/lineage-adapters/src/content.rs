@@ -371,7 +371,7 @@ fn shell_artifacts(input: &Value, workspace_root: Option<&Path>) -> Vec<Artifact
                     None,
                     ArtifactResolve {
                         strategy: w.strategy,
-                        old_string: None,
+                        old_string: w.old_string,
                         new_string: Some(w.new_string),
                         patch: None,
                     },

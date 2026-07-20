@@ -16,22 +16,36 @@ use lineage_core::ResolveStrategy;
 pub struct ShellWrite {
     pub path: String,
     /// Post-edit content: whole file for a create, the appended chunk for an
-    /// append (still a valid anchor — it exists verbatim in the result).
+    /// append, or the replacement text for an `OldString` edit — all valid
+    /// anchors (they exist verbatim in the result).
     pub new_string: String,
+    /// Present only for `OldString` edits (python `.replace(old, new)`): the
+    /// pre-edit text, the resolver's fallback anchor.
+    pub old_string: Option<String>,
     pub strategy: ResolveStrategy,
 }
 
-/// Parse a shell command for recoverable file writes. Empty when the command
-/// contains no recognized write (the caller keeps its terminal-command
-/// fallback). Multiple heredocs in one command each yield a write.
+/// Parse a shell command for recoverable file writes — heredoc redirects
+/// (`FullFile`) and python literal `.replace(old, new)` edits (`OldString`).
+/// Empty when nothing is recognized (the caller keeps its terminal-command
+/// fallback).
 pub fn parse_shell_writes(command: &str) -> Vec<ShellWrite> {
     let mut writes = Vec::new();
     let mut rest = command;
     while let Some((write, tail)) = next_heredoc_write(rest) {
         if let Some(write) = write {
             writes.push(write);
+        } else {
+            // A `python3 - <<EOF` heredoc has no file redirect (so
+            // `next_heredoc_write` yields None), but its body may hold replaces.
+            let body = &rest[..rest.len() - tail.len()];
+            writes.extend(parse_python_replaces(body));
         }
         rest = tail;
+    }
+    // A `python3 -c "…"` command has no heredoc at all; scan the whole thing.
+    if writes.is_empty() {
+        writes.extend(parse_python_replaces(command));
     }
     writes
 }
@@ -64,10 +78,61 @@ fn next_heredoc_write(input: &str) -> Option<(Option<ShellWrite>, &str)> {
         Some(ShellWrite {
             path,
             new_string: body,
+            old_string: None,
             strategy,
         }),
         tail,
     ))
+}
+
+/// Recognize the `open(p).read()` → `.replace(old, new)` → `open(p,'w').write`
+/// pattern in a python script body and emit one `OldString` edit per replace.
+/// Only literal (parsed-from-source) `old`/`new` are recoverable — the regex
+/// variant (`re.compile`/`.subn`) is Tier 2 and deliberately not handled here.
+fn parse_python_replaces(body: &str) -> Vec<ShellWrite> {
+    // Must actually write a file back; a read-only inspect script is not a write.
+    if !body.contains(".replace(")
+        || body.contains("re.compile")
+        || body.contains(".subn(")
+        || py::has_regex_sub(body)
+    {
+        return Vec::new();
+    }
+    let Some(path) = py::find_write_path(body) else {
+        return Vec::new();
+    };
+    let vars = py::collect_string_assignments(body);
+
+    let mut writes = Vec::new();
+    for (old_expr, new_expr) in py::find_replace_calls(body) {
+        // Both arguments must resolve to literals (directly or via a variable);
+        // a computed replacement is not transcript-recoverable.
+        let (Some(old), Some(new)) = (
+            resolve_literal(&old_expr, &vars),
+            resolve_literal(&new_expr, &vars),
+        ) else {
+            continue;
+        };
+        if old.is_empty() {
+            continue;
+        }
+        writes.push(ShellWrite {
+            path: path.clone(),
+            new_string: new,
+            old_string: Some(old),
+            strategy: ResolveStrategy::OldString,
+        });
+    }
+    writes
+}
+
+/// A `.replace` argument is a string literal or a variable bound earlier.
+fn resolve_literal(expr: &str, vars: &std::collections::HashMap<String, String>) -> Option<String> {
+    let expr = expr.trim();
+    if let Some(lit) = py::parse_string_literal(expr) {
+        return Some(lit);
+    }
+    vars.get(expr).cloned()
 }
 
 /// After `<<`, read the delimiter word. Handles `<<EOF`, `<< EOF`, `<<'EOF'`,
@@ -221,5 +286,246 @@ mod tests {
     #[test]
     fn empty_when_no_heredoc() {
         assert!(parse_shell_writes("cargo build && git status").is_empty());
+    }
+
+    #[test]
+    fn recovers_python_literal_replace_inline() {
+        let cmd = "python3 - <<'EOF'\np = 'src/auth.rs'\ns = open(p).read()\nopen(p, 'w').write(s.replace('fn old() {}', 'fn new() {}'))\nEOF";
+        let writes = parse_shell_writes(cmd);
+        assert_eq!(writes.len(), 1);
+        assert_eq!(writes[0].path, "src/auth.rs");
+        assert_eq!(writes[0].strategy, ResolveStrategy::OldString);
+        assert_eq!(writes[0].old_string.as_deref(), Some("fn old() {}"));
+        assert_eq!(writes[0].new_string, "fn new() {}");
+    }
+
+    #[test]
+    fn recovers_python_replace_via_variables_and_triple_quotes() {
+        // The dominant corpus shape: p/old/new bound to triple-quoted literals,
+        // an intervening assert, two-step read/replace/write.
+        let cmd = "python3 - <<'PYEOF'\np = 'docs/x.md'\ns = open(p).read()\nold = \"\"\"line one\nline two\n\"\"\"\nnew = \"\"\"line one\nline two changed\n\"\"\"\nassert old in s\ns = s.replace(old, new)\nopen(p, 'w').write(s)\nPYEOF";
+        let writes = parse_shell_writes(cmd);
+        assert_eq!(writes.len(), 1);
+        assert_eq!(writes[0].path, "docs/x.md");
+        assert_eq!(
+            writes[0].old_string.as_deref(),
+            Some("line one\nline two\n")
+        );
+        assert_eq!(writes[0].new_string, "line one\nline two changed\n");
+    }
+
+    #[test]
+    fn recovers_multiple_replaces_on_one_file() {
+        let cmd = "python3 - <<'EOF'\np='f.md'\ns=open(p).read()\ns=s.replace('a','A')\ns=s.replace('b','B')\nopen(p,'w').write(s)\nEOF";
+        let writes = parse_shell_writes(cmd);
+        assert_eq!(writes.len(), 2);
+        assert_eq!(writes[0].old_string.as_deref(), Some("a"));
+        assert_eq!(writes[1].new_string, "B");
+    }
+
+    #[test]
+    fn ignores_python_regex_substitution() {
+        // Tier 2, not us: the replacement is computed by the regex engine.
+        let cmd = "python3 - <<'EOF'\nimport re\np='f.rs'\nt=open(p).read()\nt2,n=re.compile(r'a+').subn('X',t)\nopen(p,'w').write(t2)\nEOF";
+        assert!(parse_shell_writes(cmd).is_empty());
+    }
+
+    #[test]
+    fn ignores_read_only_python_inspect() {
+        // No write-back — inspection, not authorship.
+        let cmd = "python3 - <<'EOF'\ns=open('f.rs').read()\nprint(s.replace('a','b'))\nEOF";
+        assert!(parse_shell_writes(cmd).is_empty());
+    }
+
+    #[test]
+    fn python_c_string_form() {
+        let cmd = "python3 -c \"p='f'; s=open(p).read(); open(p,'w').write(s.replace('x','y'))\"";
+        let writes = parse_shell_writes(cmd);
+        assert_eq!(writes.len(), 1);
+        assert_eq!(writes[0].old_string.as_deref(), Some("x"));
+    }
+}
+
+/// Minimal python-source scanning for the literal-replace pattern. Not a python
+/// parser — just enough to pull string literals and the replace/write shape out
+/// of the small scripts agents inline. All parsing, never evaluation.
+mod py {
+    use std::collections::HashMap;
+
+    /// The file path written back: the first arg of `open(p, 'w')`, resolved
+    /// through string assignments. None if the script never writes.
+    pub fn find_write_path(body: &str) -> Option<String> {
+        let idx = body.find("'w')").or_else(|| body.find("\"w\")"))?;
+        let before = &body[..idx];
+        let open_at = before.rfind("open(")?;
+        let first_arg = before[open_at + 5..].split(',').next()?.trim();
+        let vars = collect_string_assignments(body);
+        parse_string_literal(first_arg).or_else(|| vars.get(first_arg).cloned())
+    }
+
+    /// True if the script does a regex substitution (Tier 2, not us).
+    pub fn has_regex_sub(body: &str) -> bool {
+        body.contains("re.sub(")
+    }
+
+    /// `name = <string literal>` bindings, so a `.replace(old, new)` referring
+    /// to `old`/`new`/`p` by name resolves.
+    pub fn collect_string_assignments(body: &str) -> HashMap<String, String> {
+        let mut map = HashMap::new();
+        let mut i = 0;
+        while i < body.len() {
+            if let Some((name, after_eq)) = assignment_at(body, i) {
+                if let Some((lit, consumed)) = parse_string_literal_prefix(&body[after_eq..]) {
+                    map.entry(name).or_insert(lit);
+                    i = after_eq + consumed;
+                    continue;
+                }
+            }
+            i += 1;
+        }
+        map
+    }
+
+    /// If position `i` begins `<ident> = `, return (ident, index past `=`).
+    fn assignment_at(body: &str, i: usize) -> Option<(String, usize)> {
+        let bytes = body.as_bytes();
+        // ident starts at a statement boundary — newline, `;`, whitespace, or
+        // the quote that opens a `python3 -c "…"` script.
+        if i > 0 && !matches!(bytes[i - 1], b'\n' | b';' | b' ' | b'\t' | b'"' | b'\'') {
+            return None;
+        }
+        let mut j = i;
+        while j < bytes.len() && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_') {
+            j += 1;
+        }
+        if j == i || body[i..].chars().next()?.is_ascii_digit() {
+            return None;
+        }
+        let name = &body[i..j];
+        let mut k = j;
+        while k < bytes.len() && bytes[k] == b' ' {
+            k += 1;
+        }
+        if k >= bytes.len() || bytes[k] != b'=' {
+            return None;
+        }
+        if k + 1 < bytes.len() && bytes[k + 1] == b'=' {
+            return None; // `==`, not assignment
+        }
+        let mut after = k + 1;
+        while after < bytes.len() && bytes[after] == b' ' {
+            after += 1;
+        }
+        Some((name.to_string(), after))
+    }
+
+    /// Every `.replace(<argA>, <argB>)` — raw argument expressions for the
+    /// caller to resolve.
+    pub fn find_replace_calls(body: &str) -> Vec<(String, String)> {
+        let mut calls = Vec::new();
+        let mut from = 0;
+        while let Some(rel) = body[from..].find(".replace(") {
+            let start = from + rel + ".replace(".len();
+            if let Some((a, b, end)) = two_args(&body[start..]) {
+                calls.push((a, b));
+                from = start + end;
+            } else {
+                from = start;
+            }
+        }
+        calls
+    }
+
+    /// Two comma-separated args up to the matching `)`, respecting string
+    /// literals so commas inside them don't split. Returns (argA, argB, index
+    /// past the closing paren).
+    fn two_args(s: &str) -> Option<(String, String, usize)> {
+        let bytes = s.as_bytes();
+        let mut i = 0;
+        let mut args: Vec<String> = Vec::new();
+        let mut cur_start = 0;
+        while i < bytes.len() {
+            match bytes[i] {
+                b'\'' | b'"' => {
+                    let (_, consumed) = parse_string_literal_prefix(&s[i..])?;
+                    i += consumed;
+                }
+                b',' if args.is_empty() => {
+                    args.push(s[cur_start..i].trim().to_string());
+                    cur_start = i + 1;
+                    i += 1;
+                }
+                b')' => {
+                    args.push(s[cur_start..i].trim().to_string());
+                    return (args.len() >= 2).then(|| (args[0].clone(), args[1].clone(), i + 1));
+                }
+                _ => i += 1,
+            }
+        }
+        None
+    }
+
+    /// Parse a python string literal that occupies the entire expression.
+    pub fn parse_string_literal(expr: &str) -> Option<String> {
+        let (lit, consumed) = parse_string_literal_prefix(expr)?;
+        expr[consumed..].trim().is_empty().then_some(lit)
+    }
+
+    /// Parse a python string literal at the start of `s`; returns (value, bytes
+    /// consumed). Handles triple-quoted and single-line `'`/`"` with
+    /// `\n`/`\t`/`\\`/`\"`/`\'` unescaping; `r`/`b` prefixes accepted, `f`
+    /// (computed) rejected.
+    pub fn parse_string_literal_prefix(s: &str) -> Option<(String, usize)> {
+        let bytes = s.as_bytes();
+        let mut off = 0;
+        while off < bytes.len() && matches!(bytes[off], b'r' | b'b' | b'R' | b'B') {
+            off += 1;
+        }
+        if off < bytes.len() && matches!(bytes[off], b'f' | b'F') {
+            return None;
+        }
+        let rest = &s[off..];
+        for triple in ["\"\"\"", "'''"] {
+            if let Some(inner) = rest.strip_prefix(triple) {
+                let end = inner.find(triple)?;
+                return Some((
+                    inner[..end].to_string(),
+                    off + triple.len() + end + triple.len(),
+                ));
+            }
+        }
+        let quote = match rest.as_bytes().first() {
+            Some(&q @ (b'\'' | b'"')) => q,
+            _ => return None,
+        };
+        let inner = &rest[1..];
+        let ib = inner.as_bytes();
+        let mut out = String::new();
+        let mut i = 0;
+        while i < ib.len() {
+            let c = ib[i];
+            if c == b'\\' && i + 1 < ib.len() {
+                match ib[i + 1] {
+                    b'n' => out.push('\n'),
+                    b't' => out.push('\t'),
+                    b'\\' => out.push('\\'),
+                    b'\'' => out.push('\''),
+                    b'"' => out.push('"'),
+                    other => {
+                        out.push('\\');
+                        out.push(other as char);
+                    }
+                }
+                i += 2;
+                continue;
+            }
+            if c == quote {
+                return Some((out, off + 1 + i + 1));
+            }
+            let ch = inner[i..].chars().next()?;
+            out.push(ch);
+            i += ch.len_utf8();
+        }
+        None
     }
 }
