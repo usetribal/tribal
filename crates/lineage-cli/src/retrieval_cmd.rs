@@ -154,15 +154,24 @@ pub fn salience_report(repo_path: &Path) -> Result<()> {
 }
 
 /// Embed sessions that are not already embedded at the current model version,
-/// storing their chunk vectors — the dense index pass. Run from import and
-/// `rebuild-index` so `context query --dense` has vectors to search.
+/// storing their chunk vectors — the dense index pass. Opted into via
+/// `rebuild embeddings` (and `rebuild [index] --embed`) so `context query
+/// --dense` has vectors to search.
 ///
 /// Incremental: sessions already embedded at the current version are skipped, so
 /// a backfill pays only for new or model-changed sessions — steady-state cost is
-/// the one session just imported, not the whole corpus. A no-op without the
-/// `dense` feature.
+/// the one session just imported, not the whole corpus.
+///
+/// `progress(done, remaining)` is called once as `(0, remaining)` before the
+/// loop (`remaining` counts only sessions still needing embedding, so
+/// already-current sessions never inflate the bar) and again after each
+/// embedded session, so the CLI can drive a progress bar without this crate
+/// depending on a rendering library.
 #[cfg(feature = "dense")]
-pub fn embed_all_sessions(repo_path: &Path) -> Result<usize> {
+pub fn embed_all_sessions(
+    repo_path: &Path,
+    progress: &mut dyn FnMut(usize, usize),
+) -> Result<usize> {
     use std::collections::HashSet;
 
     use lineage_embed::FastEmbedder;
@@ -171,19 +180,29 @@ pub fn embed_all_sessions(repo_path: &Path) -> Result<usize> {
 
     let repo = open_repo(repo_path)?;
     let index = LineageIndex::open(repo.git_dir().join("lineage").join("index.db"))?;
-    // The user is waiting on a backfill, so use more threads than the hook path.
-    let embedder = FastEmbedder::new_for_backfill(embed_cache_dir())?;
 
     let already: HashSet<String> = index
         .sessions_embedded_at_version(DENSE_RETRIEVER_VERSION)?
         .into_iter()
         .collect();
 
+    let pending: Vec<_> = list_session_ids(repo.inner())?
+        .into_iter()
+        .filter(|id| !already.contains(id.as_str()))
+        .collect();
+
+    // Model load can take seconds; skip it (and the bar) when nothing is due.
+    if pending.is_empty() {
+        return Ok(0);
+    }
+
+    // The user is waiting on a backfill, so use more threads than the hook path.
+    let embedder = FastEmbedder::new_for_backfill(embed_cache_dir())?;
+
+    let remaining = pending.len();
+    progress(0, remaining);
     let mut embedded = 0usize;
-    for id in list_session_ids(repo.inner())? {
-        if already.contains(id.as_str()) {
-            continue;
-        }
+    for id in pending {
         if let Some(mut conv) = read_conversation_stored(repo.inner(), &id)? {
             hydrate_conversation(repo.inner(), &mut conv)?;
             let chunks = embed_and_store_session(&index, &embedder, &conv)?;
@@ -191,13 +210,9 @@ pub fn embed_all_sessions(repo_path: &Path) -> Result<usize> {
                 embedded += 1;
             }
         }
+        progress(embedded, remaining);
     }
     Ok(embedded)
-}
-
-#[cfg(not(feature = "dense"))]
-pub fn embed_all_sessions(_repo_path: &Path) -> Result<usize> {
-    Ok(0)
 }
 
 /// Where the ONNX model is cached. A stable per-user location so the model

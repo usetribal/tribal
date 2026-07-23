@@ -24,6 +24,18 @@ pub struct RebuildReport {
 /// first so pre-gate links cannot survive; callers replay manual links from
 /// the event log afterwards (they are user intent, not derivable).
 pub fn rebuild_links(repo: &Repository) -> Result<RebuildReport, LineageError> {
+    rebuild_links_with_progress(repo, &mut |_| {})
+}
+
+/// Like [`rebuild_links`] but calls `progress(commits_scanned)` after each
+/// commit is processed, so the CLI can drive a progress bar for the commit-scan
+/// phase (the slow part of a full rebuild) without this crate depending on a
+/// rendering library. The revwalk length is not known up front, so the callback
+/// receives a running count rather than a `(done, total)` pair.
+pub fn rebuild_links_with_progress(
+    repo: &Repository,
+    progress: &mut dyn FnMut(usize),
+) -> Result<RebuildReport, LineageError> {
     let mut report = RebuildReport::default();
 
     // Wipe: line-object refs, then every note. Both are derived; blobs left
@@ -64,6 +76,7 @@ pub fn rebuild_links(repo: &Repository) -> Result<RebuildReport, LineageError> {
         if !link.linked.is_empty() {
             report.linked_commits.push((sha, link));
         }
+        progress(report.commits_scanned);
     }
 
     Ok(report)

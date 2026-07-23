@@ -182,10 +182,6 @@ pub fn import(
             index.index_conversation(&conv)?;
         }
     }
-    // Dense index pass: embed the imported sessions' chunks so semantic queries
-    // work. A no-op without the `dense` feature (lexical needs no vectors).
-    // let _ = crate::retrieval_cmd::embed_all_sessions(repo_path);
-
     let imported_ids: Vec<LineageId> = conversations.iter().map(|c| c.id.clone()).collect();
     write_last_import(inner, &LastImportState::new(imported_ids))?;
 
@@ -650,14 +646,20 @@ fn print_hits(hits: &[SearchHit]) {
     }
 }
 
-pub fn rebuild_index(repo_path: &Path) -> Result<()> {
+/// Rebuild only the lexical search index; embeddings are a separate pass
+/// (`rebuild embeddings`) so a plain index rebuild stays cheap. `embed` opts
+/// into running that pass afterwards, same as `rebuild --embed`.
+pub fn rebuild_index(repo_path: &Path, embed: bool) -> Result<()> {
     let repo = open_repo(repo_path)?;
     let inner = repo.inner();
     let index = LineageIndex::open(repo.git_dir().join("lineage").join("index.db"))?;
-    let indexed = index.rebuild(inner)?;
-    // Dense index pass: re-embed every session so semantic queries reflect the
-    // rebuilt corpus. A no-op without the `dense` feature.
-    let embedded = crate::retrieval_cmd::embed_all_sessions(repo_path)?;
+
+    let mut bar = crate::progress::SessionProgress::new("indexing");
+    let indexed = index.rebuild_with_progress(inner, &mut |done, total| bar.update(done, total))?;
+    bar.finish();
+
+    let embedded = if embed { run_embed_pass(repo_path)? } else { 0 };
+
     if embedded > 0 {
         println!("index rebuilt ({embedded} session(s) embedded)");
     } else {
@@ -668,6 +670,46 @@ pub fn rebuild_index(repo_path: &Path) -> Result<()> {
         "rebuild_index",
         Outcome::Ok,
         serde_json::json!({ "sessions_indexed": indexed, "sessions_embedded": embedded }),
+    );
+    Ok(())
+}
+
+/// Run the dense-embedding backfill with a per-session progress bar, returning
+/// the number of sessions embedded. Only compiled into `--features dense`
+/// builds; lexical-only builds reject the request before reaching here.
+#[cfg(feature = "dense")]
+fn run_embed_pass(repo_path: &Path) -> Result<usize> {
+    let mut bar = crate::progress::SessionProgress::new("embedding");
+    let embedded = crate::retrieval_cmd::embed_all_sessions(repo_path, &mut |done, remaining| {
+        bar.update(done, remaining)
+    })?;
+    bar.finish();
+    Ok(embedded)
+}
+
+#[cfg(not(feature = "dense"))]
+fn run_embed_pass(_repo_path: &Path) -> Result<usize> {
+    Err(
+        "embedding backfill needs a build with `--features dense`; this is a lexical-only build"
+            .into(),
+    )
+}
+
+/// `git lineage rebuild embeddings`: the dense-embedding backfill on its own,
+/// symmetric with `rebuild index`. Rejects clearly on a lexical-only build.
+pub fn rebuild_embeddings(repo_path: &Path) -> Result<()> {
+    let embedded = run_embed_pass(repo_path)?;
+    if embedded > 0 {
+        println!("embeddings rebuilt ({embedded} session(s) embedded)");
+    } else {
+        println!("embeddings up to date (0 session(s) embedded)");
+    }
+    let repo = open_repo(repo_path)?;
+    EventLog::for_git_dir(&repo.git_dir()).append(
+        Utc::now(),
+        "rebuild_embeddings",
+        Outcome::Ok,
+        serde_json::json!({ "sessions_embedded": embedded }),
     );
     Ok(())
 }
@@ -821,9 +863,16 @@ fn parse_blame_target(target: &str) -> Result<(String, u32)> {
 /// links from the event log — they are user intent, not derivable, so the
 /// wipe must not lose them. Pre-event-log manual links cannot be identified
 /// and are dropped (reported).
-pub fn rebuild(repo_path: &Path) -> Result<()> {
+pub fn rebuild(repo_path: &Path, embed: bool) -> Result<()> {
     let repo = open_repo(repo_path)?;
-    let report = lineage_git::rebuild_links(repo.inner())?;
+
+    // The commit scan is the slow phase of a full rebuild (a revwalk over all
+    // history); its length is unknown up front, so it gets a running-count
+    // spinner rather than a ratio bar.
+    let scan = crate::progress::Spinner::new("scanning commits");
+    let report =
+        lineage_git::rebuild_links_with_progress(repo.inner(), &mut |scanned| scan.set(scanned))?;
+    scan.finish();
 
     let log = EventLog::for_git_dir(&repo.git_dir());
     for (sha, link) in &report.linked_commits {
@@ -870,15 +919,26 @@ pub fn rebuild(repo_path: &Path) -> Result<()> {
     }
 
     let index = LineageIndex::open(repo.git_dir().join("lineage").join("index.db"))?;
-    let sessions_indexed = index.rebuild(repo.inner())?;
+    let mut bar = crate::progress::SessionProgress::new("indexing");
+    let sessions_indexed =
+        index.rebuild_with_progress(repo.inner(), &mut |done, total| bar.update(done, total))?;
+    bar.finish();
+
+    // Dense index pass is opt-in (--embed): a full re-embed can take minutes.
+    let sessions_embedded = if embed { run_embed_pass(repo_path)? } else { 0 };
 
     println!(
-        "rebuilt derived state: {} commit(s) scanned, {} link(s) written ({} manual replayed), {} line object(s), index: {} session(s)",
+        "rebuilt derived state: {} commit(s) scanned, {} link(s) written ({} manual replayed), {} line object(s), index: {} session(s){}",
         report.commits_scanned,
         report.links_written,
         manual_replayed,
         report.line_objects,
         sessions_indexed,
+        if sessions_embedded > 0 {
+            format!(", embedded: {sessions_embedded} session(s)")
+        } else {
+            String::new()
+        },
     );
     println!(
         "wiped {} note(s) and {} line-object ref(s); manual links predating the event log are not recoverable",
@@ -897,6 +957,7 @@ pub fn rebuild(repo_path: &Path) -> Result<()> {
             "notes_deleted": report.notes_deleted,
             "line_object_refs_deleted": report.line_object_refs_deleted,
             "sessions_indexed": sessions_indexed,
+            "sessions_embedded": sessions_embedded,
         }),
     );
     Ok(())

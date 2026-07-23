@@ -146,6 +146,10 @@ enum Commands {
     Rebuild {
         #[command(subcommand)]
         target: Option<RebuildTarget>,
+        /// Also run the dense-embedding backfill after the rebuild (needs the
+        /// `dense` build feature). Off by default — a full re-embed is slow.
+        #[arg(long)]
+        embed: bool,
     },
     /// Deprecated alias for `rebuild index`
     #[command(hide = true)]
@@ -204,7 +208,14 @@ enum HookAction {
 #[derive(Subcommand)]
 enum RebuildTarget {
     /// Rebuild only the search index
-    Index,
+    Index {
+        /// Also run the dense-embedding backfill afterward (needs the `dense`
+        /// build feature). Off by default — a full re-embed is slow.
+        #[arg(long)]
+        embed: bool,
+    },
+    /// Rebuild only the dense embeddings (needs the `dense` build feature)
+    Embeddings,
 }
 
 #[derive(Subcommand)]
@@ -423,11 +434,12 @@ fn main() -> ExitCode {
             remote,
         } => commands::sync(&repo_path, server.as_deref(), token.as_deref(), &remote),
         Commands::Search { query } => commands::search(&repo_path, &query),
-        Commands::Rebuild { target } => match target {
-            None => commands::rebuild(&repo_path),
-            Some(RebuildTarget::Index) => commands::rebuild_index(&repo_path),
+        Commands::Rebuild { target, embed } => match target {
+            None => commands::rebuild(&repo_path, embed),
+            Some(RebuildTarget::Index { embed }) => commands::rebuild_index(&repo_path, embed),
+            Some(RebuildTarget::Embeddings) => commands::rebuild_embeddings(&repo_path),
         },
-        Commands::RebuildIndex => commands::rebuild_index(&repo_path),
+        Commands::RebuildIndex => commands::rebuild_index(&repo_path, false),
         Commands::Link {
             session_id,
             commit_sha,
