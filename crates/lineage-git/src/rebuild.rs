@@ -1,8 +1,8 @@
 use git2::Repository;
-use lineage_core::{LineageError, LineageId};
+use lineage_core::{Conversation, LineageError, LineageId};
 
-use crate::hooks::{link_sessions_to_commit, LinkBasis, LinkReport};
-use crate::refs::list_session_ids;
+use crate::hooks::{link_session_at_commit, LinkAttempt, LinkBasis, LinkReport, LinkedSession};
+use crate::refs::{list_session_ids, read_conversation_stored};
 
 /// Totals from a derived-layer rebuild, for the caller's event-log entry and
 /// user-facing summary.
@@ -55,7 +55,16 @@ pub fn rebuild_links_with_progress(
         report.notes_deleted += 1;
     }
 
+    // Read every conversation once, up front. A full-history rebuild tests each
+    // session against every commit; re-reading the (large) conversation blob per
+    // commit was the dominant cost. The blob is constant across commits.
     let ids: Vec<LineageId> = list_session_ids(repo)?;
+    let mut conversations: Vec<(LineageId, Conversation)> = Vec::with_capacity(ids.len());
+    for id in ids {
+        if let Some(conversation) = read_conversation_stored(repo, &id)? {
+            conversations.push((id, conversation));
+        }
+    }
 
     let mut walk = repo
         .revwalk()
@@ -66,7 +75,24 @@ pub fn rebuild_links_with_progress(
         let oid = oid.map_err(|e| LineageError::Other(e.to_string()))?;
         report.commits_scanned += 1;
         let sha = oid.to_string();
-        let link = link_sessions_to_commit(repo, &ids, &sha)?;
+
+        // Diff the commit once, then gate every preloaded session against it.
+        let changed = crate::line_resolve::files_changed_in_commit(repo, &sha)?;
+        let mut link = LinkReport::default();
+        for (id, conversation) in &conversations {
+            match link_session_at_commit(repo, &sha, id, conversation, &changed)? {
+                LinkAttempt::Linked {
+                    line_objects,
+                    basis,
+                } => link.linked.push(LinkedSession {
+                    session_id: id.clone(),
+                    line_objects,
+                    basis,
+                }),
+                LinkAttempt::SkippedNoOverlap => link.skipped_no_overlap.push(id.clone()),
+            }
+        }
+
         for session in &link.linked {
             report.links_written += 1;
             if session.basis == LinkBasis::LineObjects {
