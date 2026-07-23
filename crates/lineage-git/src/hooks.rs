@@ -73,11 +73,17 @@ pub fn link_sessions_to_commit(
     ids: &[LineageId],
     commit_sha: &str,
 ) -> Result<LinkReport, LineageError> {
-    let sha = commit_sha.to_string();
     let mut report = LinkReport::default();
 
+    // Diffing the commit once, then testing every session's written-file set
+    // against it, keeps a full-history rebuild from re-diffing the same commit
+    // per session.
+    let changed = crate::line_resolve::files_changed_in_commit(repo, commit_sha)?;
     for id in ids {
-        match link_session_to_head(repo, &sha, id)? {
+        let Some(conversation) = read_conversation_stored(repo, id)? else {
+            continue;
+        };
+        match link_session_at_commit(repo, commit_sha, id, &conversation, &changed)? {
             LinkAttempt::Linked {
                 line_objects,
                 basis,
@@ -87,30 +93,30 @@ pub fn link_sessions_to_commit(
                 basis,
             }),
             LinkAttempt::SkippedNoOverlap => report.skipped_no_overlap.push(id.clone()),
-            LinkAttempt::SessionMissing => {}
         }
     }
     Ok(report)
 }
 
-enum LinkAttempt {
+pub(crate) enum LinkAttempt {
     Linked {
         line_objects: usize,
         basis: LinkBasis,
     },
     SkippedNoOverlap,
-    SessionMissing,
 }
 
-fn link_session_to_head(
+/// Evidence-gate one session against one commit, given the session's already
+/// read conversation and the commit's already computed changed-file set. The
+/// caller owns both so a rebuild can read each conversation once and diff each
+/// commit once, rather than per (commit, session) pair.
+pub(crate) fn link_session_at_commit(
     repo: &Repository,
     commit_sha: &str,
     session_id: &LineageId,
+    conversation: &lineage_core::Conversation,
+    changed: &std::collections::HashSet<String>,
 ) -> Result<LinkAttempt, LineageError> {
-    let Some(conversation) = read_conversation_stored(repo, session_id)? else {
-        return Ok(LinkAttempt::SessionMissing);
-    };
-
     // The gate (gap 8): a link needs evidence — the session must have
     // *written* a file this commit changed. Reads don't count, so a session
     // that only consulted a changed file never becomes commit provenance.
@@ -120,8 +126,7 @@ fn link_session_to_head(
     // whole histories (rebuild). Manual `git lineage link` bypasses this path
     // entirely and stays authoritative.
     let workspace = lineage_core::workspace_root_for(&conversation.workspace_root, repo.workdir());
-    let changed = crate::line_resolve::files_changed_in_commit(repo, commit_sha)?;
-    let overlaps = lineage_core::files_written(&conversation)
+    let overlaps = lineage_core::files_written(conversation)
         .iter()
         .map(|p| lineage_core::normalize_repo_path(p, Some(&workspace)))
         .any(|p| changed.contains(&p));
@@ -130,7 +135,7 @@ fn link_session_to_head(
     }
 
     let line_objects =
-        materialize_line_objects(repo, &conversation, commit_sha, Confidence::Heuristic)?;
+        materialize_line_objects(repo, conversation, commit_sha, Confidence::Heuristic)?;
     let basis = if line_objects.is_empty() {
         LinkBasis::FileOverlap
     } else {
