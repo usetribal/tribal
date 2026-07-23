@@ -4,7 +4,7 @@ use lineage_core::{
     RepoBinding, Role, Turn,
 };
 use lineage_git::{write_conversation, write_line_object};
-use lineage_oracle::{ContextQuery, EvidenceTier, LocalRetriever, Retriever, Strength};
+use lineage_retrieval::{ContextQuery, EvidenceTier, LocalRetriever, Retriever, Strength};
 use lineage_search::LineageIndex;
 
 struct Fixture {

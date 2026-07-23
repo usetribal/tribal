@@ -182,6 +182,9 @@ pub fn import(
             index.index_conversation(&conv)?;
         }
     }
+    // Dense index pass: embed the imported sessions' chunks so semantic queries
+    // work. A no-op without the `dense` feature (lexical needs no vectors).
+    // let _ = crate::retrieval_cmd::embed_all_sessions(repo_path);
 
     let imported_ids: Vec<LineageId> = conversations.iter().map(|c| c.id.clone()).collect();
     write_last_import(inner, &LastImportState::new(imported_ids))?;
@@ -652,12 +655,19 @@ pub fn rebuild_index(repo_path: &Path) -> Result<()> {
     let inner = repo.inner();
     let index = LineageIndex::open(repo.git_dir().join("lineage").join("index.db"))?;
     let indexed = index.rebuild(inner)?;
-    println!("index rebuilt");
+    // Dense index pass: re-embed every session so semantic queries reflect the
+    // rebuilt corpus. A no-op without the `dense` feature.
+    let embedded = crate::retrieval_cmd::embed_all_sessions(repo_path)?;
+    if embedded > 0 {
+        println!("index rebuilt ({embedded} session(s) embedded)");
+    } else {
+        println!("index rebuilt");
+    }
     EventLog::for_git_dir(&repo.git_dir()).append(
         Utc::now(),
         "rebuild_index",
         Outcome::Ok,
-        serde_json::json!({ "sessions_indexed": indexed }),
+        serde_json::json!({ "sessions_indexed": indexed, "sessions_embedded": embedded }),
     );
     Ok(())
 }

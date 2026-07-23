@@ -21,6 +21,12 @@ path = "src/lib.rs"
 name = "git-lineage"
 path = "src/main.rs"
 
+[features]
+# Semantic (dense) intent retrieval: the ONNX embedding model. Off by default so
+# the standard CLI stays lightweight; enable to use `context query --dense`/fused.
+default = []
+dense = ["dep:lineage-embed", "lineage-retrieval/dense"]
+
 [dependencies]
 chrono = { workspace = true }
 clap = { workspace = true }
@@ -28,7 +34,8 @@ lineage-adapters = { workspace = true }
 lineage-agent = { workspace = true }
 lineage-core = { workspace = true }
 lineage-git = { workspace = true }
-lineage-oracle = { workspace = true }
+lineage-retrieval = { workspace = true }
+lineage-embed = { workspace = true, optional = true }
 lineage-policy = { workspace = true }
 lineage-search = { workspace = true }
 serde = { workspace = true }

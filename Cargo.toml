@@ -9,7 +9,8 @@ members = [
     "crates/lineage-adapters",
     "crates/lineage-cli",
     "crates/lineage-search",
-    "crates/lineage-oracle",
+    "crates/lineage-embed",
+    "crates/lineage-retrieval",
     "crates/lineage-mcp",
 ]
 
@@ -35,7 +36,8 @@ lineage-git = { path = "crates/lineage-git" }
 lineage-agent = { path = "crates/lineage-agent" }
 lineage-adapters = { path = "crates/lineage-adapters" }
 lineage-search = { path = "crates/lineage-search" }
-lineage-oracle = { path = "crates/lineage-oracle" }
+lineage-embed = { path = "crates/lineage-embed" }
+lineage-retrieval = { path = "crates/lineage-retrieval" }
 lineage-cli = { path = "crates/lineage-cli" }
 
 chrono = { version = "0.4", features = ["serde"] }
@@ -59,3 +61,4 @@ regex = "1"
 aho-corasick = "1"
 tempfile = "3"
 ureq = { version = "2", features = ["json"] }
+fastembed = { version = "5", default-features = false, features = ["hf-hub-rustls-tls", "ort-download-binaries"] }

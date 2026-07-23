@@ -1,14 +1,14 @@
-use crate::types::{ContextQuery, Retrieval};
+use crate::types::{ContextQuery, IntentQuery, Retrieval};
 
 #[derive(Debug, thiserror::Error)]
-pub enum OracleError {
+pub enum RetrievalError {
     #[error("retrieval failed: {0}")]
     Retrieval(String),
     #[error("cache failed: {0}")]
     Cache(String),
 }
 
-pub type Result<T> = std::result::Result<T, OracleError>;
+pub type Result<T> = std::result::Result<T, RetrievalError>;
 
 /// Where retrieval runs is a deployment detail (in-process over local data
 /// now, a server endpoint in team mode); callers only ever see this trait.
@@ -16,6 +16,16 @@ pub type Result<T> = std::result::Result<T, OracleError>;
 /// `budget_ms` by failing open, not by cancelling.
 pub trait Retriever {
     fn retrieve(&self, query: &ContextQuery) -> Result<Retrieval>;
+}
+
+/// Intent (prompt-keyed) retrieval. A separate trait from `Retriever` because
+/// the query shape differs (free text, no file anchor) and each mechanism —
+/// lexical (`FtsRetriever`), dense, later fused — is its own impl so the legs
+/// can be measured independently before fusion. Evidence is always at session
+/// granularity; a dense retriever that matches sub-session chunks rolls them up
+/// to the session before returning.
+pub trait IntentRetriever {
+    fn retrieve_intent(&self, query: &IntentQuery) -> Result<Retrieval>;
 }
 
 #[cfg(test)]

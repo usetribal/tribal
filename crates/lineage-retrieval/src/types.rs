@@ -16,6 +16,18 @@ pub struct ContextQuery {
     pub budget_ms: Option<u64>,
 }
 
+/// An intent (prompt-keyed) retrieval request: free-text intent, no file or
+/// line anchor. Distinct from `ContextQuery` because that shape is file-keyed
+/// and frozen by the injection spec — intent matching is a different surface
+/// (the `UserPromptSubmit` trigger) with a different query shape.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IntentQuery {
+    /// The user's message / intent text to match against the corpus.
+    pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub budget_ms: Option<u64>,
+}
+
 /// Ordered relevance scale for selection floors and cache heuristics.
 /// Variant order is the total order (`None < Low < Medium < High`) — `Ord`
 /// derives from it, so do not reorder.
@@ -33,6 +45,11 @@ pub enum Strength {
 pub enum EvidenceTier {
     LineObjects,
     FilesTouched,
+    /// The session's content matched an intent query (lexical or dense). Not
+    /// anchored to a file or line — the match is against what the session was
+    /// about. Ranking within a retrieval preserves the retriever's relevance
+    /// order; strength is a coarse floor (see `strength_for`).
+    IntentMatch,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -94,6 +111,11 @@ pub fn strength_for(tier: EvidenceTier, match_confidence: Option<Confidence>) ->
     match (tier, match_confidence) {
         (EvidenceTier::LineObjects, Some(Confidence::Exact | Confidence::Manual)) => Strength::High,
         (EvidenceTier::LineObjects, _) => Strength::Medium,
+        // A content match is real evidence — stronger than a bare files-touched
+        // link, below an exact line-object. The retriever's own relevance order
+        // (preserved by evidence ranking) carries the finer signal; strength is
+        // only the coarse floor selection acts on.
+        (EvidenceTier::IntentMatch, _) => Strength::Medium,
         (EvidenceTier::FilesTouched, _) => Strength::Low,
     }
 }

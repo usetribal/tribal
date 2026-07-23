@@ -4,9 +4,9 @@ use std::path::Path;
 use chrono::{DateTime, Utc};
 use lineage_core::{normalize_repo_path, RepoBinding};
 use lineage_git::{open_repo, resolve_repo_binding};
-use lineage_oracle::{
-    CacheKey, ContextQuery, Evidence, LocalRetriever, OracleCache, Retrieval, Retriever, Strength,
-    LOCAL_RETRIEVER_VERSION,
+use lineage_retrieval::{
+    CacheKey, ContextQuery, Evidence, LocalRetriever, Retrieval, RetrievalCache, Retriever,
+    Strength, LOCAL_RETRIEVER_VERSION,
 };
 use lineage_search::LineageIndex;
 use sha2::{Digest, Sha256};
@@ -114,7 +114,7 @@ fn run_claude_hook(repo_path: &Path, input: &str, now_unix: i64) -> Result<Optio
 
     let git_dir = repo.git_dir();
     let index = LineageIndex::open(git_dir.join("lineage").join("index.db"))?;
-    let cache = OracleCache::open(git_dir.join("lineage").join("oracle.db"))?;
+    let cache = RetrievalCache::open(git_dir.join("lineage").join("oracle.db"))?;
 
     let key = CacheKey {
         file_path: &relative_path,
