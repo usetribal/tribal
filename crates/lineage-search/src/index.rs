@@ -222,6 +222,10 @@ impl LineageIndex {
     }
 
     pub fn index_conversation(&self, conversation: &Conversation) -> Result<()> {
+        // One transaction per conversation: a session is hundreds of turn-row
+        // inserts, and autocommit would fsync each one — measured at ~50s wall
+        // for a 67-session corpus vs ~1s batched.
+        let tx = self.conn.unchecked_transaction()?;
         // The explicit empty body keeps this insert valid on indexes created
         // before the turn pivot, whose sessions.body is NOT NULL without a
         // default; the corpus text lives in `turns` now.
@@ -298,6 +302,7 @@ impl LineageIndex {
             [],
         )?;
 
+        tx.commit()?;
         Ok(())
     }
 
@@ -429,6 +434,11 @@ impl LineageIndex {
         chunks: &[(String, Vec<f32>)],
         model_version: &str,
     ) -> Result<()> {
+        // One transaction per session: besides batching fsyncs, it makes an
+        // interrupted backfill safe — a session either has all its vectors at
+        // the new version or none, never a partial set that would be skipped
+        // as already-current.
+        let tx = self.conn.unchecked_transaction()?;
         self.conn.execute(
             "DELETE FROM session_vectors WHERE session_id = ?1",
             params![session_id],
@@ -447,6 +457,7 @@ impl LineageIndex {
                 ],
             )?;
         }
+        tx.commit()?;
         Ok(())
     }
 
@@ -515,12 +526,26 @@ impl LineageIndex {
     /// Returns the number of sessions indexed so callers can report it
     /// (diagnostics-v0 `rebuild_index` event) without re-listing refs.
     pub fn rebuild(&self, repo: &Repository) -> Result<usize> {
+        self.rebuild_with_progress(repo, &mut |_, _| {})
+    }
+
+    /// Like [`rebuild`](Self::rebuild) but calls `progress(done, total)` after
+    /// each session is indexed, so the CLI can drive a progress bar without this
+    /// crate depending on a rendering library. `total` is the session count
+    /// reported once before the loop (as `(0, total)`).
+    pub fn rebuild_with_progress(
+        &self,
+        repo: &Repository,
+        progress: &mut dyn FnMut(usize, usize),
+    ) -> Result<usize> {
         self.conn.execute("DELETE FROM sessions", [])?;
         // The delete trigger clears turns_fts alongside.
         self.conn.execute("DELETE FROM turns", [])?;
         self.conn.execute("DELETE FROM session_files", [])?;
 
         let ids = list_session_ids(repo).map_err(SearchError::Lineage)?;
+        let total = ids.len();
+        progress(0, total);
         let mut indexed = 0usize;
         for id in ids {
             if let Some(mut conv) =
@@ -530,6 +555,7 @@ impl LineageIndex {
                 self.index_conversation(&conv)?;
                 indexed += 1;
             }
+            progress(indexed, total);
         }
         Ok(indexed)
     }

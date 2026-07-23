@@ -81,8 +81,9 @@ See [Import](../import.md).
 | `git lineage show <id> [--json] [--hydrate-images]` | Show conversation |
 | `git lineage blame <path>[:line] [--json]` | Lineage for a file line |
 | `git lineage search <query>` | Full-text search (auto-rebuilds stale index) |
-| `git lineage rebuild` | Rebuild all derived state (links, line objects, index) from stored sessions |
+| `git lineage rebuild [--embed]` | Rebuild all derived state (links, line objects, index) from stored sessions; `--embed` also runs the dense-embedding backfill (needs the `dense` build) |
 | `git lineage rebuild index` | Rebuild only the search index (`rebuild-index` is a deprecated alias) |
+| `git lineage rebuild embeddings` | Rebuild only the dense embeddings — the semantic backfill (needs the `dense` build; shows a per-session progress bar) |
 | `git lineage export [--redact] [--format json\|jsonl]` | Export sessions |
 
 See [Explore](../explore.md).

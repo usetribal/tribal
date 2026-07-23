@@ -97,7 +97,7 @@ fn every_instrumented_operation_appends_a_schema_valid_entry() {
     commands::import(dir.path(), &["cursor".into()], None, true, false).unwrap();
     hooks_cmd::install_hook(dir.path(), true).unwrap();
     hooks_cmd::post_commit(dir.path()).unwrap();
-    commands::rebuild_index(dir.path()).unwrap();
+    commands::rebuild_index(dir.path(), false).unwrap();
     skill_cmd::init_skill(dir.path(), &["claude".into()], false).unwrap();
 
     let repo = open_repo(dir.path()).unwrap();
@@ -212,7 +212,7 @@ fn a_failed_log_write_never_fails_the_operation() {
     // A directory where the log file should be makes every append fail.
     fs::create_dir_all(dir.path().join(".git/lineage/events.jsonl")).unwrap();
 
-    commands::rebuild_index(dir.path()).unwrap();
+    commands::rebuild_index(dir.path(), false).unwrap();
     hooks_cmd::install_hook(dir.path(), true).unwrap();
     hooks_cmd::post_commit(dir.path()).unwrap();
 }

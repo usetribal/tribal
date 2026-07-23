@@ -174,7 +174,7 @@ fn cli_workflow_covers_commands() {
     commands::blame(dir.path(), "src.txt:1", false).unwrap();
     commands::blame(dir.path(), "src.txt:1", true).unwrap();
     commands::search(dir.path(), "authentication").unwrap();
-    commands::rebuild_index(dir.path()).unwrap();
+    commands::rebuild_index(dir.path(), false).unwrap();
     commands::export(dir.path(), true, "json").unwrap();
     commands::export(dir.path(), false, "jsonl").unwrap();
     commands::materialize(dir.path(), None, Some(&session_id)).unwrap();

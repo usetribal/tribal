@@ -50,7 +50,7 @@ pub use lfs_refs::{
 pub use lfs_worktree::{ensure_gitattributes, LINEAGE_MEDIA_DIR};
 pub use line_resolve::{materialize_line_objects, resolve_old_string};
 pub use notes::{list_notes, map_commit_to_sessions, read_note_for_commit, write_note_for_commit};
-pub use rebuild::{rebuild_links, RebuildReport};
+pub use rebuild::{rebuild_links, rebuild_links_with_progress, RebuildReport};
 pub use refs::{
     list_line_objects, list_session_ids, read_conversation, read_conversation_stored,
     read_line_object, read_manifest, session_ref, write_conversation, write_line_object,
