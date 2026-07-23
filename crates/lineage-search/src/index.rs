@@ -2,8 +2,8 @@ use std::path::Path;
 
 use git2::Repository;
 use lineage_core::{
-    files_touched, files_written, normalize_repo_path, turn_indexable_text, turn_salience,
-    Conversation, LineageError,
+    files_touched, files_written, normalize_repo_path, turn_indexable_text, turn_is_salient,
+    turn_salience, Conversation, LineageError,
 };
 use lineage_git::{hydrate_conversation, list_session_ids, read_conversation_stored};
 use rusqlite::{params, Connection};
@@ -37,19 +37,20 @@ pub struct SearchHit {
 pub struct TurnHit {
     pub turn_id: String,
     pub session_id: String,
-    pub salience: f64,
+    pub salience_class: String,
     pub body: String,
     pub snippet: String,
     pub score: f64,
 }
 
 /// One indexed turn, as stored: the salience-admitted enriched text and its
-/// session. What `get_turn` returns.
+/// session. What `get_turn` returns. `salience_class` is kept for reporting;
+/// admission is binary now, so it no longer weights ranking.
 #[derive(Debug, Clone)]
 pub struct TurnRow {
     pub turn_id: String,
     pub session_id: String,
-    pub salience: f64,
+    pub salience_class: String,
     pub body: String,
 }
 
@@ -131,7 +132,39 @@ impl LineageIndex {
         Ok(index)
     }
 
+    /// Whether `table` currently has a column named `column`. Used to detect an
+    /// older-shaped index on open so it can be dropped and rebuilt.
+    fn column_exists(&self, table: &str, column: &str) -> Result<bool> {
+        let mut stmt = self.conn.prepare(&format!("PRAGMA table_info({table})"))?;
+        let mut rows = stmt.query([])?;
+        while let Some(row) = rows.next()? {
+            let name: String = row.get(1)?;
+            if name == column {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
     fn init_schema(&self) -> Result<()> {
+        // The turn table lost its `salience REAL` column when salience went
+        // binary. `CREATE TABLE IF NOT EXISTS` can't alter an existing table, so
+        // an index written by an older binary would still have the NOT NULL
+        // column and reject the new insert. Drop the old-shaped table (and its
+        // FTS mirror) so it is recreated below; the next rebuild repopulates it
+        // — the established pre-release upgrade path (rebuild, not migrate).
+        let turns_has_salience = self.column_exists("turns", "salience")?;
+        if turns_has_salience {
+            self.conn.execute_batch(
+                r#"
+                DROP TRIGGER IF EXISTS turns_ai;
+                DROP TRIGGER IF EXISTS turns_ad;
+                DROP TRIGGER IF EXISTS turns_au;
+                DROP TABLE IF EXISTS turns_fts;
+                DROP TABLE IF EXISTS turns;
+                "#,
+            )?;
+        }
         self.conn.execute_batch(
             r#"
             CREATE TABLE IF NOT EXISTS sessions (
@@ -145,7 +178,6 @@ impl LineageIndex {
                 session_id TEXT NOT NULL,
                 turn_index INTEGER NOT NULL,
                 salience_class TEXT NOT NULL,
-                salience REAL NOT NULL,
                 body TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_turns_session ON turns(session_id);
@@ -238,18 +270,18 @@ impl LineageIndex {
             ],
         )?;
 
-        // The FTS document is the turn, weighted by the v0 salience rules.
-        // Zero-weight turns (tool results, pure exploration) are excluded
-        // entirely — this is what stops a session's exploratory open from
-        // ranking it on incidental matches. Delete-then-insert keeps
-        // re-imports idempotent, same as session_files below.
+        // The FTS document is the turn. Salience admission is binary: tool
+        // results and pure exploration are excluded entirely (this is what
+        // stops a session's exploratory open from ranking it on incidental
+        // matches), while everything else — including narration — is indexed at
+        // parity and ranked by plain bm25. The class is stored for reporting.
+        // Delete-then-insert keeps re-imports idempotent, same as session_files.
         self.conn.execute(
             "DELETE FROM turns WHERE session_id = ?1",
             params![conversation.id.as_str()],
         )?;
         for (turn_index, turn) in conversation.turns.iter().enumerate() {
-            let class = turn_salience(turn);
-            if class.weight() == 0.0 {
+            if !turn_is_salient(turn) {
                 continue;
             }
             let body = turn_indexable_text(turn);
@@ -257,14 +289,13 @@ impl LineageIndex {
                 continue;
             }
             self.conn.execute(
-                "INSERT OR REPLACE INTO turns (turn_id, session_id, turn_index, salience_class, salience, body)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT OR REPLACE INTO turns (turn_id, session_id, turn_index, salience_class, body)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
                 params![
                     turn.id.as_str(),
                     conversation.id.as_str(),
                     turn_index as i64,
-                    class.as_str(),
-                    f64::from(class.weight()),
+                    turn_salience(turn).as_str(),
                     body,
                 ],
             )?;
@@ -312,7 +343,7 @@ impl LineageIndex {
     const TURNS_PER_SESSION_HIT: usize = 8;
 
     /// Session-level search, aggregated from turn matches: a session ranks by
-    /// its best salience-weighted turn, shown with that turn's snippet. One
+    /// its best (plain-bm25) turn, shown with that turn's snippet. One
     /// code path with `search_turns` — SQLite's FTS auxiliary functions do not
     /// survive subquery aggregation, so the fold happens here.
     pub fn search(&self, query: &str, limit: usize) -> Result<Vec<SearchHit>> {
@@ -337,17 +368,18 @@ impl LineageIndex {
         Ok(hits)
     }
 
-    /// Turn-level search: the intent-retrieval unit. Ranked by
-    /// salience-weighted bm25 (negative, lower = better, so multiplying by
-    /// salience ∈ (0,1] penalizes narration); the stored enriched body rides
+    /// Turn-level search: the intent-retrieval unit. Ranked by plain bm25
+    /// (negative, lower = better) over the binary-salient corpus — narration is
+    /// indexed at parity, so ranking is relevance alone and the FTS leg agrees
+    /// with the dense leg on which turns matter. The stored enriched body rides
     /// along so a retriever can emit verbatim turn text without re-reading the
     /// conversation blob.
     pub fn search_turns(&self, query: &str, limit: usize) -> Result<Vec<TurnHit>> {
         let mut stmt = self.conn.prepare(
             r#"
-            SELECT t.turn_id, t.session_id, t.salience, t.body,
+            SELECT t.turn_id, t.session_id, t.salience_class, t.body,
                    snippet(turns_fts, 1, '>>>', '<<<', '...', 32) as snippet,
-                   bm25(turns_fts) * t.salience as score
+                   bm25(turns_fts) as score
             FROM turns_fts
             JOIN turns t ON turns_fts.rowid = t.rowid
             WHERE turns_fts MATCH ?1
@@ -360,7 +392,7 @@ impl LineageIndex {
             Ok(TurnHit {
                 turn_id: row.get(0)?,
                 session_id: row.get(1)?,
-                salience: row.get(2)?,
+                salience_class: row.get(2)?,
                 body: row.get(3)?,
                 snippet: row.get(4)?,
                 score: row.get::<_, f64>(5)?.abs(),
@@ -378,14 +410,14 @@ impl LineageIndex {
     /// stored text through this instead of re-reading conversation blobs.
     /// `None` for unknown ids and for turns excluded by salience.
     pub fn get_turn(&self, turn_id: &str) -> Result<Option<TurnRow>> {
-        let mut stmt = self
-            .conn
-            .prepare("SELECT turn_id, session_id, salience, body FROM turns WHERE turn_id = ?1")?;
+        let mut stmt = self.conn.prepare(
+            "SELECT turn_id, session_id, salience_class, body FROM turns WHERE turn_id = ?1",
+        )?;
         let mut rows = stmt.query_map(params![turn_id], |row| {
             Ok(TurnRow {
                 turn_id: row.get(0)?,
                 session_id: row.get(1)?,
-                salience: row.get(2)?,
+                salience_class: row.get(2)?,
                 body: row.get(3)?,
             })
         })?;

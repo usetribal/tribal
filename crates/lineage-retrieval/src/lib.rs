@@ -8,7 +8,6 @@
 //! live here so no consumer redeclares them.
 
 mod cache;
-#[cfg(feature = "dense")]
 mod dense;
 mod fts;
 mod fusion;
@@ -18,7 +17,6 @@ mod session;
 mod types;
 
 pub use cache::{CacheKey, RetrievalCache};
-#[cfg(feature = "dense")]
 pub use dense::{embed_and_store_session, DenseRetriever, DENSE_RETRIEVER_VERSION};
 pub use fts::{FtsRetriever, FTS_RETRIEVER_VERSION};
 pub use fusion::{FusedRetriever, DEFAULT_RRF_K};

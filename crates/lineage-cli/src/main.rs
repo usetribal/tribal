@@ -146,8 +146,8 @@ enum Commands {
     Rebuild {
         #[command(subcommand)]
         target: Option<RebuildTarget>,
-        /// Also run the dense-embedding backfill after the rebuild (needs the
-        /// `dense` build feature). Off by default — a full re-embed is slow.
+        /// Also run the dense-embedding backfill after the rebuild. Off by
+        /// default — a full re-embed touches every session.
         #[arg(long)]
         embed: bool,
     },
@@ -209,12 +209,12 @@ enum HookAction {
 enum RebuildTarget {
     /// Rebuild only the search index
     Index {
-        /// Also run the dense-embedding backfill afterward (needs the `dense`
-        /// build feature). Off by default — a full re-embed is slow.
+        /// Also run the dense-embedding backfill afterward. Off by default — a
+        /// full re-embed touches every session.
         #[arg(long)]
         embed: bool,
     },
-    /// Rebuild only the dense embeddings (needs the `dense` build feature)
+    /// Rebuild only the dense embeddings
     Embeddings,
 }
 
@@ -250,11 +250,10 @@ enum ContextAction {
         /// Lexical (FTS) leg only
         #[arg(long)]
         lexical: bool,
-        /// Dense (semantic) leg only — needs the `dense` build feature
+        /// Dense (semantic) leg only
         #[arg(long)]
         dense: bool,
-        /// Fused lexical + dense (RRF) — needs the `dense` build feature; the
-        /// default when the feature is built in
+        /// Fused lexical + dense (RRF) — the default
         #[arg(long)]
         fused: bool,
     },
@@ -267,11 +266,9 @@ fn parse_agent(s: &str) -> Result<String, String> {
     }
 }
 
-/// Map the query leg flags to a `Leg`, defaulting to fused (best quality) when
-/// dense is built, lexical otherwise. Dense/fused are rejected with a clear
-/// message on a build without the `dense` feature rather than silently falling
-/// back — the difference is the whole point of choosing a leg.
-#[cfg(feature = "dense")]
+/// Map the query leg flags to a `Leg`, defaulting to fused (best quality).
+/// All three legs are always available — the static embedder needs no build
+/// opt-in — so this only validates that at most one flag is set.
 fn select_leg(lexical: bool, dense: bool, fused: bool) -> Result<retrieval_cmd::Leg, String> {
     match (lexical, dense, fused) {
         (true, false, false) => Ok(retrieval_cmd::Leg::Lexical),
@@ -280,18 +277,6 @@ fn select_leg(lexical: bool, dense: bool, fused: bool) -> Result<retrieval_cmd::
         (false, false, false) => Ok(retrieval_cmd::Leg::Fused),
         _ => Err("choose at most one of --lexical / --dense / --fused".into()),
     }
-}
-
-#[cfg(not(feature = "dense"))]
-fn select_leg(lexical: bool, dense: bool, fused: bool) -> Result<retrieval_cmd::Leg, String> {
-    if dense || fused {
-        return Err(
-            "dense/fused retrieval needs a build with `--features dense`; only --lexical is available"
-                .into(),
-        );
-    }
-    let _ = lexical;
-    Ok(retrieval_cmd::Leg::Lexical)
 }
 
 fn main() -> ExitCode {

@@ -11,7 +11,7 @@ use crate::types::{strength_for, Evidence, EvidenceTier, IntentQuery, Retrieval}
 /// Cache-key component for the intent path: bump on any change to what the FTS
 /// retriever would answer for an unchanged corpus (tokenization, candidate
 /// depth, evidence shape).
-pub const FTS_RETRIEVER_VERSION: &str = "2";
+pub const FTS_RETRIEVER_VERSION: &str = "3";
 
 /// How many FTS candidates to pull before building evidence. Over-retrieve
 /// relative to what selection injects: fusion (later) needs depth so a strong
@@ -20,11 +20,10 @@ pub const FTS_RETRIEVER_VERSION: &str = "2";
 /// tunable with an SE-domain default, not a hard limit on what selection shows.
 const DEFAULT_CANDIDATE_DEPTH: usize = 50;
 
-/// Rung 1 — lexical intent retrieval over the turn FTS index (BM25, weighted
-/// by import-time salience). The FTS document is a single salient turn, so a
+/// Rung 1 — lexical intent retrieval over the turn FTS index (plain BM25 over
+/// the binary-salient corpus). The FTS document is a single salient turn, so a
 /// match means "this turn's own words are about the query", and the evidence
-/// carries that verbatim text. Ordered by the index's weighted relevance
-/// ranking.
+/// carries that verbatim text. Ordered by the index's relevance ranking.
 pub struct FtsRetriever<'a> {
     repo: &'a Repository,
     index: &'a LineageIndex,
@@ -56,7 +55,7 @@ impl IntentRetriever for FtsRetriever<'_> {
             .search_turns(&query.text, self.candidate_depth)
             .map_err(|e| RetrievalError::Retrieval(e.to_string()))?;
 
-        // The index returns turn hits already ordered by weighted relevance.
+        // The index returns turn hits already ordered by bm25 relevance.
         // Preserve that order in the evidence so a later fusion step sees a
         // clean turn ranking (fusion is rank-based).
         let mut gate = SessionGate::new(self.repo);
@@ -87,7 +86,7 @@ impl IntentRetriever for FtsRetriever<'_> {
         }
 
         // Every entry is the same tier/strength, so `from_evidence`'s
-        // strength-sort is order-preserving and the weighted relevance ranking
+        // strength-sort is order-preserving and the bm25 relevance ranking
         // survives — the strongest lexical match stays first.
         let mut retrieval = Retrieval::from_evidence(evidence);
         retrieval.truncated = truncated;

@@ -11,12 +11,8 @@ const READ_TOOL_MARKERS: &[&str] = &[
 
 /// An assistant turn whose tool calls are all reads is exploration only when
 /// its prose is also thin; a long explanation alongside reads may carry real
-/// reasoning, so it stays at narration weight instead.
+/// reasoning, so it stays narration (indexed) instead.
 const EXPLORE_MAX_CONTENT_CHARS: usize = 200;
-
-/// Weight applied to assistant narration: kept in the corpus (real decisions
-/// hide in prose), but never allowed to outrank full-weight evidence.
-const NARRATION_WEIGHT: f32 = 0.3;
 
 /// The v0 salience rule set's verdict for one turn. Classes mirror the
 /// categories the rules were measured with (docs/plans/xifong/
@@ -39,14 +35,18 @@ pub enum SalienceClass {
 }
 
 impl SalienceClass {
-    /// Index/retrieval weight. Zero-weight turns leave the corpus entirely;
-    /// narration stays but is down-weighted (the "never surface noise" rule
-    /// acts through selection floors, not deletion).
-    pub fn weight(self) -> f32 {
+    /// Whether a turn of this class enters the retrieval corpus at all.
+    /// Salience is a binary corpus decision, not a ranking weight: narration is
+    /// indexed at parity with edits and user turns (real decisions hide in
+    /// prose), while pure exploration and tool results stay out. A fractional
+    /// narration weight used to multiply into the FTS leg's bm25 but was
+    /// invisible to the dense leg's cosine, so the two legs ranked over
+    /// divergent orders — keeping the decision binary leaves ranking to
+    /// relevance alone.
+    pub fn is_salient(self) -> bool {
         match self {
-            Self::User | Self::Edit | Self::Decision => 1.0,
-            Self::Narration => NARRATION_WEIGHT,
-            Self::Explore | Self::ToolResult => 0.0,
+            Self::User | Self::Edit | Self::Decision | Self::Narration => true,
+            Self::Explore | Self::ToolResult => false,
         }
     }
 
@@ -101,9 +101,9 @@ pub fn turn_salience(turn: &Turn) -> SalienceClass {
     SalienceClass::Narration
 }
 
-/// Convenience for callers that only need the weight.
-pub fn turn_salience_weight(turn: &Turn) -> f32 {
-    turn_salience(turn).weight()
+/// Convenience for callers that only need the indexed-or-not decision.
+pub fn turn_is_salient(turn: &Turn) -> bool {
+    turn_salience(turn).is_salient()
 }
 
 #[cfg(test)]
@@ -134,17 +134,17 @@ mod tests {
     }
 
     #[test]
-    fn user_turns_are_full_weight() {
+    fn user_turns_are_indexed() {
         let t = turn(Role::User, "make the import idempotent");
         assert_eq!(turn_salience(&t), SalienceClass::User);
-        assert_eq!(turn_salience_weight(&t), 1.0);
+        assert!(turn_is_salient(&t));
     }
 
     #[test]
     fn tool_result_turns_are_dropped() {
         let t = turn(Role::Tool, "1234 lines of build output");
         assert_eq!(turn_salience(&t), SalienceClass::ToolResult);
-        assert_eq!(turn_salience_weight(&t), 0.0);
+        assert!(!turn_is_salient(&t));
     }
 
     #[test]
@@ -169,7 +169,7 @@ mod tests {
         let mut t = turn(Role::Assistant, "");
         t.tool_calls = vec![tool_call("AskUserQuestion")];
         assert_eq!(turn_salience(&t), SalienceClass::Decision);
-        assert_eq!(turn_salience_weight(&t), 1.0);
+        assert!(turn_is_salient(&t));
     }
 
     #[test]
@@ -177,7 +177,7 @@ mod tests {
         let mut t = turn(Role::Assistant, "Let me look at the config.");
         t.tool_calls = vec![tool_call("Read"), tool_call("Glob")];
         assert_eq!(turn_salience(&t), SalienceClass::Explore);
-        assert_eq!(turn_salience_weight(&t), 0.0);
+        assert!(!turn_is_salient(&t));
     }
 
     #[test]
@@ -200,7 +200,8 @@ mod tests {
     fn plain_prose_assistant_turns_are_narration() {
         let t = turn(Role::Assistant, "The tradeoff is X because Y.");
         assert_eq!(turn_salience(&t), SalienceClass::Narration);
-        assert_eq!(turn_salience_weight(&t), NARRATION_WEIGHT);
+        // Narration is indexed at parity with edits/user turns (binary salience).
+        assert!(turn_is_salient(&t));
     }
 
     #[test]

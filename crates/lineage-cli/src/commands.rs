@@ -675,9 +675,7 @@ pub fn rebuild_index(repo_path: &Path, embed: bool) -> Result<()> {
 }
 
 /// Run the dense-embedding backfill with a per-session progress bar, returning
-/// the number of sessions embedded. Only compiled into `--features dense`
-/// builds; lexical-only builds reject the request before reaching here.
-#[cfg(feature = "dense")]
+/// the number of sessions embedded.
 fn run_embed_pass(repo_path: &Path) -> Result<usize> {
     let mut bar = crate::progress::SessionProgress::new("embedding");
     let embedded = crate::retrieval_cmd::embed_all_sessions(repo_path, &mut |done, remaining| {
@@ -687,16 +685,8 @@ fn run_embed_pass(repo_path: &Path) -> Result<usize> {
     Ok(embedded)
 }
 
-#[cfg(not(feature = "dense"))]
-fn run_embed_pass(_repo_path: &Path) -> Result<usize> {
-    Err(
-        "embedding backfill needs a build with `--features dense`; this is a lexical-only build"
-            .into(),
-    )
-}
-
 /// `git lineage rebuild embeddings`: the dense-embedding backfill on its own,
-/// symmetric with `rebuild index`. Rejects clearly on a lexical-only build.
+/// symmetric with `rebuild index`.
 pub fn rebuild_embeddings(repo_path: &Path) -> Result<()> {
     let embedded = run_embed_pass(repo_path)?;
     if embedded > 0 {

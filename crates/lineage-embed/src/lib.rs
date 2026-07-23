@@ -1,10 +1,10 @@
 //! Local, keyless text embedding for lineage retrieval.
 //!
 //! The [`TextEmbedder`] trait is the seam: the dense retriever depends on it,
-//! not on any particular model runtime. The fastembed/ONNX implementation lives
-//! behind the `dense` feature so a lexical-only build carries none of its weight
-//! (the ONNX runtime + tokenizers + hf-hub are a large transitive tree). A
-//! future static-embedding or server-side embedder implements the same trait.
+//! not on any particular model runtime. The shipped implementation is a
+//! [`Model2VecEmbedder`] — a static token->vector lookup, no ONNX and no
+//! transformer, so a query embeds in microseconds and construction is a plain
+//! matrix load. A future server-side embedder implements the same trait.
 
 use thiserror::Error;
 
@@ -39,8 +39,6 @@ pub trait TextEmbedder {
     fn embed_query(&self, text: &str) -> Result<Vec<f32>>;
 }
 
-#[cfg(feature = "dense")]
-mod fastembed_impl;
+mod model2vec;
 
-#[cfg(feature = "dense")]
-pub use fastembed_impl::FastEmbedder;
+pub use model2vec::Model2VecEmbedder;
