@@ -1,3 +1,5 @@
 mod index;
 
-pub use index::{inspect_schema, IndexSchemaInfo, LineageIndex, SearchHit};
+pub use index::{
+    inspect_schema, ChunkVector, IndexSchemaInfo, LineageIndex, SearchHit, TurnHit, TurnRow,
+};

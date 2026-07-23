@@ -14,7 +14,7 @@ const LINE_OBJECT_REF_GLOB: &str = "refs/lineage/lines/*";
 
 /// Cache-key component: bump on any change to what this retriever would
 /// answer for an unchanged repo (tiers, grouping, summary source).
-pub const LOCAL_RETRIEVER_VERSION: &str = "2";
+pub const LOCAL_RETRIEVER_VERSION: &str = "3";
 
 /// Solo-mode retriever: answers from the repo's own lineage refs and search
 /// index, in-process. Team mode swaps in a server-backed implementation
@@ -110,6 +110,7 @@ impl<'a> LocalRetriever<'a> {
 
         Ok(Some(Evidence {
             session_id: conversation.id,
+            turn_id: None,
             tier,
             strength: strength_for(tier, match_confidence),
             match_confidence,

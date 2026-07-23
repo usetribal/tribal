@@ -89,6 +89,70 @@ fn print_retrieval(text: &str, leg: Leg, retrieval: &Retrieval) {
     }
 }
 
+/// Per-corpus breakdown of the v0 salience rules: how many turns land in each
+/// class and what fraction of the corpus indexing keeps. This is the
+/// reproducibility surface for the measured baseline the rules were designed
+/// against (docs/plans/xifong/enhanced-semantic-retrieval) — run it on any
+/// repo to compare its distribution.
+pub fn salience_report(repo_path: &Path) -> Result<()> {
+    use std::collections::BTreeMap;
+
+    use lineage_core::turn_salience;
+    use lineage_git::{hydrate_conversation, list_session_ids, read_conversation_stored};
+
+    let repo = open_repo(repo_path)?;
+
+    let mut counts: BTreeMap<&'static str, (usize, f32)> = BTreeMap::new();
+    let mut total_turns = 0usize;
+    let mut kept_fractions: Vec<f64> = Vec::new();
+    for id in list_session_ids(repo.inner())? {
+        let Some(mut conv) = read_conversation_stored(repo.inner(), &id)? else {
+            continue;
+        };
+        // Hydrated content: the explore rule reads prose length, and large
+        // turn bodies may be compacted out of the stored blob.
+        hydrate_conversation(repo.inner(), &mut conv)?;
+        if conv.turns.is_empty() {
+            continue;
+        }
+        let mut kept = 0usize;
+        for turn in &conv.turns {
+            let class = turn_salience(turn);
+            let entry = counts.entry(class.as_str()).or_insert((0, class.weight()));
+            entry.0 += 1;
+            total_turns += 1;
+            if class.weight() >= 1.0 {
+                kept += 1;
+            }
+        }
+        kept_fractions.push(kept as f64 / conv.turns.len() as f64);
+    }
+
+    if total_turns == 0 {
+        println!("no indexed sessions — run `git lineage import` first");
+        return Ok(());
+    }
+
+    println!(
+        "salience breakdown: {} session(s), {} turn(s)",
+        kept_fractions.len(),
+        total_turns
+    );
+    for (class, (count, weight)) in &counts {
+        println!(
+            "  {class:<12} {count:>7}  ({:>5.1}%)  weight {weight}",
+            *count as f64 * 100.0 / total_turns as f64,
+        );
+    }
+    kept_fractions.sort_by(f64::total_cmp);
+    let median = kept_fractions[kept_fractions.len() / 2];
+    println!(
+        "  median session keeps {:.0}% of turns at full weight",
+        median * 100.0
+    );
+    Ok(())
+}
+
 /// Embed sessions that are not already embedded at the current model version,
 /// storing their chunk vectors — the dense index pass. Run from import and
 /// `rebuild-index` so `context query --dense` has vectors to search.

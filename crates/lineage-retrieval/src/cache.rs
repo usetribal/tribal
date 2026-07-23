@@ -175,6 +175,7 @@ mod tests {
     fn retrieval_with_one_hit() -> Retrieval {
         Retrieval::from_evidence(vec![Evidence {
             session_id: LineageId::new(),
+            turn_id: None,
             tier: EvidenceTier::FilesTouched,
             strength: Strength::Low,
             match_confidence: None,

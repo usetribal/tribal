@@ -230,6 +230,8 @@ enum ContextAction {
         #[arg(long)]
         user: bool,
     },
+    /// Report the corpus's turn-salience breakdown (what indexing keeps/drops)
+    Salience,
     /// Retrieve past sessions matching a free-text intent (prompt-keyed)
     Query {
         /// The intent / question to match against the session corpus
@@ -402,6 +404,7 @@ fn main() -> ExitCode {
                     );
                 })
             }
+            ContextAction::Salience => retrieval_cmd::salience_report(&repo_path),
             ContextAction::Query {
                 text,
                 lexical,

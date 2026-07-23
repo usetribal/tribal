@@ -1,3 +1,5 @@
+use crate::ids::LineageId;
+use crate::salience::turn_salience_weight;
 use crate::{ArtifactKind, Conversation, Role, Turn};
 
 const CODE_EDIT_TOOLS: &[&str] = &[
@@ -173,51 +175,83 @@ pub fn enriched_indexable_body(conv: &Conversation) -> String {
 /// not a fixed law — the eval stage calibrates it (gotcha R2.3).
 pub const DEFAULT_CHUNK_MAX_CHARS: usize = 2000;
 
+/// One dense-retrieval chunk: enriched text plus the turn dense evidence
+/// should point at when this chunk matches. The anchor is the most salient
+/// turn that contributed text — the turn whose words carried the intent, not
+/// merely the first turn in the group.
+#[derive(Debug, Clone)]
+pub struct SessionChunk {
+    pub anchor_turn_id: LineageId,
+    pub text: String,
+}
+
 /// Dense-retrieval chunks: the session split into intent-bearing turn-groups,
 /// each a user turn plus the assistant turns that answer it, as enriched text.
 /// Chunking (not whole-session embedding) keeps a short query from being
 /// averaged against a whole session's vector (gotcha R2.3). Groups prefer turn
 /// boundaries, but **no chunk ever exceeds `max_chars`**: a single turn whose
 /// text is larger than the budget is split into sub-chunks, so a giant edit
-/// cannot produce a multi-megabyte chunk that starves the embedder. Empty groups
-/// are dropped.
-pub fn session_chunks(conv: &Conversation, max_chars: usize) -> Vec<String> {
+/// cannot produce a multi-megabyte chunk that starves the embedder. Zero-weight
+/// turns (tool results, pure exploration) contribute no text, so a group of
+/// only noise produces no chunk at all.
+pub fn session_chunks(conv: &Conversation, max_chars: usize) -> Vec<SessionChunk> {
     let max_chars = max_chars.max(1);
     let mut chunks = Vec::new();
     let mut current: Vec<String> = Vec::new();
     let mut current_len = 0usize;
+    // (weight, turn id) of the best contributor so far; ties keep the earlier
+    // turn so a group anchored by its user turn stays anchored there.
+    let mut anchor: Option<(f32, LineageId)> = None;
 
-    let flush = |current: &mut Vec<String>, current_len: &mut usize, chunks: &mut Vec<String>| {
-        if !current.is_empty() {
-            chunks.push(current.join("\n"));
-            current.clear();
-            *current_len = 0;
+    let flush = |current: &mut Vec<String>,
+                 current_len: &mut usize,
+                 anchor: &mut Option<(f32, LineageId)>,
+                 chunks: &mut Vec<SessionChunk>| {
+        if let Some((_, anchor_turn_id)) = anchor.take() {
+            if !current.is_empty() {
+                chunks.push(SessionChunk {
+                    anchor_turn_id,
+                    text: current.join("\n"),
+                });
+            }
         }
+        current.clear();
+        *current_len = 0;
     };
 
     for turn in &conv.turns {
         // A user turn starts a new intent group — it is the question the
         // following assistant turns answer, and the unit a query should match.
         if turn.role == Role::User {
-            flush(&mut current, &mut current_len, &mut chunks);
+            flush(&mut current, &mut current_len, &mut anchor, &mut chunks);
         }
 
+        let weight = turn_salience_weight(turn);
+        if weight == 0.0 {
+            continue;
+        }
         let text = turn_indexable_text(turn);
         if text.is_empty() {
             continue;
         }
+        if anchor.as_ref().is_none_or(|(w, _)| weight > *w) {
+            anchor = Some((weight, turn.id.clone()));
+        }
 
         for piece in split_to_max(&text, max_chars) {
             // Close the current group before a piece that would overflow it, so
-            // no emitted chunk exceeds the budget.
+            // no emitted chunk exceeds the budget. The overflow chunk keeps the
+            // group's anchor: it is still the same intent, just more of it.
             if current_len + piece.len() > max_chars {
-                flush(&mut current, &mut current_len, &mut chunks);
+                let carried = anchor.clone();
+                flush(&mut current, &mut current_len, &mut anchor, &mut chunks);
+                anchor = carried;
             }
             current_len += piece.len();
             current.push(piece);
         }
     }
-    flush(&mut current, &mut current_len, &mut chunks);
+    flush(&mut current, &mut current_len, &mut anchor, &mut chunks);
     chunks
 }
 
@@ -438,10 +472,10 @@ mod tests {
 
         let chunks = session_chunks(&c, DEFAULT_CHUNK_MAX_CHARS);
         assert_eq!(chunks.len(), 2);
-        assert!(chunks[0].contains("add caching"));
-        assert!(chunks[0].contains("cache.rs"));
-        assert!(chunks[1].contains("add metrics"));
-        assert!(chunks[1].contains("metrics.rs"));
+        assert!(chunks[0].text.contains("add caching"));
+        assert!(chunks[0].text.contains("cache.rs"));
+        assert!(chunks[1].text.contains("add metrics"));
+        assert!(chunks[1].text.contains("metrics.rs"));
     }
 
     #[test]
@@ -456,14 +490,44 @@ mod tests {
         let chunks = session_chunks(&c, 40);
         assert!(chunks.len() >= 2);
         // No chunk mixes the two large turns' distinct content past the budget.
-        assert!(chunks.iter().any(|c| c.contains(&"a".repeat(30))));
-        assert!(chunks.iter().any(|c| c.contains(&"b".repeat(30))));
+        assert!(chunks.iter().any(|c| c.text.contains(&"a".repeat(30))));
+        assert!(chunks.iter().any(|c| c.text.contains(&"b".repeat(30))));
     }
 
     #[test]
     fn empty_session_has_no_chunks() {
         let c = Conversation::new(AgentKind::Claude, "/repo");
         assert!(session_chunks(&c, DEFAULT_CHUNK_MAX_CHARS).is_empty());
+    }
+
+    #[test]
+    fn zero_weight_turns_contribute_no_chunk_text() {
+        let mut c = Conversation::new(AgentKind::Claude, "/repo");
+        c.turns.push(user_turn("add caching"));
+        let mut tool_result = assistant_turn("");
+        tool_result.role = Role::Tool;
+        tool_result.content = "500 lines of build output about caching".into();
+        c.turns.push(tool_result);
+
+        let chunks = session_chunks(&c, DEFAULT_CHUNK_MAX_CHARS);
+        assert_eq!(chunks.len(), 1);
+        assert!(!chunks[0].text.contains("build output"));
+    }
+
+    #[test]
+    fn chunk_anchor_is_the_most_salient_contributing_turn() {
+        let mut c = Conversation::new(AgentKind::Claude, "/repo");
+        // Narration first, then the user turn: the user turn (weight 1.0)
+        // must out-anchor the earlier narration (0.3) in its own group, and
+        // the pre-user narration forms its own chunk anchored on itself.
+        c.turns.push(assistant_turn("warming up"));
+        c.turns.push(user_turn("add caching"));
+        c.turns.push(assistant_turn("working on it"));
+
+        let chunks = session_chunks(&c, DEFAULT_CHUNK_MAX_CHARS);
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[0].anchor_turn_id, c.turns[0].id);
+        assert_eq!(chunks[1].anchor_turn_id, c.turns[1].id);
     }
 
     #[test]
@@ -476,7 +540,7 @@ mod tests {
         let chunks = session_chunks(&c, 500);
         assert!(chunks.len() >= 20);
         assert!(
-            chunks.iter().all(|c| c.chars().count() <= 500),
+            chunks.iter().all(|c| c.text.chars().count() <= 500),
             "no chunk may exceed the cap"
         );
     }

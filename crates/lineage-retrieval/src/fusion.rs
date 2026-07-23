@@ -11,9 +11,9 @@ pub const DEFAULT_RRF_K: f64 = 60.0;
 
 /// Rung 1.5 — fuse two intent legs (lexical + dense) by reciprocal-rank fusion.
 /// RRF combines ranks, not scores, side-stepping the incompatible score scales
-/// of BM25 and cosine (gotcha F.4). Both legs emit *session*-ranked lists (the
-/// dense leg rolls chunks up to sessions first), so fusion is over a common key
-/// and a session found by only one leg still survives — the failure mode where
+/// of BM25 and cosine (gotcha F.4). Both legs emit *turn*-ranked lists (the
+/// dense leg rolls chunks up to anchor turns first), so fusion is over a common
+/// key and a turn found by only one leg still survives — the failure mode where
 /// a semantic miss loses an exact keyword hit, or vice versa, cannot happen.
 pub struct FusedRetriever<A: IntentRetriever, B: IntentRetriever> {
     lexical: A,
@@ -36,22 +36,33 @@ impl<A: IntentRetriever, B: IntentRetriever> FusedRetriever<A, B> {
     }
 }
 
-/// One session's fused state: its RRF score so far and the evidence to emit for
-/// it (whichever leg saw it first — both carry the same session-level summary).
+/// One turn's fused state: its RRF score so far and the evidence to emit for
+/// it (whichever leg saw it first — both carry the same verbatim turn text).
 struct Fused {
     score: f64,
     evidence: Evidence,
 }
 
+/// The RRF key: the turn when the evidence is turn-grained, the session
+/// otherwise — so a leg that cannot resolve turns (or session-grained
+/// evidence in a mixed pipeline) still fuses instead of vanishing.
+fn fusion_key(evidence: &Evidence) -> String {
+    evidence
+        .turn_id
+        .as_ref()
+        .unwrap_or(&evidence.session_id)
+        .as_str()
+        .to_string()
+}
+
 /// Accumulate one leg's ranked evidence into the fused map: each entry at rank
-/// `r` (0-based) contributes `1/(k + r + 1)`. A session present in both legs
+/// `r` (0-based) contributes `1/(k + r + 1)`. A turn present in both legs
 /// sums both contributions, which is what lifts agreed-upon results.
 fn accumulate(fused: &mut HashMap<String, Fused>, retrieval: Retrieval, k: f64) {
     for (rank, evidence) in retrieval.evidence.into_iter().enumerate() {
         let contribution = 1.0 / (k + (rank as f64) + 1.0);
-        let key = evidence.session_id.as_str().to_string();
         fused
-            .entry(key)
+            .entry(fusion_key(&evidence))
             .and_modify(|f| f.score += contribution)
             .or_insert(Fused {
                 score: contribution,
@@ -99,6 +110,7 @@ mod tests {
     fn evidence_for(session_id: &str) -> Evidence {
         Evidence {
             session_id: LineageId::from(session_id.to_string()),
+            turn_id: None,
             tier: EvidenceTier::IntentMatch,
             strength: strength_for(EvidenceTier::IntentMatch, None),
             match_confidence: None,

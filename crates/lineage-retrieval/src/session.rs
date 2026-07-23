@@ -56,3 +56,60 @@ pub(crate) fn attribution_for(conversation: &Conversation) -> String {
         conversation.started_at.format("%Y-%m-%d"),
     )
 }
+
+/// Cap for verbatim turn text carried in evidence. Selection caps the whole
+/// digest at 4 KiB across up to three entries; capping per entry here keeps
+/// one long turn from starving the others while leaving render a pure
+/// formatting step (spec: the selector derives nothing).
+const VERBATIM_SUMMARY_MAX_CHARS: usize = 1200;
+
+/// The evidence payload for a turn-grained match: the turn's own words,
+/// bounded. Cuts on a char boundary with an ellipsis so a truncated payload is
+/// visibly truncated.
+pub(crate) fn verbatim_summary(body: &str) -> String {
+    if body.chars().count() <= VERBATIM_SUMMARY_MAX_CHARS {
+        return body.to_string();
+    }
+    let mut out: String = body.chars().take(VERBATIM_SUMMARY_MAX_CHARS).collect();
+    out.push('…');
+    out
+}
+
+/// Per-query memo of the session-level admission decision (privacy) and
+/// attribution. Turn-grained retrieval visits many turns of the same session;
+/// the conversation ref is read once per session, not once per turn. Reads the
+/// stored (unhydrated) conversation — privacy and attribution live in
+/// metadata, and turn text comes from the index.
+pub(crate) struct SessionGate<'a> {
+    repo: &'a Repository,
+    verdicts: std::collections::HashMap<String, Option<String>>,
+}
+
+impl<'a> SessionGate<'a> {
+    pub(crate) fn new(repo: &'a Repository) -> Self {
+        Self {
+            repo,
+            verdicts: std::collections::HashMap::new(),
+        }
+    }
+
+    /// `Some(attribution)` when the session may be emitted as evidence; `None`
+    /// when it is private (or its fork chain is) or unreadable.
+    pub(crate) fn attribution(&mut self, session_id: &str) -> Result<Option<String>> {
+        if let Some(verdict) = self.verdicts.get(session_id) {
+            return Ok(verdict.clone());
+        }
+        let id = lineage_core::LineageId::from(session_id.to_string());
+        let conversation = read_conversation_stored(self.repo, &id)
+            .map_err(|e| RetrievalError::Retrieval(e.to_string()))?;
+        let verdict = match conversation {
+            Some(conversation) if !is_private_or_private_ancestor(self.repo, &conversation)? => {
+                Some(attribution_for(&conversation))
+            }
+            _ => None,
+        };
+        self.verdicts
+            .insert(session_id.to_string(), verdict.clone());
+        Ok(verdict)
+    }
+}
