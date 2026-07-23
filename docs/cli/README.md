@@ -81,9 +81,9 @@ See [Import](../import.md).
 | `git lineage show <id> [--json] [--hydrate-images]` | Show conversation |
 | `git lineage blame <path>[:line] [--json]` | Lineage for a file line |
 | `git lineage search <query>` | Full-text search (auto-rebuilds stale index) |
-| `git lineage rebuild [--embed]` | Rebuild all derived state (links, line objects, index) from stored sessions; `--embed` also runs the dense-embedding backfill (needs the `dense` build) |
+| `git lineage rebuild [--embed]` | Rebuild all derived state (links, line objects, index) from stored sessions; `--embed` also runs the dense-embedding backfill |
 | `git lineage rebuild index` | Rebuild only the search index (`rebuild-index` is a deprecated alias) |
-| `git lineage rebuild embeddings` | Rebuild only the dense embeddings — the semantic backfill (needs the `dense` build; shows a per-session progress bar) |
+| `git lineage rebuild embeddings` | Rebuild only the dense embeddings — the semantic backfill (shows a per-session progress bar) |
 | `git lineage export [--redact] [--format json\|jsonl]` | Export sessions |
 
 See [Explore](../explore.md).
@@ -116,7 +116,7 @@ See [LFS](../lfs.md).
 | `git lineage context log [--limit N]` | Show recorded context injections, newest last |
 | `git lineage context install [--user]` | Wire the context hook per-repo or user-level (all repos) |
 | `git lineage context uninstall [--user]` | Remove lineage context-hook wiring |
-| `git lineage context query "<text>" [--lexical\|--dense\|--fused]` | Retrieve past turns matching a free-text intent (dense/fused need a `dense`-feature build) |
+| `git lineage context query "<text>" [--lexical\|--dense\|--fused]` | Retrieve past turns matching a free-text intent (fused is the default) |
 | `git lineage context salience` | Report the corpus's turn-salience breakdown (what indexing keeps and drops) |
 
 `context hook` is wired into the agent harness, not run by hand: when the agent

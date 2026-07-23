@@ -1,5 +1,5 @@
 use crate::ids::LineageId;
-use crate::salience::turn_salience_weight;
+use crate::salience::turn_is_salient;
 use crate::{ArtifactKind, Conversation, Role, Turn};
 
 const CODE_EDIT_TOOLS: &[&str] = &[
@@ -176,9 +176,11 @@ pub fn enriched_indexable_body(conv: &Conversation) -> String {
 pub const DEFAULT_CHUNK_MAX_CHARS: usize = 2000;
 
 /// One dense-retrieval chunk: enriched text plus the turn dense evidence
-/// should point at when this chunk matches. The anchor is the most salient
-/// turn that contributed text — the turn whose words carried the intent, not
-/// merely the first turn in the group.
+/// should point at when this chunk matches. The anchor is the group's first
+/// user turn if one contributed text, else its first salient contributor — the
+/// turn whose words carried the intent, not merely the first turn in the group.
+/// (Under binary salience every contributor is equally salient, so "first user
+/// turn, else first contributor" is what "most salient contributor" now means.)
 #[derive(Debug, Clone)]
 pub struct SessionChunk {
     pub anchor_turn_id: LineageId,
@@ -199,13 +201,15 @@ pub fn session_chunks(conv: &Conversation, max_chars: usize) -> Vec<SessionChunk
     let mut chunks = Vec::new();
     let mut current: Vec<String> = Vec::new();
     let mut current_len = 0usize;
-    // (weight, turn id) of the best contributor so far; ties keep the earlier
-    // turn so a group anchored by its user turn stays anchored there.
-    let mut anchor: Option<(f32, LineageId)> = None;
+    // (is_user, turn id) of the group's anchor: the first user turn that
+    // contributed text, else the first salient contributor. A non-user anchor
+    // is only ever upgraded to a user turn, never to a later contributor, so a
+    // group anchored by its user turn stays there.
+    let mut anchor: Option<(bool, LineageId)> = None;
 
     let flush = |current: &mut Vec<String>,
                  current_len: &mut usize,
-                 anchor: &mut Option<(f32, LineageId)>,
+                 anchor: &mut Option<(bool, LineageId)>,
                  chunks: &mut Vec<SessionChunk>| {
         if let Some((_, anchor_turn_id)) = anchor.take() {
             if !current.is_empty() {
@@ -226,16 +230,18 @@ pub fn session_chunks(conv: &Conversation, max_chars: usize) -> Vec<SessionChunk
             flush(&mut current, &mut current_len, &mut anchor, &mut chunks);
         }
 
-        let weight = turn_salience_weight(turn);
-        if weight == 0.0 {
+        if !turn_is_salient(turn) {
             continue;
         }
         let text = turn_indexable_text(turn);
         if text.is_empty() {
             continue;
         }
-        if anchor.as_ref().is_none_or(|(w, _)| weight > *w) {
-            anchor = Some((weight, turn.id.clone()));
+        let is_user = turn.role == Role::User;
+        // Set the anchor on the first contributor; only a user turn may replace
+        // a non-user anchor (the "first user turn, else first contributor" rule).
+        if anchor.is_none() || (is_user && !anchor.as_ref().unwrap().0) {
+            anchor = Some((is_user, turn.id.clone()));
         }
 
         for piece in split_to_max(&text, max_chars) {
@@ -501,7 +507,7 @@ mod tests {
     }
 
     #[test]
-    fn zero_weight_turns_contribute_no_chunk_text() {
+    fn non_salient_turns_contribute_no_chunk_text() {
         let mut c = Conversation::new(AgentKind::Claude, "/repo");
         c.turns.push(user_turn("add caching"));
         let mut tool_result = assistant_turn("");
@@ -515,11 +521,11 @@ mod tests {
     }
 
     #[test]
-    fn chunk_anchor_is_the_most_salient_contributing_turn() {
+    fn chunk_anchor_prefers_the_user_turn_then_first_contributor() {
         let mut c = Conversation::new(AgentKind::Claude, "/repo");
-        // Narration first, then the user turn: the user turn (weight 1.0)
-        // must out-anchor the earlier narration (0.3) in its own group, and
-        // the pre-user narration forms its own chunk anchored on itself.
+        // Narration first, then the user turn: the user turn anchors its own
+        // group (a user turn replaces a non-user anchor), while the pre-user
+        // narration forms its own chunk anchored on itself (first contributor).
         c.turns.push(assistant_turn("warming up"));
         c.turns.push(user_turn("add caching"));
         c.turns.push(assistant_turn("working on it"));

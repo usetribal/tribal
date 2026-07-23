@@ -1,6 +1,6 @@
 [package]
 name = "lineage-embed"
-description = "Local text embedding for lineage retrieval (fastembed/ONNX), behind a small trait"
+description = "Local text embedding for lineage retrieval (model2vec static embeddings), behind a small trait"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,16 +8,11 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
-[features]
-# Off by default: pulls the ONNX runtime + tokenizers + hf-hub (~270 transitive
-# crates). Lexical retrieval (Rung 1) needs none of it, so the heavy tree only
-# lands when a consumer opts into dense embedding.
-default = []
-dense = ["dep:fastembed"]
-
 [dependencies]
 thiserror = { workspace = true }
-fastembed = { workspace = true, optional = true }
+ureq = { workspace = true }
+safetensors = { workspace = true }
+tokenizers = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

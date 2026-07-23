@@ -62,4 +62,9 @@ regex = "1"
 aho-corasick = "1"
 tempfile = "3"
 ureq = { version = "2", features = ["json"] }
-fastembed = { version = "5", default-features = false, features = ["hf-hub-rustls-tls", "ort-download-binaries"] }
+# model2vec static embedding: a token->vector matrix (safetensors) + the model's
+# tokenizer. No ONNX/transformer runtime — lookup + mean-pool + L2-normalize.
+# tokenizers is kept to its minimal feature set (onig only, for the WordPiece
+# pre-tokenizer); the training/http/progressbar features are not needed here.
+safetensors = "0.4"
+tokenizers = { version = "0.21", default-features = false, features = ["onig"] }

@@ -15,11 +15,10 @@ use crate::types::{strength_for, Evidence, EvidenceTier, IntentQuery, Retrieval}
 /// identity is part of it — a corpus embedded by one model must not be scored
 /// against another's query vector, and it is what lets incremental embedding
 /// know which stored vectors are current.
-pub const DENSE_RETRIEVER_VERSION: &str = "2-jina-v2-code";
+pub const DENSE_RETRIEVER_VERSION: &str = "3-potion-retrieval-32M";
 
 /// Embed a session's chunks and store the vectors with their anchor turns —
-/// the dense index pass, run at import/rebuild when the `dense` feature is on.
-/// Kept beside the retriever so the chunking used to *store* vectors matches
+/// the dense index pass, run at import/rebuild. Kept beside the retriever so the chunking used to *store* vectors matches
 /// the retriever's model, and so the CLI and the eval harness share one code
 /// path. Idempotent per session (store replaces), and tags vectors with
 /// `DENSE_RETRIEVER_VERSION` so a later pass can skip already-current sessions.

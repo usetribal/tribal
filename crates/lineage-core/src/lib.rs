@@ -22,7 +22,7 @@ pub use import_state::{
     is_valid_import_schema, LastImportState, LAST_IMPORT_SCHEMA, LAST_IMPORT_SCHEMA_LEGACY,
 };
 pub use path_util::{normalize_repo_path, paths_match_repo_file, workspace_root_for};
-pub use salience::{turn_salience, turn_salience_weight, SalienceClass};
+pub use salience::{turn_is_salient, turn_salience, SalienceClass};
 pub use sync::{
     BlobManifestEntry, RepoBinding, SessionCommitLink, SyncBatch, SyncObjectKind, SyncObjectResult,
     SyncObjectStatus, SyncRejectReason, SyncResponse, SYNC_BATCH_SCHEMA, SYNC_RESPONSE_SCHEMA,
