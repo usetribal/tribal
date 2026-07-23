@@ -2,7 +2,7 @@ use std::path::Path;
 
 use rusqlite::{params, Connection};
 
-use crate::retriever::{OracleError, Result};
+use crate::retriever::{Result, RetrievalError};
 use crate::types::Retrieval;
 
 /// Version of the serialized `Retrieval` value encoding — not a key part.
@@ -24,22 +24,22 @@ pub struct CacheKey<'a> {
 /// Derived-data sidecar: deleting the file is always safe and merely costs
 /// re-retrieval. Negative answers (empty retrievals) are stored like any
 /// other — answering "nothing" instantly is what keeps the hook invisible.
-pub struct OracleCache {
+pub struct RetrievalCache {
     conn: Connection,
 }
 
-impl OracleCache {
+impl RetrievalCache {
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         if let Some(parent) = path.as_ref().parent() {
-            std::fs::create_dir_all(parent).map_err(|e| OracleError::Cache(e.to_string()))?;
+            std::fs::create_dir_all(parent).map_err(|e| RetrievalError::Cache(e.to_string()))?;
         }
-        let conn = Connection::open(path).map_err(|e| OracleError::Cache(e.to_string()))?;
+        let conn = Connection::open(path).map_err(|e| RetrievalError::Cache(e.to_string()))?;
         // WAL + a short busy timeout: parallel hook fires may race; losing a
         // write to contention is fine, blocking the agent's tool call is not.
         conn.pragma_update(None, "journal_mode", "WAL")
-            .map_err(|e| OracleError::Cache(e.to_string()))?;
+            .map_err(|e| RetrievalError::Cache(e.to_string()))?;
         conn.pragma_update(None, "busy_timeout", 100)
-            .map_err(|e| OracleError::Cache(e.to_string()))?;
+            .map_err(|e| RetrievalError::Cache(e.to_string()))?;
         conn.execute_batch(
             r#"
             CREATE TABLE IF NOT EXISTS retrievals (
@@ -54,7 +54,7 @@ impl OracleCache {
             );
             "#,
         )
-        .map_err(|e| OracleError::Cache(e.to_string()))?;
+        .map_err(|e| RetrievalError::Cache(e.to_string()))?;
         Ok(Self { conn })
     }
 
@@ -76,7 +76,7 @@ impl OracleCache {
             .map(Some)
             .or_else(|e| match e {
                 rusqlite::Error::QueryReturnedNoRows => Ok(None),
-                other => Err(OracleError::Cache(other.to_string())),
+                other => Err(RetrievalError::Cache(other.to_string())),
             })?;
 
         let Some((schema_version, serialized)) = row else {
@@ -103,7 +103,7 @@ impl OracleCache {
     /// heuristics and the injection log, not the hit/miss decision.
     pub fn put(&self, key: &CacheKey, retrieval: &Retrieval, created_at_unix: i64) -> Result<()> {
         let serialized =
-            serde_json::to_string(retrieval).map_err(|e| OracleError::Cache(e.to_string()))?;
+            serde_json::to_string(retrieval).map_err(|e| RetrievalError::Cache(e.to_string()))?;
         self.conn
             .execute(
                 "INSERT OR REPLACE INTO retrievals
@@ -120,7 +120,7 @@ impl OracleCache {
                     created_at_unix,
                 ],
             )
-            .map_err(|e| OracleError::Cache(e.to_string()))?;
+            .map_err(|e| RetrievalError::Cache(e.to_string()))?;
 
         // Entries under older generations can never hit again (the key
         // includes the generation), so writing is the moment to shed them.
@@ -129,7 +129,7 @@ impl OracleCache {
                 "DELETE FROM retrievals WHERE corpus_generation < ?1",
                 params![key.corpus_generation],
             )
-            .map_err(|e| OracleError::Cache(e.to_string()))?;
+            .map_err(|e| RetrievalError::Cache(e.to_string()))?;
         Ok(())
     }
 
@@ -146,7 +146,7 @@ impl OracleCache {
                     key.retriever_version
                 ],
             )
-            .map_err(|e| OracleError::Cache(e.to_string()))?;
+            .map_err(|e| RetrievalError::Cache(e.to_string()))?;
         Ok(())
     }
 }
@@ -157,9 +157,9 @@ mod tests {
     use crate::types::{Evidence, EvidenceTier, Strength};
     use lineage_core::LineageId;
 
-    fn open_cache() -> (tempfile::TempDir, OracleCache) {
+    fn open_cache() -> (tempfile::TempDir, RetrievalCache) {
         let dir = tempfile::tempdir().unwrap();
-        let cache = OracleCache::open(dir.path().join("oracle.db")).unwrap();
+        let cache = RetrievalCache::open(dir.path().join("oracle.db")).unwrap();
         (dir, cache)
     }
 
@@ -261,14 +261,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("oracle.db");
 
-        let cache = OracleCache::open(&path).unwrap();
+        let cache = RetrievalCache::open(&path).unwrap();
         cache
             .put(&key("aa", 1, "v1"), &retrieval_with_one_hit(), 0)
             .unwrap();
         drop(cache);
 
         std::fs::remove_file(&path).unwrap();
-        let cache = OracleCache::open(&path).unwrap();
+        let cache = RetrievalCache::open(&path).unwrap();
         assert_eq!(cache.get(&key("aa", 1, "v1")).unwrap(), None);
     }
 }

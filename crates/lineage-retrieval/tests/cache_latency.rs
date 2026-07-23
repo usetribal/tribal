@@ -1,13 +1,13 @@
-use lineage_oracle::{CacheKey, OracleCache, Retrieval};
+use lineage_retrieval::{CacheKey, Retrieval, RetrievalCache};
 
 /// Not a correctness test: measures cache-hit lookup latency for the plan's
-/// budget check. Run on demand with `cargo test -p lineage-oracle --release
+/// budget check. Run on demand with `cargo test -p lineage-retrieval --release
 /// -- --ignored --nocapture`; never asserted in CI (wall-time asserts flake).
 #[test]
 #[ignore]
 fn measure_cache_hit_latency() {
     let dir = tempfile::tempdir().unwrap();
-    let cache = OracleCache::open(dir.path().join("oracle.db")).unwrap();
+    let cache = RetrievalCache::open(dir.path().join("oracle.db")).unwrap();
     let key = CacheKey {
         file_path: "src/auth.rs",
         file_blob_sha: "aa",

@@ -11,7 +11,8 @@ pub use config::{
     CommitMappingMode, LargeBlobBackend, LfsTransport, LineageRepoConfig, LINEAGE_CONFIG_SCHEMA,
 };
 pub use conversation_util::{
-    conversation_modified_code, files_touched, files_written, generate_architecture_summary,
+    conversation_modified_code, enriched_indexable_body, files_touched, files_written,
+    generate_architecture_summary, session_chunks, turn_indexable_text, DEFAULT_CHUNK_MAX_CHARS,
 };
 pub use error::{LineageError, Result};
 pub use ids::{derive_line_object_id, derive_session_id, LineageId};

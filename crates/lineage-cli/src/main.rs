@@ -1,6 +1,8 @@
 use std::path::PathBuf;
 
-use lineage_cli::{commands, context_cmd, doctor_cmd, hooks_cmd, init_cmd, skill_cmd};
+use lineage_cli::{
+    commands, context_cmd, doctor_cmd, hooks_cmd, init_cmd, retrieval_cmd, skill_cmd,
+};
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
@@ -228,6 +230,21 @@ enum ContextAction {
         #[arg(long)]
         user: bool,
     },
+    /// Retrieve past sessions matching a free-text intent (prompt-keyed)
+    Query {
+        /// The intent / question to match against the session corpus
+        text: String,
+        /// Lexical (FTS) leg only
+        #[arg(long)]
+        lexical: bool,
+        /// Dense (semantic) leg only — needs the `dense` build feature
+        #[arg(long)]
+        dense: bool,
+        /// Fused lexical + dense (RRF) — needs the `dense` build feature; the
+        /// default when the feature is built in
+        #[arg(long)]
+        fused: bool,
+    },
 }
 
 fn parse_agent(s: &str) -> Result<String, String> {
@@ -235,6 +252,33 @@ fn parse_agent(s: &str) -> Result<String, String> {
         "cursor" | "claude" | "codex" | "all" => Ok(s.to_lowercase()),
         other => Err(format!("unknown agent: {other}")),
     }
+}
+
+/// Map the query leg flags to a `Leg`, defaulting to fused (best quality) when
+/// dense is built, lexical otherwise. Dense/fused are rejected with a clear
+/// message on a build without the `dense` feature rather than silently falling
+/// back — the difference is the whole point of choosing a leg.
+#[cfg(feature = "dense")]
+fn select_leg(lexical: bool, dense: bool, fused: bool) -> Result<retrieval_cmd::Leg, String> {
+    match (lexical, dense, fused) {
+        (true, false, false) => Ok(retrieval_cmd::Leg::Lexical),
+        (false, true, false) => Ok(retrieval_cmd::Leg::Dense),
+        (false, false, true) => Ok(retrieval_cmd::Leg::Fused),
+        (false, false, false) => Ok(retrieval_cmd::Leg::Fused),
+        _ => Err("choose at most one of --lexical / --dense / --fused".into()),
+    }
+}
+
+#[cfg(not(feature = "dense"))]
+fn select_leg(lexical: bool, dense: bool, fused: bool) -> Result<retrieval_cmd::Leg, String> {
+    if dense || fused {
+        return Err(
+            "dense/fused retrieval needs a build with `--features dense`; only --lexical is available"
+                .into(),
+        );
+    }
+    let _ = lexical;
+    Ok(retrieval_cmd::Leg::Lexical)
 }
 
 fn main() -> ExitCode {
@@ -358,6 +402,15 @@ fn main() -> ExitCode {
                     );
                 })
             }
+            ContextAction::Query {
+                text,
+                lexical,
+                dense,
+                fused,
+            } => match select_leg(lexical, dense, fused) {
+                Ok(leg) => retrieval_cmd::query(&repo_path, &text, leg),
+                Err(msg) => Err(msg.into()),
+            },
         },
         Commands::Export { redact, format } => commands::export(&repo_path, redact, &format),
         Commands::Login { server } => commands::login(&server),

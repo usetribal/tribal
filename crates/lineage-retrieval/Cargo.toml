@@ -1,6 +1,6 @@
 [package]
-name = "lineage-oracle"
-description = "Context oracle: retrieval contract and local retriever for injecting provenance into agent sessions"
+name = "lineage-retrieval"
+description = "Retrieval spine for lineage: query -> ranked session evidence (lexical, dense, fused)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,11 +8,18 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
+[features]
+# The dense (embedding) leg pulls the ONNX runtime via lineage-embed. Off by
+# default so a lexical-only consumer (Rung 1) stays lightweight.
+default = []
+dense = ["dep:lineage-embed", "lineage-embed/dense"]
+
 [dependencies]
 git2 = { workspace = true }
 lineage-core = { workspace = true }
 lineage-git = { workspace = true }
 lineage-search = { workspace = true }
+lineage-embed = { workspace = true, optional = true }
 rusqlite = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

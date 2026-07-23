@@ -1,14 +1,13 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::time::Instant;
 
 use git2::Repository;
-use lineage_core::{
-    generate_architecture_summary, normalize_repo_path, Confidence, Conversation, LineageId,
-};
-use lineage_git::{read_conversation, read_conversation_stored, read_line_object};
+use lineage_core::{generate_architecture_summary, normalize_repo_path, Confidence, LineageId};
+use lineage_git::{read_conversation, read_line_object};
 use lineage_search::LineageIndex;
 
-use crate::retriever::{OracleError, Result, Retriever};
+use crate::retriever::{Result, RetrievalError, Retriever};
+use crate::session::{attribution_for, is_private_or_private_ancestor};
 use crate::types::{strength_for, ContextQuery, Evidence, EvidenceTier, Retrieval};
 
 const LINE_OBJECT_REF_GLOB: &str = "refs/lineage/lines/*";
@@ -43,11 +42,11 @@ impl<'a> LocalRetriever<'a> {
         let refs = self
             .repo
             .references_glob(LINE_OBJECT_REF_GLOB)
-            .map_err(|e| OracleError::Retrieval(e.to_string()))?;
+            .map_err(|e| RetrievalError::Retrieval(e.to_string()))?;
 
         let mut by_session: BTreeMap<String, LineMatches> = BTreeMap::new();
         for reference in refs {
-            let reference = reference.map_err(|e| OracleError::Retrieval(e.to_string()))?;
+            let reference = reference.map_err(|e| RetrievalError::Retrieval(e.to_string()))?;
             let Some(name) = reference.name() else {
                 continue;
             };
@@ -55,7 +54,7 @@ impl<'a> LocalRetriever<'a> {
                 continue;
             };
             let object = read_line_object(self.repo, &LineageId::from(id))
-                .map_err(|e| OracleError::Retrieval(e.to_string()))?;
+                .map_err(|e| RetrievalError::Retrieval(e.to_string()))?;
             let Some(object) = object else { continue };
             if normalize_repo_path(&object.file_path, None) != file_path {
                 continue;
@@ -82,60 +81,23 @@ impl<'a> LocalRetriever<'a> {
         Ok(by_session)
     }
 
-    /// Privacy is enforced here, before caching or selection: a private
-    /// conversation — or one whose parent chain reaches a private one — is
-    /// never evidence (spec: Privacy).
-    fn is_private_or_private_ancestor(&self, conversation: &Conversation) -> Result<bool> {
-        if conversation.private {
-            return Ok(true);
-        }
-
-        let mut seen: HashSet<String> = HashSet::new();
-        seen.insert(conversation.id.as_str().to_string());
-        let mut next = conversation.parent_session_id.clone();
-        while let Some(parent_id) = next {
-            // A cycle cannot arise from correct fork data, but a corrupt ref
-            // must degrade to "not private", never to an infinite loop.
-            if !seen.insert(parent_id.as_str().to_string()) {
-                return Ok(false);
-            }
-            let parent = read_conversation_stored(self.repo, &parent_id)
-                .map_err(|e| OracleError::Retrieval(e.to_string()))?;
-            let Some(parent) = parent else {
-                // An unsynced/absent parent is unknown, and unknown does not
-                // reach a private conversation.
-                return Ok(false);
-            };
-            if parent.private {
-                return Ok(true);
-            }
-            next = parent.parent_session_id;
-        }
-        Ok(false)
-    }
-
     fn evidence_for_session(
         &self,
         session_id: &str,
         line_matches: Option<LineMatches>,
     ) -> Result<Option<Evidence>> {
         let id = LineageId::from(session_id.to_string());
-        let conversation =
-            read_conversation(self.repo, &id).map_err(|e| OracleError::Retrieval(e.to_string()))?;
+        let conversation = read_conversation(self.repo, &id)
+            .map_err(|e| RetrievalError::Retrieval(e.to_string()))?;
         let Some(conversation) = conversation else {
             return Ok(None);
         };
-        if self.is_private_or_private_ancestor(&conversation)? {
+        if is_private_or_private_ancestor(self.repo, &conversation)? {
             return Ok(None);
         }
 
         let summary = generate_architecture_summary(&conversation);
-        let attribution = format!(
-            "{} session {}, {}",
-            conversation.agent.as_str(),
-            conversation.id.as_str(),
-            conversation.started_at.format("%Y-%m-%d"),
-        );
+        let attribution = attribution_for(&conversation);
 
         let (tier, match_confidence, line_ranges) = match line_matches {
             Some(matches) => (
@@ -171,7 +133,7 @@ impl Retriever for LocalRetriever<'_> {
         for session_id in self
             .index
             .sessions_that_wrote_file(&file_path)
-            .map_err(|e| OracleError::Retrieval(e.to_string()))?
+            .map_err(|e| RetrievalError::Retrieval(e.to_string()))?
         {
             if !line_matches.contains_key(&session_id) {
                 candidates.push(session_id);

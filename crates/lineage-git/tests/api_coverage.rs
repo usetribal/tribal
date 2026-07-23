@@ -2,14 +2,14 @@ use std::process::Command;
 
 use lineage_core::Confidence;
 use lineage_core::{
-    AgentKind, Artifact, ArtifactKind, Conversation, LargeBlobBackend, LineageId,
-    LineageRepoConfig, Role, Turn, LINEAGE_CONFIG_SCHEMA,
+    enriched_indexable_body, AgentKind, Artifact, ArtifactKind, Conversation, LargeBlobBackend,
+    LineageId, LineageRepoConfig, Role, Turn, LINEAGE_CONFIG_SCHEMA,
 };
 use lineage_git::{
     best_commit_for_conversation, find_repo, hydrate_conversation, hydrate_media_artifacts,
-    indexable_body, link_session_to_commit, list_session_ids, map_commit_to_sessions,
-    materialize_line_objects, open_repo, persist_conversation, read_conversation, read_repo_config,
-    run_doctor, write_repo_config,
+    link_session_to_commit, list_session_ids, map_commit_to_sessions, materialize_line_objects,
+    open_repo, persist_conversation, read_conversation, read_repo_config, run_doctor,
+    write_repo_config,
 };
 
 fn init_repo() -> tempfile::TempDir {
@@ -104,7 +104,7 @@ fn exercises_public_git_api_surface() {
     let _ = materialize_line_objects(inner, &conv, &sha, Confidence::Exact).unwrap();
 
     let mut loaded = read_conversation(inner, &conv.id).unwrap().unwrap();
-    assert!(indexable_body(&loaded).contains("api.rs"));
+    assert!(enriched_indexable_body(&loaded).contains("api.rs"));
     let _ = hydrate_conversation(inner, &mut loaded).unwrap();
     let _ = hydrate_media_artifacts(inner, &mut loaded).unwrap();
     let _ = run_doctor(&repo).unwrap();

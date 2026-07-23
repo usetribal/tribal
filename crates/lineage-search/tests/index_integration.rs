@@ -1,7 +1,7 @@
 use std::process::Command;
 
-use lineage_core::{AgentKind, Conversation, LineageId, Role, Turn};
-use lineage_git::{indexable_body, open_repo, persist_conversation};
+use lineage_core::{enriched_indexable_body, AgentKind, Conversation, LineageId, Role, Turn};
+use lineage_git::{open_repo, persist_conversation};
 use lineage_search::LineageIndex;
 
 fn init_repo() -> tempfile::TempDir {
@@ -35,7 +35,7 @@ fn index_search_and_rebuild() {
     index.index_conversation(&conv).unwrap();
     let hits = index.search("caching", 5).unwrap();
     assert!(!hits.is_empty());
-    assert!(indexable_body(&conv).contains("caching"));
+    assert!(enriched_indexable_body(&conv).contains("caching"));
 
     index.rebuild(repo.inner()).unwrap();
     let hits2 = index.search("redis", 5).unwrap();

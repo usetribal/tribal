@@ -1,10 +1,11 @@
 use std::path::Path;
 
 use git2::Repository;
-use lineage_core::{files_touched, files_written, normalize_repo_path, Conversation, LineageError};
-use lineage_git::{
-    hydrate_conversation, indexable_body, list_session_ids, read_conversation_stored,
+use lineage_core::{
+    enriched_indexable_body, files_touched, files_written, normalize_repo_path, Conversation,
+    LineageError,
 };
+use lineage_git::{hydrate_conversation, list_session_ids, read_conversation_stored};
 use rusqlite::{params, Connection};
 use thiserror::Error;
 
@@ -27,6 +28,16 @@ pub struct SearchHit {
     pub session_id: String,
     pub score: f64,
     pub snippet: String,
+}
+
+/// One stored chunk embedding: which session and chunk it came from, and the
+/// vector. The dense retriever loads all of these and scores them against the
+/// query vector (brute-force cosine — see `all_chunk_vectors`).
+#[derive(Debug, Clone)]
+pub struct ChunkVector {
+    pub session_id: String,
+    pub chunk_index: i64,
+    pub vector: Vec<f32>,
 }
 
 pub struct LineageIndex {
@@ -108,7 +119,8 @@ impl LineageIndex {
                 id UNINDEXED,
                 body,
                 content='sessions',
-                content_rowid='rowid'
+                content_rowid='rowid',
+                tokenize="unicode61 tokenchars '-_'"
             );
             CREATE TRIGGER IF NOT EXISTS sessions_ai AFTER INSERT ON sessions BEGIN
                 INSERT INTO sessions_fts(rowid, body) VALUES (new.rowid, new.body);
@@ -130,6 +142,14 @@ impl LineageIndex {
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS session_vectors (
+                session_id TEXT NOT NULL,
+                chunk_index INTEGER NOT NULL,
+                dim INTEGER NOT NULL,
+                vector BLOB NOT NULL,
+                model_version TEXT NOT NULL DEFAULT '',
+                PRIMARY KEY (session_id, chunk_index)
+            );
             "#,
         )?;
         // Indexes created by binaries predating the read/write distinction
@@ -138,11 +158,18 @@ impl LineageIndex {
             "ALTER TABLE session_files ADD COLUMN wrote INTEGER NOT NULL DEFAULT 0",
             [],
         );
+        // Vectors from binaries predating incremental embedding lack a version
+        // tag; the empty default means they never match a real version and so
+        // re-embed on the next pass.
+        let _ = self.conn.execute(
+            "ALTER TABLE session_vectors ADD COLUMN model_version TEXT NOT NULL DEFAULT ''",
+            [],
+        );
         Ok(())
     }
 
     pub fn index_conversation(&self, conversation: &Conversation) -> Result<()> {
-        let body = indexable_body(conversation);
+        let body = enriched_indexable_body(conversation);
 
         self.conn.execute(
             "INSERT OR REPLACE INTO sessions (id, agent, started_at, body) VALUES (?1, ?2, ?3, ?4)",
@@ -178,7 +205,7 @@ impl LineageIndex {
             )?;
         }
 
-        // The generation is what lets a derived cache (lineage-oracle) detect
+        // The generation is what lets a derived cache (lineage-retrieval) detect
         // that the session corpus changed without being told about imports.
         self.conn.execute(
             "INSERT INTO index_meta (key, value) VALUES ('corpus_generation', '1')
@@ -223,10 +250,9 @@ impl LineageIndex {
         Ok(hits)
     }
 
-    /// Sessions whose tool calls touched this repo-relative path, most useful
-    /// as the files-touched evidence tier in lineage-oracle.
-    /// Sessions that *wrote* this path — the authorship signal the oracle's
-    /// evidence tier uses; read-only touches are not evidence (gap 9).
+    /// Sessions that *wrote* this path — the authorship signal the
+    /// files-touched evidence tier in lineage-retrieval uses; read-only touches
+    /// are not evidence (gap 9).
     pub fn sessions_that_wrote_file(&self, file_path: &str) -> Result<Vec<String>> {
         let normalized = normalize_repo_path(file_path, None);
         let mut stmt = self.conn.prepare(
@@ -253,6 +279,76 @@ impl LineageIndex {
             sessions.push(row?);
         }
         Ok(sessions)
+    }
+
+    /// Replace all stored chunk vectors for a session, tagged with the embedder
+    /// `model_version`. Delete-then-insert keeps re-embedding idempotent: the
+    /// chunk set is derived wholly from the conversation, so stale chunks must
+    /// not survive a re-index. Vectors are stored little-endian; the retriever
+    /// reads them back the same way.
+    pub fn store_session_vectors(
+        &self,
+        session_id: &str,
+        vectors: &[Vec<f32>],
+        model_version: &str,
+    ) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM session_vectors WHERE session_id = ?1",
+            params![session_id],
+        )?;
+        for (chunk_index, vector) in vectors.iter().enumerate() {
+            self.conn.execute(
+                "INSERT INTO session_vectors (session_id, chunk_index, dim, vector, model_version)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![
+                    session_id,
+                    chunk_index as i64,
+                    vector.len() as i64,
+                    vector_to_bytes(vector),
+                    model_version,
+                ],
+            )?;
+        }
+        Ok(())
+    }
+
+    /// Session ids already embedded at `model_version` — the embed pass skips
+    /// these so a backfill only pays for new or model-changed sessions
+    /// (incremental embedding). A session whose vectors are at a different
+    /// version is not returned, so it re-embeds.
+    pub fn sessions_embedded_at_version(&self, model_version: &str) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT DISTINCT session_id FROM session_vectors WHERE model_version = ?1",
+        )?;
+        let rows = stmt.query_map(params![model_version], |row| row.get::<_, String>(0))?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row?);
+        }
+        Ok(out)
+    }
+
+    /// Every stored chunk vector, for brute-force cosine scoring. At per-repo
+    /// scale (thousands of chunks) loading them all is sub-millisecond and needs
+    /// no ANN index; swap to one only if the eval shows scale pain.
+    pub fn all_chunk_vectors(&self) -> Result<Vec<ChunkVector>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT session_id, chunk_index, vector FROM session_vectors")?;
+        let rows = stmt.query_map([], |row| {
+            let bytes: Vec<u8> = row.get(2)?;
+            Ok(ChunkVector {
+                session_id: row.get(0)?,
+                chunk_index: row.get(1)?,
+                vector: bytes_to_vector(&bytes),
+            })
+        })?;
+
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row?);
+        }
+        Ok(out)
     }
 
     /// Monotonic counter observed by derived caches: any change means the
@@ -294,6 +390,24 @@ impl LineageIndex {
     }
 }
 
+/// Vectors are stored as raw little-endian f32 bytes — compact and exact, no
+/// float-to-text rounding. The dimension is stored alongside so a corrupt or
+/// truncated blob is detectable.
+fn vector_to_bytes(vector: &[f32]) -> Vec<u8> {
+    let mut bytes = Vec::with_capacity(vector.len() * 4);
+    for v in vector {
+        bytes.extend_from_slice(&v.to_le_bytes());
+    }
+    bytes
+}
+
+fn bytes_to_vector(bytes: &[u8]) -> Vec<f32> {
+    bytes
+        .chunks_exact(4)
+        .map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -328,6 +442,54 @@ mod tests {
             });
         }
         conv
+    }
+
+    #[test]
+    fn session_vectors_round_trip_and_replace_on_reindex() {
+        let (_dir, index) = open_index();
+        index
+            .store_session_vectors("sess-a", &[vec![1.0, 0.0, 0.5], vec![0.0, 1.0, 0.25]], "v1")
+            .unwrap();
+        index
+            .store_session_vectors("sess-b", &[vec![0.1, 0.2, 0.3]], "v1")
+            .unwrap();
+
+        let all = index.all_chunk_vectors().unwrap();
+        assert_eq!(all.len(), 3);
+        let a: Vec<_> = all.iter().filter(|c| c.session_id == "sess-a").collect();
+        assert_eq!(a.len(), 2);
+        assert_eq!(a[0].vector, vec![1.0, 0.0, 0.5]);
+
+        // Re-storing replaces, never accumulates.
+        index
+            .store_session_vectors("sess-a", &[vec![9.0, 9.0, 9.0]], "v1")
+            .unwrap();
+        let all = index.all_chunk_vectors().unwrap();
+        assert_eq!(all.len(), 2);
+        let a: Vec<_> = all.iter().filter(|c| c.session_id == "sess-a").collect();
+        assert_eq!(a.len(), 1);
+        assert_eq!(a[0].vector, vec![9.0, 9.0, 9.0]);
+    }
+
+    #[test]
+    fn incremental_embedding_tracks_which_sessions_are_current() {
+        let (_dir, index) = open_index();
+        index
+            .store_session_vectors("sess-a", &[vec![1.0, 0.0]], "v1")
+            .unwrap();
+        index
+            .store_session_vectors("sess-b", &[vec![0.0, 1.0]], "v1")
+            .unwrap();
+        // sess-c embedded by an older model version.
+        index
+            .store_session_vectors("sess-c", &[vec![0.5, 0.5]], "v0")
+            .unwrap();
+
+        let mut current = index.sessions_embedded_at_version("v1").unwrap();
+        current.sort();
+        assert_eq!(current, vec!["sess-a".to_string(), "sess-b".to_string()]);
+        // sess-c is not current, so a v1 pass would re-embed it.
+        assert!(!current.contains(&"sess-c".to_string()));
     }
 
     #[test]

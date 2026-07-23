@@ -36,7 +36,7 @@ pub use hooks::{
     link_all_sessions_to_head, link_recent_sessions_to_head, link_sessions_to_commit, LinkBasis,
     LinkReport, LinkedSession,
 };
-pub use hydrate::{hydrate_conversation, hydrate_media_artifacts, indexable_body, HydrateReport};
+pub use hydrate::{hydrate_conversation, hydrate_media_artifacts, HydrateReport};
 pub use identity::{
     repo_git_identity, stamp_prompted_by, GitIdentity, PROMPTED_BY_EMAIL, PROMPTED_BY_NAME,
 };

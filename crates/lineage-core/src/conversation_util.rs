@@ -94,6 +94,147 @@ fn extract_path_from_tool_args(args: &str) -> Option<String> {
     None
 }
 
+/// Per-snippet cap for edit text in the retrieval body. An edit's `new_string`
+/// can be an entire file (whole-file writes, large diffs); embedding or indexing
+/// megabytes of code per turn is both memory-ruinous for the dense model and
+/// low-signal (the intent lives in the first lines — signatures, identifiers —
+/// not the 2000th line of a generated file). Truncating to a prefix keeps the
+/// matchable signal without the blowup.
+const MAX_SNIPPET_CHARS: usize = 800;
+
+/// Take at most `max` chars, on a char boundary. Used to bound edit snippets so
+/// one giant write cannot dominate a turn's retrieval text.
+fn truncate_chars(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        return s.to_string();
+    }
+    s.chars().take(max).collect()
+}
+
+/// Retrieval text for one turn: prose plus the identifiers a search query is
+/// likely to name — tool-call names, the file paths they touched, and edit
+/// snippets. Prose-only indexing (the previous `indexable_body`) missed
+/// identifiers like `rebuild-index` that appear only in a tool call or path, so
+/// a lexical query for them found nothing even when the session was about
+/// exactly that. This is the shared corpus unit: the whole-session FTS body
+/// (`enriched_indexable_body`) joins it across turns, and dense chunking groups
+/// it (see `session_chunks`). Edit snippets are capped (`MAX_SNIPPET_CHARS`) so a
+/// whole-file write does not bloat the index or blow up the embedder.
+pub fn turn_indexable_text(turn: &Turn) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if !turn.content.trim().is_empty() {
+        parts.push(turn.content.clone());
+    }
+    for tc in &turn.tool_calls {
+        if !tc.name.is_empty() {
+            parts.push(tc.name.clone());
+        }
+        if let Some(path) = extract_path_from_tool_args(&tc.arguments) {
+            parts.push(path);
+        }
+    }
+    for artifact in &turn.artifacts {
+        if !artifact.path.is_empty() && !artifact.path.starts_with("turn-") {
+            parts.push(artifact.path.clone());
+        }
+        // Edit snippets carry the actual changed code; `new_string` is the
+        // post-image that exists in the committed file, `old_string` the text
+        // the edit replaced — both are high-signal for "what did this session
+        // do to this code". Capped to a prefix so a whole-file write cannot
+        // dominate (see `MAX_SNIPPET_CHARS`).
+        if let Some(resolve) = &artifact.resolve {
+            if let Some(new_string) = &resolve.new_string {
+                parts.push(truncate_chars(new_string, MAX_SNIPPET_CHARS));
+            }
+            if let Some(old_string) = &resolve.old_string {
+                parts.push(truncate_chars(old_string, MAX_SNIPPET_CHARS));
+            }
+        }
+    }
+    parts.join("\n")
+}
+
+/// The whole-session retrieval body: every turn's enriched text, joined. This
+/// is the FTS document — BM25 handles long documents, so the session is indexed
+/// whole (dense retrieval chunks instead; see `session_chunks`).
+pub fn enriched_indexable_body(conv: &Conversation) -> String {
+    conv.turns
+        .iter()
+        .map(turn_indexable_text)
+        .filter(|t| !t.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Default chunk size for dense embedding, in characters. An intent-bearing
+/// turn-group is the natural unit; this only bounds a runaway group (a long
+/// tool-heavy stretch) so one chunk's embedding does not average away its
+/// signal. Chosen for the SE domain (roughly a few hundred tokens); a tunable,
+/// not a fixed law — the eval stage calibrates it (gotcha R2.3).
+pub const DEFAULT_CHUNK_MAX_CHARS: usize = 2000;
+
+/// Dense-retrieval chunks: the session split into intent-bearing turn-groups,
+/// each a user turn plus the assistant turns that answer it, as enriched text.
+/// Chunking (not whole-session embedding) keeps a short query from being
+/// averaged against a whole session's vector (gotcha R2.3). Groups prefer turn
+/// boundaries, but **no chunk ever exceeds `max_chars`**: a single turn whose
+/// text is larger than the budget is split into sub-chunks, so a giant edit
+/// cannot produce a multi-megabyte chunk that starves the embedder. Empty groups
+/// are dropped.
+pub fn session_chunks(conv: &Conversation, max_chars: usize) -> Vec<String> {
+    let max_chars = max_chars.max(1);
+    let mut chunks = Vec::new();
+    let mut current: Vec<String> = Vec::new();
+    let mut current_len = 0usize;
+
+    let flush = |current: &mut Vec<String>, current_len: &mut usize, chunks: &mut Vec<String>| {
+        if !current.is_empty() {
+            chunks.push(current.join("\n"));
+            current.clear();
+            *current_len = 0;
+        }
+    };
+
+    for turn in &conv.turns {
+        // A user turn starts a new intent group — it is the question the
+        // following assistant turns answer, and the unit a query should match.
+        if turn.role == Role::User {
+            flush(&mut current, &mut current_len, &mut chunks);
+        }
+
+        let text = turn_indexable_text(turn);
+        if text.is_empty() {
+            continue;
+        }
+
+        for piece in split_to_max(&text, max_chars) {
+            // Close the current group before a piece that would overflow it, so
+            // no emitted chunk exceeds the budget.
+            if current_len + piece.len() > max_chars {
+                flush(&mut current, &mut current_len, &mut chunks);
+            }
+            current_len += piece.len();
+            current.push(piece);
+        }
+    }
+    flush(&mut current, &mut current_len, &mut chunks);
+    chunks
+}
+
+/// Split text into pieces of at most `max_chars` characters, on char
+/// boundaries. A turn whose enriched text exceeds a whole chunk budget (a large
+/// edit or tool dump) is broken up here so no single chunk is unbounded.
+fn split_to_max(text: &str, max_chars: usize) -> Vec<String> {
+    let chars: Vec<char> = text.chars().collect();
+    if chars.len() <= max_chars {
+        return vec![text.to_string()];
+    }
+    chars
+        .chunks(max_chars)
+        .map(|c| c.iter().collect())
+        .collect()
+}
+
 /// Heuristic architecture/decision summary from session content (no LLM).
 pub fn generate_architecture_summary(conv: &Conversation) -> String {
     let title = conv
@@ -203,5 +344,176 @@ mod tests {
         let summary = generate_architecture_summary(&c);
         assert!(summary.contains("caching"));
         assert!(summary.contains("gpt-4"));
+    }
+
+    #[test]
+    fn enriched_body_includes_identifiers_from_tool_calls_and_edits() {
+        // The dogfood failure: an identifier that appears only in a tool call
+        // or an edit snippet, never in prose. Prose-only indexing missed it.
+        let mut c = Conversation::new(AgentKind::Claude, "/repo");
+        c.turns.push(Turn {
+            id: LineageId::new(),
+            role: Role::Assistant,
+            content: "Wiring the command up.".into(),
+            tool_calls: vec![crate::ToolCall {
+                id: "t1".into(),
+                name: "Bash".into(),
+                arguments: r#"{"file_path": "src/rebuild_index.rs"}"#.into(),
+                result: None,
+            }],
+            model: None,
+            timestamp: None,
+            artifacts: vec![crate::Artifact {
+                kind: ArtifactKind::FileEdit,
+                path: "src/main.rs".into(),
+                blob_ref: None,
+                content_hash: None,
+                mime_type: None,
+                preview_data_url: None,
+                line_range: None,
+                resolve: Some(crate::ArtifactResolve {
+                    strategy: crate::ResolveStrategy::OldString,
+                    old_string: Some("fn rebuild()".into()),
+                    new_string: Some("fn rebuild_index()".into()),
+                    patch: None,
+                }),
+            }],
+        });
+
+        let body = enriched_indexable_body(&c);
+        assert!(body.contains("Wiring the command up."));
+        assert!(body.contains("Bash"));
+        assert!(body.contains("src/rebuild_index.rs"));
+        assert!(body.contains("src/main.rs"));
+        assert!(body.contains("fn rebuild_index()"));
+        assert!(body.contains("fn rebuild()"));
+    }
+
+    #[test]
+    fn enriched_body_skips_empty_turns() {
+        let mut c = Conversation::new(AgentKind::Claude, "/repo");
+        c.turns.push(Turn {
+            id: LineageId::new(),
+            role: Role::Assistant,
+            content: String::new(),
+            tool_calls: vec![],
+            model: None,
+            timestamp: None,
+            artifacts: vec![],
+        });
+        assert_eq!(enriched_indexable_body(&c), "");
+    }
+
+    fn user_turn(content: &str) -> Turn {
+        Turn {
+            id: LineageId::new(),
+            role: Role::User,
+            content: content.into(),
+            tool_calls: vec![],
+            model: None,
+            timestamp: None,
+            artifacts: vec![],
+        }
+    }
+
+    fn assistant_turn(content: &str) -> Turn {
+        Turn {
+            id: LineageId::new(),
+            role: Role::Assistant,
+            content: content.into(),
+            tool_calls: vec![],
+            model: None,
+            timestamp: None,
+            artifacts: vec![],
+        }
+    }
+
+    #[test]
+    fn chunks_group_each_user_turn_with_its_replies() {
+        let mut c = Conversation::new(AgentKind::Claude, "/repo");
+        c.turns.push(user_turn("add caching"));
+        c.turns.push(assistant_turn("done, edited cache.rs"));
+        c.turns.push(user_turn("now add metrics"));
+        c.turns.push(assistant_turn("added metrics.rs"));
+
+        let chunks = session_chunks(&c, DEFAULT_CHUNK_MAX_CHARS);
+        assert_eq!(chunks.len(), 2);
+        assert!(chunks[0].contains("add caching"));
+        assert!(chunks[0].contains("cache.rs"));
+        assert!(chunks[1].contains("add metrics"));
+        assert!(chunks[1].contains("metrics.rs"));
+    }
+
+    #[test]
+    fn oversized_group_splits_on_turn_boundary() {
+        let mut c = Conversation::new(AgentKind::Claude, "/repo");
+        c.turns.push(user_turn("start"));
+        // Two assistant turns that together exceed a small budget must split
+        // between turns, never within one.
+        c.turns.push(assistant_turn(&"a".repeat(30)));
+        c.turns.push(assistant_turn(&"b".repeat(30)));
+
+        let chunks = session_chunks(&c, 40);
+        assert!(chunks.len() >= 2);
+        // No chunk mixes the two large turns' distinct content past the budget.
+        assert!(chunks.iter().any(|c| c.contains(&"a".repeat(30))));
+        assert!(chunks.iter().any(|c| c.contains(&"b".repeat(30))));
+    }
+
+    #[test]
+    fn empty_session_has_no_chunks() {
+        let c = Conversation::new(AgentKind::Claude, "/repo");
+        assert!(session_chunks(&c, DEFAULT_CHUNK_MAX_CHARS).is_empty());
+    }
+
+    #[test]
+    fn a_single_giant_turn_is_split_under_the_cap() {
+        // The OOM cause: one turn's text larger than the whole budget must be
+        // broken up, not emitted as one unbounded chunk.
+        let mut c = Conversation::new(AgentKind::Claude, "/repo");
+        c.turns.push(assistant_turn(&"x".repeat(10_000)));
+
+        let chunks = session_chunks(&c, 500);
+        assert!(chunks.len() >= 20);
+        assert!(
+            chunks.iter().all(|c| c.chars().count() <= 500),
+            "no chunk may exceed the cap"
+        );
+    }
+
+    #[test]
+    fn edit_snippets_are_capped_so_a_whole_file_write_cannot_bloat_a_turn() {
+        let mut c = Conversation::new(AgentKind::Claude, "/repo");
+        c.turns.push(Turn {
+            id: LineageId::new(),
+            role: Role::Assistant,
+            content: String::new(),
+            tool_calls: vec![],
+            model: None,
+            timestamp: None,
+            artifacts: vec![crate::Artifact {
+                kind: ArtifactKind::FileEdit,
+                path: "src/big.rs".into(),
+                blob_ref: None,
+                content_hash: None,
+                mime_type: None,
+                preview_data_url: None,
+                line_range: None,
+                resolve: Some(crate::ArtifactResolve {
+                    strategy: crate::ResolveStrategy::OldString,
+                    old_string: None,
+                    new_string: Some("Z".repeat(100_000)),
+                    patch: None,
+                }),
+            }],
+        });
+
+        let text = turn_indexable_text(&c.turns[0]);
+        // The path survives in full; the giant snippet is bounded.
+        assert!(text.contains("src/big.rs"));
+        assert!(
+            text.chars().count() < 2000,
+            "a 100k-char edit must not produce a 100k-char turn text"
+        );
     }
 }
