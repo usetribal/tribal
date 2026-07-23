@@ -115,6 +115,8 @@ See [LFS](../lfs.md).
 | `git lineage context log [--limit N]` | Show recorded context injections, newest last |
 | `git lineage context install [--user]` | Wire the context hook per-repo or user-level (all repos) |
 | `git lineage context uninstall [--user]` | Remove lineage context-hook wiring |
+| `git lineage context query "<text>" [--lexical\|--dense\|--fused]` | Retrieve past turns matching a free-text intent (dense/fused need a `dense`-feature build) |
+| `git lineage context salience` | Report the corpus's turn-salience breakdown (what indexing keeps and drops) |
 
 `context hook` is wired into the agent harness, not run by hand: when the agent
 reads a file with provenance, a digest (attribution, line ranges, session

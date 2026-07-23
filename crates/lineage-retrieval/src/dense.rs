@@ -2,15 +2,12 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use git2::Repository;
-use lineage_core::{
-    generate_architecture_summary, session_chunks, Conversation, LineageId, DEFAULT_CHUNK_MAX_CHARS,
-};
+use lineage_core::{session_chunks, Conversation, LineageId, DEFAULT_CHUNK_MAX_CHARS};
 use lineage_embed::TextEmbedder;
-use lineage_git::read_conversation;
 use lineage_search::LineageIndex;
 
 use crate::retriever::{IntentRetriever, Result, RetrievalError};
-use crate::session::{attribution_for, is_private_or_private_ancestor};
+use crate::session::{verbatim_summary, SessionGate};
 use crate::types::{strength_for, Evidence, EvidenceTier, IntentQuery, Retrieval};
 
 /// Cache-key / vector-tag component: bump on any change to what this retriever
@@ -18,14 +15,14 @@ use crate::types::{strength_for, Evidence, EvidenceTier, IntentQuery, Retrieval}
 /// identity is part of it — a corpus embedded by one model must not be scored
 /// against another's query vector, and it is what lets incremental embedding
 /// know which stored vectors are current.
-pub const DENSE_RETRIEVER_VERSION: &str = "1-jina-v2-code";
+pub const DENSE_RETRIEVER_VERSION: &str = "2-jina-v2-code";
 
-/// Embed a session's chunks and store the vectors — the dense index pass, run
-/// at import/rebuild when the `dense` feature is on. Kept beside the retriever
-/// so the chunking used to *store* vectors matches the retriever's model, and
-/// so the CLI and the eval harness share one code path. Idempotent per session
-/// (store replaces), and tags vectors with `DENSE_RETRIEVER_VERSION` so a later
-/// pass can skip already-current sessions.
+/// Embed a session's chunks and store the vectors with their anchor turns —
+/// the dense index pass, run at import/rebuild when the `dense` feature is on.
+/// Kept beside the retriever so the chunking used to *store* vectors matches
+/// the retriever's model, and so the CLI and the eval harness share one code
+/// path. Idempotent per session (store replaces), and tags vectors with
+/// `DENSE_RETRIEVER_VERSION` so a later pass can skip already-current sessions.
 pub fn embed_and_store_session<E: TextEmbedder>(
     index: &LineageIndex,
     embedder: &E,
@@ -35,31 +32,37 @@ pub fn embed_and_store_session<E: TextEmbedder>(
     if chunks.is_empty() {
         return Ok(0);
     }
+    let texts: Vec<String> = chunks.iter().map(|c| c.text.clone()).collect();
     let vectors = embedder
-        .embed_documents(&chunks)
+        .embed_documents(&texts)
         .map_err(|e| RetrievalError::Retrieval(e.to_string()))?;
+    let stored: Vec<(String, Vec<f32>)> = chunks
+        .iter()
+        .zip(vectors)
+        .map(|(chunk, vector)| (chunk.anchor_turn_id.as_str().to_string(), vector))
+        .collect();
     index
-        .store_session_vectors(conversation.id.as_str(), &vectors, DENSE_RETRIEVER_VERSION)
+        .store_session_vectors(conversation.id.as_str(), &stored, DENSE_RETRIEVER_VERSION)
         .map_err(|e| RetrievalError::Retrieval(e.to_string()))?;
-    Ok(vectors.len())
+    Ok(stored.len())
 }
 
-/// How many top sessions to build evidence for. Over-retrieve relative to what
+/// How many top turns to build evidence for. Over-retrieve relative to what
 /// selection injects, for the same reason as the FTS leg (fusion depth, and
 /// headroom for privacy filtering) — gotcha F.2.
-const DEFAULT_TOP_SESSIONS: usize = 50;
+const DEFAULT_TOP_TURNS: usize = 50;
 
 /// Rung 2 — dense (semantic) intent retrieval. Chunks are embedded at index
 /// time and stored in `lineage-search`; at query time the query is embedded and
 /// scored against every chunk by cosine (a dot product, since vectors are
-/// L2-normalized). A session's score is the **max** over its chunks (best
-/// chunk), never a sum — summing would give long, many-chunk sessions a
+/// L2-normalized). Scores roll up to the chunk's **anchor turn** by max (best
+/// chunk), never a sum — summing would give turns anchoring many chunks a
 /// structural advantage that later fusion would inherit.
 pub struct DenseRetriever<'a, E: TextEmbedder> {
     repo: &'a Repository,
     index: &'a LineageIndex,
     embedder: &'a E,
-    top_sessions: usize,
+    top_turns: usize,
 }
 
 impl<'a, E: TextEmbedder> DenseRetriever<'a, E> {
@@ -68,35 +71,13 @@ impl<'a, E: TextEmbedder> DenseRetriever<'a, E> {
             repo,
             index,
             embedder,
-            top_sessions: DEFAULT_TOP_SESSIONS,
+            top_turns: DEFAULT_TOP_TURNS,
         }
     }
 
-    pub fn with_top_sessions(mut self, top: usize) -> Self {
-        self.top_sessions = top;
+    pub fn with_top_turns(mut self, top: usize) -> Self {
+        self.top_turns = top;
         self
-    }
-
-    fn evidence_for_session(&self, session_id: &str) -> Result<Option<Evidence>> {
-        let id = LineageId::from(session_id.to_string());
-        let conversation = read_conversation(self.repo, &id)
-            .map_err(|e| RetrievalError::Retrieval(e.to_string()))?;
-        let Some(conversation) = conversation else {
-            return Ok(None);
-        };
-        if is_private_or_private_ancestor(self.repo, &conversation)? {
-            return Ok(None);
-        }
-
-        Ok(Some(Evidence {
-            session_id: conversation.id.clone(),
-            tier: EvidenceTier::IntentMatch,
-            strength: strength_for(EvidenceTier::IntentMatch, None),
-            match_confidence: None,
-            line_ranges: Vec::new(),
-            summary: generate_architecture_summary(&conversation),
-            attribution: attribution_for(&conversation),
-        }))
     }
 }
 
@@ -119,20 +100,25 @@ impl<E: TextEmbedder> IntentRetriever for DenseRetriever<'_, E> {
             .embed_query(&query.text)
             .map_err(|e| RetrievalError::Retrieval(e.to_string()))?;
 
+        // Only vectors from the current model/chunking version are scorable;
+        // stale ones re-embed on the next index pass.
         let chunks = self
             .index
-            .all_chunk_vectors()
+            .all_chunk_vectors(DENSE_RETRIEVER_VERSION)
             .map_err(|e| RetrievalError::Retrieval(e.to_string()))?;
 
-        // Roll chunk scores up to the session by max (best chunk). A session's
-        // relevance is its single most relevant chunk, so a focused session is
-        // not out-competed by a sprawling one that merely has more chances to
-        // match (which summing would reward).
-        let mut best_by_session: HashMap<String, f32> = HashMap::new();
+        // Roll chunk scores up to the anchor turn by max (best chunk). A
+        // turn's relevance is its single most relevant chunk, so a focused
+        // turn is not out-competed by one that merely anchors more chunks
+        // (which summing would reward).
+        let mut best_by_turn: HashMap<String, f32> = HashMap::new();
         for chunk in &chunks {
+            if chunk.turn_id.is_empty() {
+                continue;
+            }
             let score = cosine_normalized(&query_vec, &chunk.vector);
-            best_by_session
-                .entry(chunk.session_id.clone())
+            best_by_turn
+                .entry(chunk.turn_id.clone())
                 .and_modify(|s| {
                     if score > *s {
                         *s = score;
@@ -141,24 +127,44 @@ impl<E: TextEmbedder> IntentRetriever for DenseRetriever<'_, E> {
                 .or_insert(score);
         }
 
-        // Rank sessions by their best-chunk score, strongest first, and keep
-        // the top slice as evidence candidates.
-        let mut ranked: Vec<(String, f32)> = best_by_session.into_iter().collect();
+        // Rank turns by their best-chunk score, strongest first, and keep the
+        // top slice as evidence candidates.
+        let mut ranked: Vec<(String, f32)> = best_by_turn.into_iter().collect();
         ranked.sort_by(|a, b| b.1.total_cmp(&a.1));
-        ranked.truncate(self.top_sessions);
+        ranked.truncate(self.top_turns);
 
+        let mut gate = SessionGate::new(self.repo);
         let mut evidence = Vec::new();
         let mut truncated = false;
-        for (session_id, _score) in ranked {
+        for (turn_id, _score) in ranked {
             if let Some(budget_ms) = query.budget_ms {
                 if started.elapsed().as_millis() >= u128::from(budget_ms) {
                     truncated = true;
                     break;
                 }
             }
-            if let Some(entry) = self.evidence_for_session(&session_id)? {
-                evidence.push(entry);
-            }
+            // The stored turn row carries the verbatim text; a vector whose
+            // turn is no longer indexed (re-imported session) is skipped.
+            let Some(turn) = self
+                .index
+                .get_turn(&turn_id)
+                .map_err(|e| RetrievalError::Retrieval(e.to_string()))?
+            else {
+                continue;
+            };
+            let Some(attribution) = gate.attribution(&turn.session_id)? else {
+                continue;
+            };
+            evidence.push(Evidence {
+                session_id: LineageId::from(turn.session_id),
+                turn_id: Some(LineageId::from(turn.turn_id)),
+                tier: EvidenceTier::IntentMatch,
+                strength: strength_for(EvidenceTier::IntentMatch, None),
+                match_confidence: None,
+                line_ranges: Vec::new(),
+                summary: verbatim_summary(&turn.body),
+                attribution,
+            });
         }
 
         // Evidence is already in descending score order; every entry shares the
@@ -244,13 +250,15 @@ mod tests {
         conv
     }
 
-    /// Store a session's chunk vectors via the real index pass, so the test
-    /// exercises the same chunking + storage path the CLI will.
+    /// Index and embed a session via the real passes, in import order: the
+    /// dense leg resolves anchor turns against the turn index, so vectors
+    /// without indexed turns (like a fresh import mid-flight) yield nothing.
     fn embed_and_store(
         index: &LineageIndex,
         conv: &lineage_core::Conversation,
         embedder: &FakeEmbedder,
     ) {
+        index.index_conversation(conv).unwrap();
         embed_and_store_session(index, embedder, conv).unwrap();
     }
 

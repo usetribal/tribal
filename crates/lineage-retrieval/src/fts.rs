@@ -1,18 +1,17 @@
 use std::time::Instant;
 
 use git2::Repository;
-use lineage_core::{generate_architecture_summary, LineageId};
-use lineage_git::read_conversation;
+use lineage_core::LineageId;
 use lineage_search::LineageIndex;
 
 use crate::retriever::{IntentRetriever, Result, RetrievalError};
-use crate::session::{attribution_for, is_private_or_private_ancestor};
+use crate::session::{verbatim_summary, SessionGate};
 use crate::types::{strength_for, Evidence, EvidenceTier, IntentQuery, Retrieval};
 
 /// Cache-key component for the intent path: bump on any change to what the FTS
 /// retriever would answer for an unchanged corpus (tokenization, candidate
 /// depth, evidence shape).
-pub const FTS_RETRIEVER_VERSION: &str = "1";
+pub const FTS_RETRIEVER_VERSION: &str = "2";
 
 /// How many FTS candidates to pull before building evidence. Over-retrieve
 /// relative to what selection injects: fusion (later) needs depth so a strong
@@ -21,10 +20,11 @@ pub const FTS_RETRIEVER_VERSION: &str = "1";
 /// tunable with an SE-domain default, not a hard limit on what selection shows.
 const DEFAULT_CANDIDATE_DEPTH: usize = 50;
 
-/// Rung 1 — lexical intent retrieval over the session FTS index (BM25). The
-/// whole session is the FTS document (BM25 handles long docs), so a match means
-/// "this session's text is about the query". Evidence is session-level and
-/// ordered by the index's relevance ranking.
+/// Rung 1 — lexical intent retrieval over the turn FTS index (BM25, weighted
+/// by import-time salience). The FTS document is a single salient turn, so a
+/// match means "this turn's own words are about the query", and the evidence
+/// carries that verbatim text. Ordered by the index's weighted relevance
+/// ranking.
 pub struct FtsRetriever<'a> {
     repo: &'a Repository,
     index: &'a LineageIndex,
@@ -45,31 +45,6 @@ impl<'a> FtsRetriever<'a> {
         self.candidate_depth = depth;
         self
     }
-
-    /// Build intent-match evidence for one session, or `None` if it is private
-    /// or unreadable. The FTS relevance order is preserved by the caller; this
-    /// only shapes a single session's evidence.
-    fn evidence_for_session(&self, session_id: &str) -> Result<Option<Evidence>> {
-        let id = LineageId::from(session_id.to_string());
-        let conversation = read_conversation(self.repo, &id)
-            .map_err(|e| RetrievalError::Retrieval(e.to_string()))?;
-        let Some(conversation) = conversation else {
-            return Ok(None);
-        };
-        if is_private_or_private_ancestor(self.repo, &conversation)? {
-            return Ok(None);
-        }
-
-        Ok(Some(Evidence {
-            session_id: conversation.id.clone(),
-            tier: EvidenceTier::IntentMatch,
-            strength: strength_for(EvidenceTier::IntentMatch, None),
-            match_confidence: None,
-            line_ranges: Vec::new(),
-            summary: generate_architecture_summary(&conversation),
-            attribution: attribution_for(&conversation),
-        }))
-    }
 }
 
 impl IntentRetriever for FtsRetriever<'_> {
@@ -78,12 +53,13 @@ impl IntentRetriever for FtsRetriever<'_> {
 
         let hits = self
             .index
-            .search(&query.text, self.candidate_depth)
+            .search_turns(&query.text, self.candidate_depth)
             .map_err(|e| RetrievalError::Retrieval(e.to_string()))?;
 
-        // The index returns hits already ordered by BM25 relevance. Preserve
-        // that order in the evidence so a later fusion step sees a clean
-        // session ranking (fusion is rank-based).
+        // The index returns turn hits already ordered by weighted relevance.
+        // Preserve that order in the evidence so a later fusion step sees a
+        // clean turn ranking (fusion is rank-based).
+        let mut gate = SessionGate::new(self.repo);
         let mut evidence = Vec::new();
         let mut truncated = false;
         for hit in hits {
@@ -95,13 +71,23 @@ impl IntentRetriever for FtsRetriever<'_> {
                     break;
                 }
             }
-            if let Some(entry) = self.evidence_for_session(&hit.session_id)? {
-                evidence.push(entry);
-            }
+            let Some(attribution) = gate.attribution(&hit.session_id)? else {
+                continue;
+            };
+            evidence.push(Evidence {
+                session_id: LineageId::from(hit.session_id),
+                turn_id: Some(LineageId::from(hit.turn_id)),
+                tier: EvidenceTier::IntentMatch,
+                strength: strength_for(EvidenceTier::IntentMatch, None),
+                match_confidence: None,
+                line_ranges: Vec::new(),
+                summary: verbatim_summary(&hit.body),
+                attribution,
+            });
         }
 
         // Every entry is the same tier/strength, so `from_evidence`'s
-        // strength-sort is order-preserving and the FTS relevance ranking
+        // strength-sort is order-preserving and the weighted relevance ranking
         // survives — the strongest lexical match stays first.
         let mut retrieval = Retrieval::from_evidence(evidence);
         retrieval.truncated = truncated;
@@ -235,6 +221,73 @@ mod tests {
             "identifier-only match should surface"
         );
         assert_eq!(retrieval.evidence[0].session_id, conv.id);
+    }
+
+    #[test]
+    fn focused_decision_outranks_noisy_exploration() {
+        // The observed dogfood failure: a session that opens with a wide
+        // exploratory sweep (tool results and read-only turns full of
+        // incidental matches) used to outrank the session that actually
+        // decided the thing. At turn grain with salience filtering, the noise
+        // turns never enter the index at all.
+        let dir = init_repo();
+        let repo = open_repo(dir.path()).unwrap();
+
+        let mut noisy = Conversation::new(AgentKind::Claude, dir.path().display().to_string());
+        noisy.turns.push(Turn {
+            id: LineageId::new(),
+            role: Role::User,
+            content: "look around the repo".into(),
+            tool_calls: vec![],
+            model: None,
+            timestamp: None,
+            artifacts: vec![],
+        });
+        for _ in 0..10 {
+            noisy.turns.push(Turn {
+                id: LineageId::new(),
+                role: Role::Tool,
+                content: "caching caching caching src/cache.rs output".into(),
+                tool_calls: vec![],
+                model: None,
+                timestamp: None,
+                artifacts: vec![],
+            });
+        }
+
+        let focused = session_about(
+            dir.path(),
+            "switch the caching layer to write-through",
+            "Edit",
+            "src/cache.rs",
+        );
+        for conv in [&noisy, &focused] {
+            persist_conversation(repo.inner(), conv).unwrap();
+        }
+
+        let index = LineageIndex::open(dir.path().join(".git/lineage/index.db")).unwrap();
+        index.index_conversation(&noisy).unwrap();
+        index.index_conversation(&focused).unwrap();
+
+        let retriever = FtsRetriever::new(repo.inner(), &index);
+        let retrieval = retriever
+            .retrieve_intent(&IntentQuery {
+                text: "caching".into(),
+                budget_ms: None,
+            })
+            .unwrap();
+
+        assert!(!retrieval.evidence.is_empty());
+        assert_eq!(retrieval.evidence[0].session_id, focused.id);
+        assert_eq!(
+            retrieval.evidence[0].turn_id.as_ref(),
+            Some(&focused.turns[0].id)
+        );
+        // The verbatim payload is the deciding turn's own words.
+        assert!(retrieval.evidence[0].summary.contains("write-through"));
+        // The noisy session's tool spam is not merely outranked — it is out of
+        // the corpus entirely.
+        assert!(retrieval.evidence.iter().all(|e| e.session_id != noisy.id));
     }
 
     #[test]

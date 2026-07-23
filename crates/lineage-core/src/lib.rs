@@ -4,6 +4,7 @@ pub mod error;
 pub mod ids;
 pub mod import_state;
 pub mod path_util;
+pub mod salience;
 pub mod sync;
 pub mod types;
 
@@ -12,7 +13,8 @@ pub use config::{
 };
 pub use conversation_util::{
     conversation_modified_code, enriched_indexable_body, files_touched, files_written,
-    generate_architecture_summary, session_chunks, turn_indexable_text, DEFAULT_CHUNK_MAX_CHARS,
+    generate_architecture_summary, session_chunks, turn_indexable_text, SessionChunk,
+    DEFAULT_CHUNK_MAX_CHARS,
 };
 pub use error::{LineageError, Result};
 pub use ids::{derive_line_object_id, derive_session_id, LineageId};
@@ -20,6 +22,7 @@ pub use import_state::{
     is_valid_import_schema, LastImportState, LAST_IMPORT_SCHEMA, LAST_IMPORT_SCHEMA_LEGACY,
 };
 pub use path_util::{normalize_repo_path, paths_match_repo_file, workspace_root_for};
+pub use salience::{turn_salience, turn_salience_weight, SalienceClass};
 pub use sync::{
     BlobManifestEntry, RepoBinding, SessionCommitLink, SyncBatch, SyncObjectKind, SyncObjectResult,
     SyncObjectStatus, SyncRejectReason, SyncResponse, SYNC_BATCH_SCHEMA, SYNC_RESPONSE_SCHEMA,

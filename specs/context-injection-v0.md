@@ -12,15 +12,17 @@ Status: **draft for review** — written against `conversation-schema-v0`,
 ## Scope
 
 - **In scope:** file-keyed injection triggered by an agent reading a file
-  (Claude Code adapter specified); the transport-neutral retrieval contract
-  (`context-query-v0`, `retrieval-v0`); evidence tiers and strength; the digest
-  format and attribution; cache keying and invalidation; privacy; the
-  injection log.
-- **Out of scope, not foreclosed:** prompt-keyed and session-start triggers;
-  adapters for other harnesses (the trigger section is per-adapter by design);
-  the server-side retrieval endpoint and team-mode cache hydration (the
-  contract here is written so a server can implement it; endpoint semantics
-  version separately).
+  (Claude Code adapter specified); prompt-keyed (intent) injection triggered
+  by the user submitting a message; the transport-neutral retrieval contract
+  (`context-query-v0`, `intent-query-v0`, `retrieval-v0`); evidence tiers and
+  strength; the digest formats (summary and verbatim-turn) and attribution;
+  affordance pointers; cache keying and invalidation; privacy; the injection
+  log.
+- **Out of scope, not foreclosed:** session-start triggers; adapters for other
+  harnesses (the trigger section is per-adapter by design); the server-side
+  retrieval endpoint and team-mode cache hydration (the contract here is
+  written so a server can implement it; endpoint semantics version
+  separately).
 - **Never in scope:** injection without visible attribution, and injection of
   `private` objects (see [Privacy](#privacy)).
 
@@ -51,6 +53,23 @@ harness-agnostic.
   does may ever surface an error inside the agent session or block the tool
   call.
 
+### Claude Code adapter — intent trigger
+
+- **Event:** `UserPromptSubmit`, configured in the harness settings by the
+  installer. Fires deterministically on every user message; the message text
+  is the query. CLI-first: `additionalContext` is known-broken in the VSCode
+  extension, and a conforming adapter MUST probe the live payload shape before
+  trusting it (the file-keyed adapter's lesson).
+- **Input:** the hook's stdin JSON; the adapter extracts the prompt text and
+  builds an `intent-query-v0`.
+- **Output on evidence:** `hookSpecificOutput.additionalContext` carrying the
+  rendered digest (see Digest format — verbatim turns). This reaches model
+  context without spending an agent turn.
+- **Output on no evidence, error, or deadline overrun:** exit 0 with no
+  output — identical fail-open discipline to the file-keyed trigger. The
+  miss path is latency-sensitive (it runs on every message): a retriever
+  SHOULD answer "nothing" well inside the budget rather than exhaust it.
+
 ## Retrieval contract
 
 One request/response shape regardless of where retrieval runs. Solo mode
@@ -65,6 +84,17 @@ the same shapes. The wire encoding is JSON with `snake_case` fields.
 | `file_blob_sha` | string | yes | Lowercase hex SHA-256 of the file content the agent received |
 | `repo` | object | yes | Repo identity hints, as in sync-protocol-v0 [Repo binding](sync-protocol-v0.md#repo-binding) |
 | `budget_ms` | integer | no | Caller's remaining latency budget; a retriever SHOULD return what it has rather than overrun |
+
+### `intent-query-v0`
+
+The prompt-keyed request: free intent text, no file or line anchor. A distinct
+shape rather than a `context-query-v0` variant — the file-keyed shape is
+frozen and its fields are all required.
+
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `text` | string | yes | The user's message / intent text to match against the corpus |
+| `budget_ms` | integer | no | As in `context-query-v0` |
 
 ### `retrieval-v0`
 
@@ -82,11 +112,12 @@ Each evidence entry:
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
 | `session_id` | string | yes | Conversation ULID the evidence comes from |
-| `tier` | string | yes | `line_objects` or `files_touched` |
+| `turn_id` | string | no | Turn ULID when the evidence is turn-grained (`intent_match`, and `line_objects` where the line object records it). Additive: consumers that only understand sessions ignore it |
+| `tier` | string | yes | `line_objects`, `files_touched`, or `intent_match` |
 | `strength` | string | yes | `high`, `medium`, or `low` (see below) |
 | `match_confidence` | string | no | For `line_objects` evidence: the line object's `confidence` (`exact`, `heuristic`, `manual`) |
 | `line_ranges` | array | no | `[start, end]` pairs in the current file, when line-level evidence exists |
-| `summary` | string | yes | Human-readable provenance summary for this file from this session |
+| `summary` | string | yes | The evidence payload: a provenance summary, or for turn-grained evidence the verbatim (capped) turn text |
 | `attribution` | string | yes | Display-only source label (who/when/agent); never an authorization identity |
 
 ### Evidence tiers and strength
@@ -98,6 +129,7 @@ heuristics act on. It is derived, never asserted independently of its inputs:
 |------|----------|----------|
 | `line_objects` | A line object in this file links the session to specific lines | `exact`/`manual` match → `high`; `heuristic` match → `medium` |
 | `files_touched` | The session **wrote** this path (edit/diff artifacts); summary is heuristic. Read-only touches are never evidence — a session that merely consulted a file must not become its provenance (and oracle-triggered reads would otherwise feed back into the corpus as evidence) | `low` |
+| `intent_match` | A turn's content matched an intent query (lexical or dense). Not anchored to a file or line; ranking within a retrieval preserves the retriever's relevance order, and strength is only the coarse floor | `medium` |
 
 `line-object-schema-v0`'s `confidence` is a match-quality scale, not an
 ordered relevance scale — `strength` exists because selection needs a total
@@ -122,6 +154,28 @@ at presentation time, never cached:
 - A selector MUST render only what the retrieval contains — no derivation,
   aggregation, or external lookups at render time.
 
+### Verbatim-turn digest (intent trigger)
+
+Turn-grained evidence injects the turn's own words, not a heuristic summary —
+the digest body for an `intent_match` entry is the evidence `summary` field
+carrying the verbatim turn text, capped at extraction time so render stays a
+pure formatting step:
+
+- The attribution header identifies the injection as Lineage-originated and
+  names the trigger, e.g.
+  `Lineage: 2 past turns match this prompt — details below.`
+- One block per selected turn: attribution (agent, session date, author when
+  known), then the verbatim turn text.
+- Each block MAY end with **affordance pointers**: one line per adjacent
+  provenance edge the agent can follow itself, rendered as a runnable
+  `git lineage` command with a fixed, small relation vocabulary —
+  `session` (the full conversation), `full-turn` (uncapped turn text),
+  `earlier-edits` (temporal chain for the turn's lines). Affordances teach
+  the agent the graph exists; they MUST be commands that work in the
+  installed CLI, and a selector MUST omit relations it cannot honour.
+- Selection defaults are shared with the file-keyed digest (entry cap, byte
+  cap, minimum strength).
+
 ## Cache
 
 A local, derived-data cache makes repeat and negative answers effectively
@@ -133,6 +187,12 @@ and merely costs re-retrieval.
   the retriever would answer. `corpus_generation` is a counter bumped on every
   import (new sessions invalidate); `retriever_version` invalidates on logic
   changes.
+- **Intent-path key:** `(query_hash, corpus_generation, retriever_version)`,
+  where `query_hash` is a content hash of the normalized query text. Free text
+  is a weak cache key — repeat hits come mostly from the same prompt re-fired
+  (harness retries, resumed sessions) — so the intent cache exists chiefly for
+  **negative caching**: the "nothing" answer for a repeated prompt must stay
+  effectively free.
 - **Value:** the serialized `retrieval-v0` — structured evidence, never the
   rendered digest — plus a `schema_version` for the value encoding. An
   unreadable or version-mismatched value is a miss and is deleted. Selection

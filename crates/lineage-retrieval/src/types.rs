@@ -55,6 +55,8 @@ pub enum EvidenceTier {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Evidence {
     pub session_id: LineageId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turn_id: Option<LineageId>,
     pub tier: EvidenceTier,
     pub strength: Strength,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -127,6 +129,7 @@ mod tests {
     fn evidence(strength: Strength) -> Evidence {
         Evidence {
             session_id: LineageId::new(),
+            turn_id: None,
             tier: EvidenceTier::FilesTouched,
             strength,
             match_confidence: None,
@@ -181,6 +184,23 @@ mod tests {
         let retrieval = Retrieval::empty();
         assert_eq!(retrieval.strength, Strength::None);
         assert_eq!(Retrieval::from_evidence(Vec::new()), retrieval);
+    }
+
+    #[test]
+    fn turn_id_round_trips_and_old_values_without_it_still_parse() {
+        let mut entry = evidence(Strength::Medium);
+        entry.turn_id = Some(LineageId::new());
+        let json = serde_json::to_value(&entry).unwrap();
+        assert_eq!(json["turn_id"], entry.turn_id.as_ref().unwrap().as_str());
+        let back: Evidence = serde_json::from_value(json).unwrap();
+        assert_eq!(back, entry);
+
+        // A pre-turn_id cached value (field absent) must deserialize to None,
+        // and a session-grained entry must keep the field off the wire.
+        let old = serde_json::to_value(evidence(Strength::Low)).unwrap();
+        assert!(old.get("turn_id").is_none());
+        let back: Evidence = serde_json::from_value(old).unwrap();
+        assert_eq!(back.turn_id, None);
     }
 
     #[test]
