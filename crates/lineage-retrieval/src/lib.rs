@@ -12,6 +12,8 @@ mod dense;
 mod fts;
 mod fusion;
 mod local;
+mod plan;
+mod primitives;
 mod retriever;
 mod session;
 mod types;
@@ -21,6 +23,14 @@ pub use dense::{embed_and_store_session, DenseRetriever, DENSE_RETRIEVER_VERSION
 pub use fts::{FtsRetriever, FTS_RETRIEVER_VERSION};
 pub use fusion::{FusedRetriever, DEFAULT_RRF_K};
 pub use local::{LocalRetriever, LOCAL_RETRIEVER_VERSION};
+pub use plan::{
+    fused_salient_turn_plan, line_anchored_temporal_plan, PlanResult, PlanRun, StageTiming,
+};
+pub use primitives::{
+    affordances_for, materialize_turns, time_search, turns_from_line_objects, turns_to_sessions,
+    AnchoredTurn, LineRef, MaterializeAnchor, RankedSession, TurnRef, MAX_AFFORDANCES,
+    MIN_ADMITTED_STRENGTH,
+};
 pub use retriever::{IntentRetriever, Result, RetrievalError, Retriever};
 pub use types::{
     strength_for, ContextQuery, Evidence, EvidenceTier, IntentQuery, Retrieval, Strength,
