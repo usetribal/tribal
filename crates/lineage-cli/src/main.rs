@@ -249,21 +249,26 @@ enum ContextAction {
         target: String,
     },
     /// Retrieve past turns matching a free-text intent or a file[:line] anchor
+    ///
+    /// Precedence: --file forces the temporal plan; --lexical/--dense/--fused
+    /// force one leg and skip the dispatcher; with none of those, the dispatcher
+    /// routes the text (a named, existing file → temporal, else fused).
     Query {
         /// The intent / question to match; optional when --file anchors the query
         #[arg(default_value = "")]
         text: String,
         /// Line-anchored temporal plan: <path>[:<line>]. With text, the text
-        /// re-ranks the anchored turns; alone, it returns them time-ordered
+        /// re-ranks the anchored turns; alone, it returns them time-ordered.
+        /// Forces temporal, skipping the dispatcher
         #[arg(long)]
         file: Option<String>,
-        /// Lexical (FTS) leg only
+        /// Lexical (FTS) leg only — skips the dispatcher
         #[arg(long)]
         lexical: bool,
-        /// Dense (semantic) leg only
+        /// Dense (semantic) leg only — skips the dispatcher
         #[arg(long)]
         dense: bool,
-        /// Fused lexical + dense (RRF) — the default
+        /// Fused lexical + dense (RRF) — forces fused, skipping the dispatcher
         #[arg(long)]
         fused: bool,
         /// Print per-stage plan timings (the fused and temporal plans only)
@@ -287,7 +292,9 @@ fn select_leg(lexical: bool, dense: bool, fused: bool) -> Result<retrieval_cmd::
         (true, false, false) => Ok(retrieval_cmd::Leg::Lexical),
         (false, true, false) => Ok(retrieval_cmd::Leg::Dense),
         (false, false, true) => Ok(retrieval_cmd::Leg::Fused),
-        (false, false, false) => Ok(retrieval_cmd::Leg::Fused),
+        // No leg flag: the dispatcher chooses the plan (temporal or fused). An
+        // explicit `--fused` skips it, so the two cases stay distinct.
+        (false, false, false) => Ok(retrieval_cmd::Leg::Default),
         _ => Err("choose at most one of --lexical / --dense / --fused".into()),
     }
 }

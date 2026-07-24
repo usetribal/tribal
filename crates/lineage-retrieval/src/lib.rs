@@ -9,6 +9,7 @@
 
 mod cache;
 mod dense;
+mod dispatch;
 mod fts;
 mod fusion;
 mod local;
@@ -20,6 +21,7 @@ mod types;
 
 pub use cache::{CacheKey, RetrievalCache};
 pub use dense::{embed_and_store_session, DenseRetriever, DENSE_RETRIEVER_VERSION};
+pub use dispatch::{route, Plan, RouteDecision};
 pub use fts::{FtsRetriever, FTS_RETRIEVER_VERSION};
 pub use fusion::{FusedRetriever, DEFAULT_RRF_K};
 pub use local::{LocalRetriever, LOCAL_RETRIEVER_VERSION};

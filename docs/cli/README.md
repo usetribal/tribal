@@ -116,8 +116,9 @@ See [LFS](../lfs.md).
 | `git lineage context log [--limit N]` | Show recorded context injections, newest last |
 | `git lineage context install [--user]` | Wire the context hook per-repo or user-level (all repos) |
 | `git lineage context uninstall [--user]` | Remove lineage context-hook wiring |
-| `git lineage context query "<text>" [--lexical\|--dense\|--fused] [--timing]` | Retrieve past turns matching a free-text intent (fused is the default); the fused path runs through the plan runner, `--timing` prints per-stage timings |
-| `git lineage context query --file <path>[:<line>] ["text"]` | Line-anchored temporal plan: the turns that authored the file/line, time-ordered (walked back through ancestry); with text, the text re-ranks those anchored turns |
+| `git lineage context query "<text>" [--timing]` | Retrieve past turns matching a free-text intent. With no leg/`--file` flag the query is **dispatched**: a named file that exists (in the corpus or the working tree) routes to the temporal plan on that anchor, everything else to the fused plan; `--timing` prints the chosen `route:` and per-stage timings |
+| `git lineage context query "<text>" [--lexical\|--dense\|--fused]` | Force one leg, skipping the dispatcher — the flags exist to see a leg in isolation |
+| `git lineage context query --file <path>[:<line>] ["text"]` | Force the line-anchored temporal plan (skips the dispatcher): the turns that authored the file/line, time-ordered (walked back through ancestry); with text, the text re-ranks those anchored turns |
 | `git lineage context salience` | Report the corpus's turn-salience breakdown (what indexing keeps and drops) |
 | `git lineage context chain <file>:<line>` | Print the temporal chain for a line — one hop per row (short sha, date, session, turn, confidence, or `DARK(kind)`) — resolved from the index (one live blame anchors HEAD, the rest are indexed reads) |
 
@@ -130,6 +131,18 @@ fired-but-silent outcome, with its reason — is recorded locally in the event
 log at `.git/lineage/events.jsonl` (never synced); `context log` is the surface
 to see exactly what your agent was told. See `specs/context-injection-v0.md`
 and `specs/diagnostics-v0.md`.
+
+`context query` routing precedence, highest first: `--file` forces the temporal
+plan on that anchor; `--lexical`/`--dense`/`--fused` force one leg and skip the
+dispatcher; with none of those, a rules-only dispatcher routes the free text. It
+extracts path-shaped and identifier-shaped tokens (no model, microseconds) and
+**hit-tests** each path against the corpus and the working tree — a path that
+exists routes to the temporal plan, everything else (unknown path, bare
+identifier, prose) to the fused plan, which degrades to honest-nothing. So the
+router never answers wrongly by construction. Each routing decision
+(`plan`/`anchor`/`signals`) is appended to the event log under `op:
+"context_query"` — separate from `context log` (which shows `context_hook`
+injections), so read it from `.git/lineage/events.jsonl` directly.
 
 ### Sync
 

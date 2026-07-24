@@ -9,22 +9,29 @@
 
 use std::path::Path;
 
+use chrono::Utc;
 use lineage_core::normalize_repo_path;
 use lineage_embed::Model2VecEmbedder;
 use lineage_git::{open_repo, resolve_anchor};
 use lineage_retrieval::{
-    affordances_for, fused_salient_turn_plan, line_anchored_temporal_plan, DenseRetriever,
-    Evidence, FtsRetriever, FusedRetriever, IntentQuery, IntentRetriever, LineRef, PlanResult,
-    Retrieval, StageTiming,
+    affordances_for, fused_salient_turn_plan, line_anchored_temporal_plan, route, DenseRetriever,
+    Evidence, FtsRetriever, FusedRetriever, IntentQuery, IntentRetriever, LineRef, Plan,
+    PlanResult, Retrieval, RouteDecision, StageTiming,
 };
 use lineage_search::LineageIndex;
+
+use crate::events::{EventLog, Outcome};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 /// Which retrieval leg to run. Selecting a leg is what lets you *see* the
-/// lexical-vs-semantic difference by hand.
+/// lexical-vs-semantic difference by hand. `Default` is the no-flag case: it
+/// skips leg selection and hands the query to the dispatcher, which routes to the
+/// temporal or fused plan. The three explicit legs bypass the dispatcher, so a
+/// hand-chosen leg always runs exactly as asked.
 #[derive(Debug, Clone, Copy)]
 pub enum Leg {
+    Default,
     Lexical,
     Dense,
     Fused,
@@ -36,10 +43,12 @@ pub enum Leg {
 /// faithful preview of the hook path.
 const DEFAULT_BUDGET_MS: u64 = 200;
 
-/// A single-leg query bypasses the plan runner: the `--lexical` / `--dense`
-/// flags exist precisely to see one leg in isolation, so wrapping them in the
-/// fused plan would defeat their purpose. Only the default (fused) and the
-/// `--file` (temporal) paths run through a plan.
+/// Precedence (documented in `--help`): `--file` forces the temporal plan on
+/// that anchor; `--lexical`/`--dense`/`--fused` force one leg and bypass the
+/// dispatcher (the flags exist precisely to see a leg in isolation, so wrapping
+/// them in a plan would defeat their purpose); with none of those, the dispatcher
+/// routes the free text to the temporal or fused plan. Only the dispatched and
+/// `--file` paths run a plan; the explicit legs run bare.
 pub fn query(
     repo_path: &Path,
     text: &str,
@@ -52,6 +61,9 @@ pub fn query(
 
     if let Some(file) = file {
         return temporal_query(&repo, &index, file, text, timing);
+    }
+    if let Leg::Default = leg {
+        return dispatched_query(&repo, &index, text, timing);
     }
 
     let intent = IntentQuery {
@@ -69,7 +81,7 @@ pub fn query(
                 DenseRetriever::new(repo.inner(), &index, &embedder).retrieve_intent(&intent)?;
             print_retrieval(text, leg, &retrieval);
         }
-        Leg::Fused => {
+        Leg::Fused | Leg::Default => {
             let embedder = Model2VecEmbedder::new(embed_cache_dir())?;
             let dense = DenseRetriever::new(repo.inner(), &index, &embedder);
             let fused = FusedRetriever::new(fts, dense);
@@ -78,6 +90,79 @@ pub fn query(
         }
     }
     Ok(())
+}
+
+/// The no-flag path: the dispatcher routes the free text, the decision is logged,
+/// and the chosen plan runs. A temporal route behaves exactly as if `--file` had
+/// been passed on the matched anchor (same `temporal_query`), so the dispatcher
+/// only *selects*; the plan code is unchanged.
+fn dispatched_query(
+    repo: &lineage_git::LineageRepo,
+    index: &LineageIndex,
+    text: &str,
+    timing: bool,
+) -> Result<()> {
+    let decision = route(text, index, repo.workdir());
+    log_route(repo, text, &decision);
+    if timing {
+        print_route(&decision);
+    }
+
+    match decision.plan {
+        Plan::Temporal => {
+            // The dispatcher only routes temporal on a hit-tested anchor, so this
+            // always resolves; `temporal_query` re-parses the anchor exactly as
+            // the `--file` path does.
+            let anchor = decision.matched_anchor.as_deref().unwrap_or(text);
+            temporal_query(repo, index, anchor, "", timing)
+        }
+        Plan::Fused => {
+            let intent = IntentQuery {
+                text: text.to_string(),
+                budget_ms: Some(DEFAULT_BUDGET_MS),
+            };
+            let embedder = Model2VecEmbedder::new(embed_cache_dir())?;
+            let fts = FtsRetriever::new(repo.inner(), index);
+            let dense = DenseRetriever::new(repo.inner(), index, &embedder);
+            let fused = FusedRetriever::new(fts, dense);
+            let plan = fused_salient_turn_plan(&fused, &intent)?;
+            print_plan_result(text, Leg::Default, &plan, timing);
+            Ok(())
+        }
+    }
+}
+
+/// The routing decision goes to the event log under `context_query`, best-effort
+/// (a failed log write never fails the query — the same discipline as
+/// `context_hook`). The plan, matched anchor, and signals are what makes the
+/// route auditable after the fact.
+fn log_route(repo: &lineage_git::LineageRepo, text: &str, decision: &RouteDecision) {
+    EventLog::for_git_dir(&repo.git_dir()).append(
+        Utc::now(),
+        "context_query",
+        Outcome::Ok,
+        serde_json::json!({
+            "query": text,
+            "plan": decision.plan.as_str(),
+            "anchor": decision.matched_anchor,
+            "signals": decision.signals,
+        }),
+    );
+}
+
+/// The `--timing` route line, e.g.
+/// `route: temporal (anchor README.md, signals: path-token+line-objects-hit)`.
+fn print_route(decision: &RouteDecision) {
+    let anchor = decision
+        .matched_anchor
+        .as_deref()
+        .map(|a| format!(" (anchor {a})"))
+        .unwrap_or_default();
+    println!(
+        "  route: {}{anchor}  signals: {}",
+        decision.plan.as_str(),
+        decision.signals.join("+"),
+    );
 }
 
 /// The line-anchored temporal plan: `--file <path>[:<line>]`. One live blame
