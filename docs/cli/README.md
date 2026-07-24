@@ -116,7 +116,8 @@ See [LFS](../lfs.md).
 | `git lineage context log [--limit N]` | Show recorded context injections, newest last |
 | `git lineage context install [--user]` | Wire the context hook per-repo or user-level (all repos) |
 | `git lineage context uninstall [--user]` | Remove lineage context-hook wiring |
-| `git lineage context query "<text>" [--lexical\|--dense\|--fused]` | Retrieve past turns matching a free-text intent (fused is the default) |
+| `git lineage context query "<text>" [--lexical\|--dense\|--fused] [--timing]` | Retrieve past turns matching a free-text intent (fused is the default); the fused path runs through the plan runner, `--timing` prints per-stage timings |
+| `git lineage context query --file <path>[:<line>] ["text"]` | Line-anchored temporal plan: the turns that authored the file/line, time-ordered (walked back through ancestry); with text, the text re-ranks those anchored turns |
 | `git lineage context salience` | Report the corpus's turn-salience breakdown (what indexing keeps and drops) |
 | `git lineage context chain <file>:<line>` | Print the temporal chain for a line — one hop per row (short sha, date, session, turn, confidence, or `DARK(kind)`) — resolved from the index (one live blame anchors HEAD, the rest are indexed reads) |
 

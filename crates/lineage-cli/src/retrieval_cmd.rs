@@ -9,10 +9,13 @@
 
 use std::path::Path;
 
+use lineage_core::normalize_repo_path;
 use lineage_embed::Model2VecEmbedder;
-use lineage_git::open_repo;
+use lineage_git::{open_repo, resolve_anchor};
 use lineage_retrieval::{
-    DenseRetriever, FtsRetriever, FusedRetriever, IntentQuery, IntentRetriever, Retrieval,
+    affordances_for, fused_salient_turn_plan, line_anchored_temporal_plan, DenseRetriever,
+    Evidence, FtsRetriever, FusedRetriever, IntentQuery, IntentRetriever, LineRef, PlanResult,
+    Retrieval, StageTiming,
 };
 use lineage_search::LineageIndex;
 
@@ -27,32 +30,147 @@ pub enum Leg {
     Fused,
 }
 
-pub fn query(repo_path: &Path, text: &str, leg: Leg) -> Result<()> {
+/// Wall budget threaded through the plan runner, matching the hook's default
+/// (context_cmd `DEFAULT_BUDGET_MS`). The by-hand `query` surface is not the
+/// hook, but running it under the same budget is what makes its stage timings a
+/// faithful preview of the hook path.
+const DEFAULT_BUDGET_MS: u64 = 200;
+
+/// A single-leg query bypasses the plan runner: the `--lexical` / `--dense`
+/// flags exist precisely to see one leg in isolation, so wrapping them in the
+/// fused plan would defeat their purpose. Only the default (fused) and the
+/// `--file` (temporal) paths run through a plan.
+pub fn query(
+    repo_path: &Path,
+    text: &str,
+    leg: Leg,
+    file: Option<&str>,
+    timing: bool,
+) -> Result<()> {
     let repo = open_repo(repo_path)?;
     let index = LineageIndex::open(repo.git_dir().join("lineage").join("index.db"))?;
+
+    if let Some(file) = file {
+        return temporal_query(&repo, &index, file, text, timing);
+    }
+
     let intent = IntentQuery {
         text: text.to_string(),
-        budget_ms: None,
+        budget_ms: Some(DEFAULT_BUDGET_MS),
     };
-
     let fts = FtsRetriever::new(repo.inner(), &index);
-    let retrieval = match leg {
-        Leg::Lexical => fts.retrieve_intent(&intent)?,
+    match leg {
+        Leg::Lexical => {
+            print_retrieval(text, leg, &fts.retrieve_intent(&intent)?);
+        }
         Leg::Dense => {
             let embedder = Model2VecEmbedder::new(embed_cache_dir())?;
-            DenseRetriever::new(repo.inner(), &index, &embedder).retrieve_intent(&intent)?
+            let retrieval =
+                DenseRetriever::new(repo.inner(), &index, &embedder).retrieve_intent(&intent)?;
+            print_retrieval(text, leg, &retrieval);
         }
         Leg::Fused => {
             let embedder = Model2VecEmbedder::new(embed_cache_dir())?;
             let dense = DenseRetriever::new(repo.inner(), &index, &embedder);
-            FusedRetriever::new(fts, dense).retrieve_intent(&intent)?
+            let fused = FusedRetriever::new(fts, dense);
+            let plan = fused_salient_turn_plan(&fused, &intent)?;
+            print_plan_result(text, leg, &plan, timing);
         }
-    };
-    print_retrieval(text, leg, &retrieval);
+    }
     Ok(())
 }
 
+/// The line-anchored temporal plan: `--file <path>[:<line>]`. One live blame
+/// anchors the line at HEAD; the plan walks from there over the index tables.
+/// When `text` is non-empty it re-ranks the anchored turns by FTS score.
+fn temporal_query(
+    repo: &lineage_git::LineageRepo,
+    index: &LineageIndex,
+    file: &str,
+    text: &str,
+    timing: bool,
+) -> Result<()> {
+    let (file_path, line) = parse_file_anchor(file);
+    let head = repo
+        .inner()
+        .head()
+        .ok()
+        .and_then(|h| h.peel_to_commit().ok())
+        .map(|c| c.id().to_string())
+        .unwrap_or_default();
+
+    // Resolve HEAD → introducing commit for the anchor line (the one allowed
+    // live blame). A file-level anchor (no line) uses line 1 as the seed for the
+    // blame; the plan still aggregates every line object for the file.
+    let anchor_line = line.unwrap_or(1);
+    let anchor = match resolve_anchor(repo.inner(), &head, &file_path, anchor_line)? {
+        Some((commit, orig_line)) => LineRef {
+            file_path: file_path.clone(),
+            line: orig_line,
+            commit_sha: commit,
+        },
+        // No blame at HEAD: the file/line has no committed history to walk, but
+        // the line_objects aggregation can still answer from HEAD directly.
+        None => LineRef {
+            file_path: file_path.clone(),
+            line: anchor_line,
+            commit_sha: head,
+        },
+    };
+
+    let text = (!text.is_empty()).then_some(text);
+    let plan = line_anchored_temporal_plan(
+        repo.inner(),
+        index,
+        &anchor,
+        line,
+        text,
+        Some(DEFAULT_BUDGET_MS),
+    )?;
+    print_plan_result(
+        &format!("{file_path}:{anchor_line}"),
+        Leg::Fused,
+        &plan,
+        timing,
+    );
+    Ok(())
+}
+
+/// `<path>` or `<path>:<line>`. A trailing `:<number>` is the line; anything
+/// else is treated as part of the path (Windows drive letters, colons in names).
+fn parse_file_anchor(file: &str) -> (String, Option<u32>) {
+    if let Some((path, line_str)) = file.rsplit_once(':') {
+        if let Ok(line) = line_str.parse::<u32>() {
+            return (normalize_repo_path(path, None), Some(line));
+        }
+    }
+    (normalize_repo_path(file, None), None)
+}
+
+fn print_plan_result(query: &str, leg: Leg, plan: &PlanResult, timing: bool) {
+    print_retrieval_with_affordances(query, leg, &plan.retrieval, plan.anchor_file.as_deref());
+    if timing {
+        print_timings(plan.timings.as_slice());
+    }
+}
+
+fn print_timings(timings: &[StageTiming]) {
+    println!("  timing:");
+    for t in timings {
+        println!("    {:<24} {} ms", t.name, t.elapsed_ms);
+    }
+}
+
 fn print_retrieval(text: &str, leg: Leg, retrieval: &Retrieval) {
+    print_retrieval_with_affordances(text, leg, retrieval, None);
+}
+
+fn print_retrieval_with_affordances(
+    text: &str,
+    leg: Leg,
+    retrieval: &Retrieval,
+    anchor_file: Option<&str>,
+) {
     println!(
         "query: {text:?}  leg: {leg:?}  strength: {:?}",
         retrieval.strength
@@ -67,9 +185,18 @@ fn print_retrieval(text: &str, leg: Leg, retrieval: &Retrieval) {
         for line in e.summary.lines() {
             println!("       {line}");
         }
+        print_affordances(e, anchor_file);
     }
     if retrieval.truncated {
         println!("  (truncated on budget)");
+    }
+}
+
+/// The affordance footer: runnable `git lineage` commands for the graph edges
+/// adjacent to this evidence (spec: Verbatim-turn digest — affordance pointers).
+fn print_affordances(evidence: &Evidence, anchor_file: Option<&str>) {
+    for cmd in affordances_for(evidence, anchor_file) {
+        println!("       → {cmd}");
     }
 }
 

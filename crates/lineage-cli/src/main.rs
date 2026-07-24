@@ -248,10 +248,15 @@ enum ContextAction {
         /// The line to chain, as <file>:<line> (e.g. README.md:40)
         target: String,
     },
-    /// Retrieve past sessions matching a free-text intent (prompt-keyed)
+    /// Retrieve past turns matching a free-text intent or a file[:line] anchor
     Query {
-        /// The intent / question to match against the session corpus
+        /// The intent / question to match; optional when --file anchors the query
+        #[arg(default_value = "")]
         text: String,
+        /// Line-anchored temporal plan: <path>[:<line>]. With text, the text
+        /// re-ranks the anchored turns; alone, it returns them time-ordered
+        #[arg(long)]
+        file: Option<String>,
         /// Lexical (FTS) leg only
         #[arg(long)]
         lexical: bool,
@@ -261,6 +266,9 @@ enum ContextAction {
         /// Fused lexical + dense (RRF) — the default
         #[arg(long)]
         fused: bool,
+        /// Print per-stage plan timings (the fused and temporal plans only)
+        #[arg(long)]
+        timing: bool,
     },
 }
 
@@ -409,11 +417,13 @@ fn main() -> ExitCode {
             ContextAction::Chain { target } => context_cmd::chain(&repo_path, &target),
             ContextAction::Query {
                 text,
+                file,
                 lexical,
                 dense,
                 fused,
+                timing,
             } => match select_leg(lexical, dense, fused) {
-                Ok(leg) => retrieval_cmd::query(&repo_path, &text, leg),
+                Ok(leg) => retrieval_cmd::query(&repo_path, &text, leg, file.as_deref(), timing),
                 Err(msg) => Err(msg.into()),
             },
         },
