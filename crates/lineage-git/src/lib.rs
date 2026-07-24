@@ -1,3 +1,4 @@
+mod ancestry;
 mod blame;
 mod blob_gc;
 mod commit_map;
@@ -25,6 +26,10 @@ mod repo;
 mod sync;
 mod write;
 
+pub use ancestry::{
+    commit_time, resolve_anchor, walk_line_ancestry, walk_line_ancestry_shared, AncestryHop,
+    AncestryParent,
+};
 pub use blame::{blame_with_lineage, BlameMatch, BlameResult};
 pub use blob_gc::{purge_orphans, PurgeReport};
 pub use commit_map::{best_commit_for_conversation, map_conversation_to_commits, CommitMatch};

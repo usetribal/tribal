@@ -118,6 +118,7 @@ See [LFS](../lfs.md).
 | `git lineage context uninstall [--user]` | Remove lineage context-hook wiring |
 | `git lineage context query "<text>" [--lexical\|--dense\|--fused]` | Retrieve past turns matching a free-text intent (fused is the default) |
 | `git lineage context salience` | Report the corpus's turn-salience breakdown (what indexing keeps and drops) |
+| `git lineage context chain <file>:<line>` | Print the temporal chain for a line — one hop per row (short sha, date, session, turn, confidence, or `DARK(kind)`) — resolved from the index (one live blame anchors HEAD, the rest are indexed reads) |
 
 `context hook` is wired into the agent harness, not run by hand: when the agent
 reads a file with provenance, a digest (attribution, line ranges, session

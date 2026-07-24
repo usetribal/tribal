@@ -182,7 +182,11 @@ pub fn import(
             index.index_conversation(&conv)?;
         }
     }
+    // Mirror the newly imported sessions' line objects and chain them. Import
+    // with --link-head may have just materialized objects; walking them now
+    // keeps `context chain` answerable without a full rebuild.
     let imported_ids: Vec<LineageId> = conversations.iter().map(|c| c.id.clone()).collect();
+    index.populate_line_tables_for_sessions(inner, &imported_ids)?;
     write_last_import(inner, &LastImportState::new(imported_ids))?;
 
     let line_objects: usize = results.iter().map(|r| r.line_objects_written).sum();
@@ -658,6 +662,10 @@ pub fn rebuild_index(repo_path: &Path, embed: bool) -> Result<()> {
     let indexed = index.rebuild_with_progress(inner, &mut |done, total| bar.update(done, total))?;
     bar.finish();
 
+    let mut lines_bar = crate::progress::SessionProgress::new("chaining");
+    index.populate_line_tables(inner, &mut |done, total| lines_bar.update(done, total))?;
+    lines_bar.finish();
+
     let embedded = if embed { run_embed_pass(repo_path)? } else { 0 };
 
     if embedded > 0 {
@@ -913,6 +921,12 @@ pub fn rebuild(repo_path: &Path, embed: bool) -> Result<()> {
     let sessions_indexed =
         index.rebuild_with_progress(repo.inner(), &mut |done, total| bar.update(done, total))?;
     bar.finish();
+
+    let mut lines_bar = crate::progress::SessionProgress::new("chaining");
+    index.populate_line_tables(repo.inner(), &mut |done, total| {
+        lines_bar.update(done, total)
+    })?;
+    lines_bar.finish();
 
     // Dense index pass is opt-in (--embed): a full re-embed can take minutes.
     let sessions_embedded = if embed { run_embed_pass(repo_path)? } else { 0 };
