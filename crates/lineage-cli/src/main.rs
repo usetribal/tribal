@@ -243,6 +243,11 @@ enum ContextAction {
     },
     /// Report the corpus's turn-salience breakdown (what indexing keeps/drops)
     Salience,
+    /// Print the temporal chain for a line: <file>:<line>, one hop per row
+    Chain {
+        /// The line to chain, as <file>:<line> (e.g. README.md:40)
+        target: String,
+    },
     /// Retrieve past sessions matching a free-text intent (prompt-keyed)
     Query {
         /// The intent / question to match against the session corpus
@@ -401,6 +406,7 @@ fn main() -> ExitCode {
                 })
             }
             ContextAction::Salience => retrieval_cmd::salience_report(&repo_path),
+            ContextAction::Chain { target } => context_cmd::chain(&repo_path, &target),
             ContextAction::Query {
                 text,
                 lexical,

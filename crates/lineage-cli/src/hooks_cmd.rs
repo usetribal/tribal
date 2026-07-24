@@ -5,7 +5,9 @@ use std::path::Path;
 use std::os::unix::fs::PermissionsExt;
 
 use chrono::Utc;
+use lineage_core::LineageId;
 use lineage_git::{link_recent_sessions_to_head, open_repo};
+use lineage_search::LineageIndex;
 
 use crate::events::{EventLog, Outcome};
 
@@ -72,6 +74,15 @@ pub fn post_commit(repo_path: &Path) -> Result<()> {
     let report = link_recent_sessions_to_head(repo.inner())?;
     if !report.linked.is_empty() {
         eprintln!("lineage: linked {} session(s) to HEAD", report.linked.len());
+    }
+
+    // Linking just materialized line objects at HEAD; mirror them so
+    // `context chain` sees this commit without waiting for a full rebuild.
+    if !report.linked.is_empty() {
+        let index = LineageIndex::open(repo.git_dir().join("lineage").join("index.db"))?;
+        let linked_ids: Vec<LineageId> =
+            report.linked.iter().map(|s| s.session_id.clone()).collect();
+        index.populate_line_tables_for_sessions(repo.inner(), &linked_ids)?;
     }
 
     let head_sha = repo

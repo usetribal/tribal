@@ -308,6 +308,90 @@ pub fn print_log(repo_path: &Path, limit: usize) -> Result<()> {
     Ok(())
 }
 
+/// `git lineage context chain <file>:<line>`: print the temporal chain for a
+/// line, one hop per row. One live blame anchors the line at HEAD to its commit;
+/// every subsequent hop is resolved from the index tables (`line_history` takes
+/// no repo, so it cannot blame). Mirrors `chain.sh`'s columns for parity.
+pub fn chain(repo_path: &Path, target: &str) -> Result<()> {
+    let (file_path, line) = parse_chain_target(target)?;
+    let repo = open_repo(repo_path)?;
+
+    let head = repo
+        .inner()
+        .head()
+        .ok()
+        .and_then(|h| h.peel_to_commit().ok())
+        .map(|c| c.id().to_string())
+        .unwrap_or_default();
+
+    // The single allowed live blame: resolve the line at HEAD to its introducing
+    // commit and that line's position within it — the anchor the indexed walk
+    // starts from (`line_history` takes no repo, so it cannot blame).
+    let anchor = lineage_git::resolve_anchor(repo.inner(), &head, &file_path, line)?;
+    let Some((anchor_commit, anchor_line)) = anchor else {
+        println!(
+            "Temporal chain for {file_path}:{line} (HEAD={})",
+            short(&head)
+        );
+        println!("no chain (line has no blame at HEAD)");
+        return Ok(());
+    };
+
+    let index = LineageIndex::open(repo.git_dir().join("lineage").join("index.db"))?;
+    let hops = index.line_history(&file_path, anchor_line, &anchor_commit)?;
+
+    println!(
+        "Temporal chain for {file_path}:{line} (HEAD={})",
+        short(&head)
+    );
+    if hops.is_empty() {
+        println!("no chain (line not on indexed lineage history)");
+        return Ok(());
+    }
+    for (i, hop) in hops.iter().enumerate() {
+        print_hop(i + 1, hop);
+    }
+    println!("Chain length: {} hops", hops.len());
+    Ok(())
+}
+
+fn print_hop(hop_num: usize, hop: &lineage_search::Hop) {
+    let date = DateTime::<Utc>::from_timestamp(hop.committed_at, 0)
+        .map(|d| d.format("%Y-%m-%d").to_string())
+        .unwrap_or_else(|| "-".to_string());
+    let (session, turn, conf) = match (&hop.session_id, &hop.turn_id, &hop.confidence) {
+        (Some(s), Some(t), Some(c)) => (s.clone(), t.clone(), c.clone()),
+        _ => (
+            "-".to_string(),
+            "-".to_string(),
+            format!("DARK({})", hop.hop_kind),
+        ),
+    };
+    println!(
+        "{:<4} {:<10} {:<11} {:<28} {:<32} {:<14} {}:{}",
+        hop_num,
+        &hop.commit_sha[..hop.commit_sha.len().min(8)],
+        date,
+        session,
+        turn,
+        conf,
+        hop.file_path,
+        hop.start_line,
+    );
+}
+
+fn short(sha: &str) -> &str {
+    &sha[..sha.len().min(9)]
+}
+
+fn parse_chain_target(target: &str) -> Result<(String, u32)> {
+    let (path, line_str) = target
+        .rsplit_once(':')
+        .ok_or("target must be <file>:<line>")?;
+    let line: u32 = line_str.parse().map_err(|_| "line must be a number")?;
+    Ok((normalize_repo_path(path, None), line))
+}
+
 const CLAUDE_SETTINGS_FILE: &str = ".claude/settings.json";
 const HOOK_COMMAND: &str = "git lineage context hook claude";
 

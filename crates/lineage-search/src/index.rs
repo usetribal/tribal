@@ -3,9 +3,12 @@ use std::path::Path;
 use git2::Repository;
 use lineage_core::{
     files_touched, files_written, normalize_repo_path, turn_indexable_text, turn_is_salient,
-    turn_salience, Conversation, LineageError,
+    turn_salience, Confidence, Conversation, LineObject, LineageError, LineageId,
 };
-use lineage_git::{hydrate_conversation, list_session_ids, read_conversation_stored};
+use lineage_git::{
+    commit_time, hydrate_conversation, list_line_objects, list_session_ids,
+    read_conversation_stored, read_note_for_commit, walk_line_ancestry_shared, AncestryHop,
+};
 use rusqlite::{params, Connection};
 use thiserror::Error;
 
@@ -64,6 +67,38 @@ pub struct ChunkVector {
     pub chunk_index: i64,
     pub turn_id: String,
     pub vector: Vec<f32>,
+}
+
+/// One line object as mirrored into the `line_objects` table: enough to seed an
+/// ancestry walk and to resolve a chain hop to its turn.
+#[derive(Debug, Clone)]
+pub struct LineObjectRow {
+    pub id: String,
+    pub file_path: String,
+    pub start_line: u32,
+    pub end_line: u32,
+    pub commit_sha: String,
+    pub committed_at: i64,
+    pub session_id: String,
+    pub turn_id: String,
+    pub confidence: String,
+}
+
+/// One resolved hop of a temporal chain: the commit that touched the region,
+/// its time, and either the attributing turn (when a line object covers the
+/// region) or a dark marker (`hop_kind` = dark_no_note | dark_no_match |
+/// boundary). Assembled entirely from the two index tables.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct Hop {
+    pub commit_sha: String,
+    pub committed_at: i64,
+    pub file_path: String,
+    pub start_line: u32,
+    pub end_line: u32,
+    pub session_id: Option<String>,
+    pub turn_id: Option<String>,
+    pub confidence: Option<String>,
+    pub hop_kind: String,
 }
 
 pub struct LineageIndex {
@@ -216,6 +251,35 @@ impl LineageIndex {
                 vector BLOB NOT NULL,
                 model_version TEXT NOT NULL DEFAULT '',
                 PRIMARY KEY (session_id, chunk_index)
+            );
+            CREATE TABLE IF NOT EXISTS line_objects (
+                id TEXT PRIMARY KEY,
+                file_path TEXT NOT NULL,
+                start_line INTEGER NOT NULL,
+                end_line INTEGER NOT NULL,
+                commit_sha TEXT NOT NULL,
+                committed_at INTEGER NOT NULL,
+                session_id TEXT NOT NULL,
+                turn_id TEXT NOT NULL,
+                confidence TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_line_objects_file_commit
+                ON line_objects(file_path, commit_sha);
+            CREATE INDEX IF NOT EXISTS idx_line_objects_file_time
+                ON line_objects(file_path, committed_at);
+            CREATE INDEX IF NOT EXISTS idx_line_objects_turn
+                ON line_objects(turn_id);
+            CREATE TABLE IF NOT EXISTS line_ancestry (
+                file_path TEXT NOT NULL,
+                commit_sha TEXT NOT NULL,
+                start_line INTEGER NOT NULL,
+                end_line INTEGER NOT NULL,
+                parent_commit_sha TEXT,
+                parent_file_path TEXT,
+                parent_start_line INTEGER,
+                parent_end_line INTEGER,
+                hop_kind TEXT NOT NULL,
+                PRIMARY KEY (file_path, commit_sha, start_line, end_line)
             );
             "#,
         )?;
@@ -537,6 +601,358 @@ impl LineageIndex {
         Ok(out)
     }
 
+    /// Depth cap on an ancestry walk: a squash/rebase floor or a long-lived
+    /// line bottoms out honestly at a boundary before this, but a pathological
+    /// history must not walk unbounded. The plan's "boundary/depth cap".
+    const ANCESTRY_MAX_HOPS: usize = 50;
+
+    /// Insert one line object's mirror row. The commit's time is looked up once
+    /// per object; an object whose commit no longer exists is skipped (returns
+    /// `false`) — it points at unreachable history and can never anchor a chain.
+    fn insert_line_object_row(&self, repo: &Repository, obj: &LineObject) -> Result<bool> {
+        let Some(committed_at) = commit_time(repo, &obj.commit_sha)? else {
+            return Ok(false);
+        };
+        let normalized = normalize_repo_path(&obj.file_path, None);
+        self.conn.execute(
+            "INSERT OR REPLACE INTO line_objects
+             (id, file_path, start_line, end_line, commit_sha, committed_at,
+              session_id, turn_id, confidence)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![
+                obj.id.as_str(),
+                normalized,
+                obj.line_range[0] as i64,
+                obj.line_range[1] as i64,
+                obj.commit_sha,
+                committed_at,
+                obj.conversation_id.as_str(),
+                obj.turn_id.as_str(),
+                confidence_str(obj),
+            ],
+        )?;
+        Ok(true)
+    }
+
+    /// Walk the blame ancestry of one line object's region and upsert an edge
+    /// per hop. The whole region is blamed once per hop (hunk-grain), so a
+    /// region that splits across commits diverges into distinct edges and
+    /// containment at query time picks the right one; a single-commit region
+    /// stays one edge. `hop_kind` is decided per child commit from
+    /// note/line-object presence, so a dark hop still records a continuable edge.
+    fn populate_ancestry_for_region(
+        &self,
+        repo: &Repository,
+        file_path: &str,
+        commit_sha: &str,
+        start_line: u32,
+        end_line: u32,
+        seen: &mut std::collections::HashSet<(String, u32, u32)>,
+    ) -> Result<()> {
+        let hops = walk_line_ancestry_shared(
+            repo,
+            commit_sha,
+            file_path,
+            start_line,
+            end_line,
+            Self::ANCESTRY_MAX_HOPS,
+            seen,
+        )?;
+        for hop in &hops {
+            let hop_kind = self.hop_kind_for(repo, hop)?;
+            // PK (file, commit, start, end) makes exact-duplicate edges from
+            // overlapping seeds idempotent; INSERT OR IGNORE keeps the first
+            // writer's edge (they agree on parent — same blame).
+            self.conn.execute(
+                "INSERT OR IGNORE INTO line_ancestry
+                 (file_path, commit_sha, start_line, end_line,
+                  parent_commit_sha, parent_file_path, parent_start_line, parent_end_line,
+                  hop_kind)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+                params![
+                    hop.file_path,
+                    hop.commit_sha,
+                    hop.start_line as i64,
+                    hop.end_line as i64,
+                    hop.parent.as_ref().map(|p| p.commit_sha.clone()),
+                    hop.parent.as_ref().map(|p| p.file_path.clone()),
+                    hop.parent.as_ref().map(|p| p.start_line as i64),
+                    hop.parent.as_ref().map(|p| p.end_line as i64),
+                    hop_kind,
+                ],
+            )?;
+        }
+        Ok(())
+    }
+
+    /// Classify a hop: a boundary (no parent) records honestly; otherwise the
+    /// edge is `resolved` if a line object covers the child region, `dark_no_note`
+    /// if the child commit has no lineage note, else `dark_no_match` (note
+    /// present but no covering object — carried-along region).
+    fn hop_kind_for(&self, repo: &Repository, hop: &AncestryHop) -> Result<String> {
+        if hop.parent.is_none() {
+            return Ok("boundary".to_string());
+        }
+        if self
+            .line_object_covering(&hop.file_path, &hop.commit_sha, hop.start_line)?
+            .is_some()
+        {
+            return Ok("resolved".to_string());
+        }
+        let has_note = read_note_for_commit(repo, &hop.commit_sha)
+            .map_err(SearchError::Lineage)?
+            .is_some();
+        Ok(if has_note {
+            "dark_no_match".to_string()
+        } else {
+            "dark_no_note".to_string()
+        })
+    }
+
+    /// The narrowest line object whose region contains `line` at `(file,
+    /// commit)`, or `None`. Narrowest wins: the tightest range is the most
+    /// specific attribution (the prototype's `resolve_turn` rule).
+    fn line_object_covering(
+        &self,
+        file_path: &str,
+        commit_sha: &str,
+        line: u32,
+    ) -> Result<Option<LineObjectRow>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, file_path, start_line, end_line, commit_sha, committed_at,
+                    session_id, turn_id, confidence
+             FROM line_objects
+             WHERE file_path = ?1 AND commit_sha = ?2
+               AND start_line <= ?3 AND end_line >= ?3
+             ORDER BY (end_line - start_line) ASC
+             LIMIT 1",
+        )?;
+        let mut rows = stmt.query_map(
+            params![file_path, commit_sha, line as i64],
+            row_to_line_object,
+        )?;
+        rows.next().transpose().map_err(SearchError::Sqlite)
+    }
+
+    /// Full recompute of both line tables: wipe, mirror every reachable line
+    /// object, then seed an ancestry walk from each object's region. Batched in
+    /// one transaction — the repo learned autocommit fsyncs make a rebuild
+    /// dominate wall time. `progress(done, total)` fires per line object walked.
+    pub fn populate_line_tables(
+        &self,
+        repo: &Repository,
+        progress: &mut dyn FnMut(usize, usize),
+    ) -> Result<usize> {
+        let tx = self.conn.unchecked_transaction()?;
+        self.conn.execute("DELETE FROM line_objects", [])?;
+        self.conn.execute("DELETE FROM line_ancestry", [])?;
+
+        let objects = list_line_objects(repo).map_err(SearchError::Lineage)?;
+        let total = objects.len();
+        progress(0, total);
+
+        // Two passes: mirror every object first so the ancestry pass can decide
+        // `resolved` vs dark from a complete line_objects table, not a partial
+        // one — a hop's child commit may host objects not yet inserted.
+        let mut mirrored = Vec::with_capacity(objects.len());
+        for obj in &objects {
+            if self.insert_line_object_row(repo, obj)? {
+                mirrored.push(obj);
+            }
+        }
+        // One seen-set shared across every seed: thousands of overlapping
+        // regions share ancestry commits, so a blame position is walked once
+        // for the whole pass, not once per line object.
+        let mut seen = std::collections::HashSet::new();
+        for (done, obj) in mirrored.iter().enumerate() {
+            let file_path = normalize_repo_path(&obj.file_path, None);
+            self.populate_ancestry_for_region(
+                repo,
+                &file_path,
+                &obj.commit_sha,
+                obj.line_range[0],
+                obj.line_range[1],
+                &mut seen,
+            )?;
+            progress(done + 1, total);
+        }
+
+        tx.commit()?;
+        Ok(mirrored.len())
+    }
+
+    /// Incremental line-table population for one session set's line objects
+    /// (import / post-commit link path). Refreshes those objects' mirror rows
+    /// and seeds ancestry from their regions; existing edges are left in place
+    /// (they are derived from unchanged history). Batched in one transaction.
+    pub fn populate_line_tables_for_sessions(
+        &self,
+        repo: &Repository,
+        session_ids: &[LineageId],
+    ) -> Result<usize> {
+        if session_ids.is_empty() {
+            return Ok(0);
+        }
+        let wanted: std::collections::HashSet<&str> =
+            session_ids.iter().map(|id| id.as_str()).collect();
+        let objects: Vec<LineObject> = list_line_objects(repo)
+            .map_err(SearchError::Lineage)?
+            .into_iter()
+            .filter(|o| wanted.contains(o.conversation_id.as_str()))
+            .collect();
+
+        let tx = self.conn.unchecked_transaction()?;
+        let mut mirrored = 0usize;
+        for obj in &objects {
+            if !self.insert_line_object_row(repo, obj)? {
+                continue;
+            }
+            mirrored += 1;
+        }
+        let mut seen = std::collections::HashSet::new();
+        for obj in &objects {
+            let file_path = normalize_repo_path(&obj.file_path, None);
+            self.populate_ancestry_for_region(
+                repo,
+                &file_path,
+                &obj.commit_sha,
+                obj.line_range[0],
+                obj.line_range[1],
+                &mut seen,
+            )?;
+        }
+        tx.commit()?;
+        Ok(mirrored)
+    }
+
+    /// Resolve a temporal chain for `(file_path, line)` anchored at
+    /// `anchor_commit` (the commit a single live HEAD blame resolved the line
+    /// to). Everything after the anchor is indexed reads: no `Repository` is
+    /// taken, so this function cannot blame. Each hop is the ancestry edge at
+    /// the current position plus (for resolved hops) the covering line object.
+    pub fn line_history(
+        &self,
+        file_path: &str,
+        line: u32,
+        anchor_commit: &str,
+    ) -> Result<Vec<Hop>> {
+        let file_path = normalize_repo_path(file_path, None);
+        let mut hops = Vec::new();
+        let mut cur_file = file_path;
+        let mut cur_commit = anchor_commit.to_string();
+        let mut cur_line = line;
+        let mut seen = std::collections::HashSet::new();
+
+        for _ in 0..Self::ANCESTRY_MAX_HOPS {
+            let Some(edge) = self.ancestry_edge_covering(&cur_file, &cur_commit, cur_line)? else {
+                break;
+            };
+            // A revisited (commit, line) means a cycle in stored edges — bail
+            // rather than loop; the index is derived and could be inconsistent.
+            if !seen.insert((edge.commit_sha.clone(), edge.start_line)) {
+                break;
+            }
+            hops.push(self.hop_from_edge(&edge)?);
+
+            let Some(parent) = edge.parent else {
+                break;
+            };
+            cur_file = parent.file_path;
+            cur_commit = parent.commit_sha;
+            cur_line = parent.start_line;
+        }
+        Ok(hops)
+    }
+
+    /// The ancestry edge whose child region contains `line` at `(file, commit)`,
+    /// narrowest first (a sub-range divergence stores two edges; containment
+    /// picks the tighter, more specific one).
+    fn ancestry_edge_covering(
+        &self,
+        file_path: &str,
+        commit_sha: &str,
+        line: u32,
+    ) -> Result<Option<AncestryEdge>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT file_path, commit_sha, start_line, end_line,
+                    parent_commit_sha, parent_file_path, parent_start_line, parent_end_line,
+                    hop_kind
+             FROM line_ancestry
+             WHERE file_path = ?1 AND commit_sha = ?2
+               AND start_line <= ?3 AND end_line >= ?3
+             ORDER BY (end_line - start_line) ASC
+             LIMIT 1",
+        )?;
+        let mut rows = stmt.query_map(params![file_path, commit_sha, line as i64], |row| {
+            let parent_commit: Option<String> = row.get(4)?;
+            let parent = parent_commit.map(|commit_sha| AncestryEdgeParent {
+                commit_sha,
+                file_path: row
+                    .get::<_, Option<String>>(5)
+                    .ok()
+                    .flatten()
+                    .unwrap_or_default(),
+                start_line: row.get::<_, Option<i64>>(6).ok().flatten().unwrap_or(0) as u32,
+            });
+            Ok(AncestryEdge {
+                file_path: row.get(0)?,
+                commit_sha: row.get(1)?,
+                start_line: row.get::<_, i64>(2)? as u32,
+                end_line: row.get::<_, i64>(3)? as u32,
+                hop_kind: row.get(8)?,
+                parent,
+            })
+        })?;
+        rows.next().transpose().map_err(SearchError::Sqlite)
+    }
+
+    /// Decorate an edge into a `Hop`: a resolved edge carries the covering line
+    /// object's turn; a dark/boundary edge carries only its kind. `committed_at`
+    /// comes from a covering line object when one exists, else 0 (a dark hop's
+    /// child commit has no object to source it from).
+    fn hop_from_edge(&self, edge: &AncestryEdge) -> Result<Hop> {
+        let covering =
+            self.line_object_covering(&edge.file_path, &edge.commit_sha, edge.start_line)?;
+        let (session_id, turn_id, confidence, committed_at) = match &covering {
+            Some(obj) => (
+                Some(obj.session_id.clone()),
+                Some(obj.turn_id.clone()),
+                Some(obj.confidence.clone()),
+                obj.committed_at,
+            ),
+            None => (None, None, None, 0),
+        };
+        Ok(Hop {
+            commit_sha: edge.commit_sha.clone(),
+            committed_at,
+            file_path: edge.file_path.clone(),
+            start_line: edge.start_line,
+            end_line: edge.end_line,
+            session_id,
+            turn_id,
+            confidence,
+            hop_kind: edge.hop_kind.clone(),
+        })
+    }
+
+    /// All turns that ever touched `file_path`, most recent first — the
+    /// aggregation query `committed_at` earns its column for ("why so bloated").
+    /// No walking: a single indexed scan of the mirror table.
+    pub fn line_objects_for_file(&self, file_path: &str) -> Result<Vec<LineObjectRow>> {
+        let normalized = normalize_repo_path(file_path, None);
+        let mut stmt = self.conn.prepare(
+            "SELECT id, file_path, start_line, end_line, commit_sha, committed_at,
+                    session_id, turn_id, confidence
+             FROM line_objects WHERE file_path = ?1 ORDER BY committed_at DESC",
+        )?;
+        let rows = stmt.query_map(params![normalized], row_to_line_object)?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row?);
+        }
+        Ok(out)
+    }
+
     /// Monotonic counter observed by derived caches: any change means the
     /// session corpus may have changed. 0 = nothing indexed yet.
     pub fn generation(&self) -> Result<i64> {
@@ -590,6 +1006,46 @@ impl LineageIndex {
             progress(indexed, total);
         }
         Ok(indexed)
+    }
+}
+
+/// One stored ancestry edge with its parent side, as read back for the walk.
+struct AncestryEdge {
+    file_path: String,
+    commit_sha: String,
+    start_line: u32,
+    end_line: u32,
+    hop_kind: String,
+    parent: Option<AncestryEdgeParent>,
+}
+
+struct AncestryEdgeParent {
+    commit_sha: String,
+    file_path: String,
+    start_line: u32,
+}
+
+fn row_to_line_object(row: &rusqlite::Row) -> rusqlite::Result<LineObjectRow> {
+    Ok(LineObjectRow {
+        id: row.get(0)?,
+        file_path: row.get(1)?,
+        start_line: row.get::<_, i64>(2)? as u32,
+        end_line: row.get::<_, i64>(3)? as u32,
+        commit_sha: row.get(4)?,
+        committed_at: row.get(5)?,
+        session_id: row.get(6)?,
+        turn_id: row.get(7)?,
+        confidence: row.get(8)?,
+    })
+}
+
+/// The line object's confidence as its stored string (exact | heuristic |
+/// manual), matching the enum's lowercase serde spelling.
+fn confidence_str(obj: &LineObject) -> &'static str {
+    match obj.confidence {
+        Confidence::Exact => "exact",
+        Confidence::Heuristic => "heuristic",
+        Confidence::Manual => "manual",
     }
 }
 
