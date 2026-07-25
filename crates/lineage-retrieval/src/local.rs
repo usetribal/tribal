@@ -2,19 +2,22 @@ use std::collections::BTreeMap;
 use std::time::Instant;
 
 use git2::Repository;
-use lineage_core::{generate_architecture_summary, normalize_repo_path, Confidence, LineageId};
+use lineage_core::{
+    generate_architecture_summary, normalize_repo_path, turn_indexable_text, Confidence,
+    Conversation, LineageId,
+};
 use lineage_git::{read_conversation, read_line_object};
 use lineage_search::LineageIndex;
 
 use crate::retriever::{Result, RetrievalError, Retriever};
-use crate::session::{attribution_for, is_private_or_private_ancestor};
+use crate::session::{attribution_for, is_private_or_private_ancestor, verbatim_summary};
 use crate::types::{strength_for, ContextQuery, Evidence, EvidenceTier, Retrieval};
 
 const LINE_OBJECT_REF_GLOB: &str = "refs/lineage/lines/*";
 
 /// Cache-key component: bump on any change to what this retriever would
 /// answer for an unchanged repo (tiers, grouping, summary source).
-pub const LOCAL_RETRIEVER_VERSION: &str = "3";
+pub const LOCAL_RETRIEVER_VERSION: &str = "5";
 
 /// Solo-mode retriever: answers from the repo's own lineage refs and search
 /// index, in-process. Team mode swaps in a server-backed implementation
@@ -25,9 +28,13 @@ pub struct LocalRetriever<'a> {
 }
 
 /// Line-object evidence for one session before it becomes wire `Evidence`.
+/// `turn_id` is the turn the strongest line object attributes the lines to —
+/// carried through so the digest can quote the turn that actually wrote the
+/// code rather than describing the session as a whole.
 struct LineMatches {
     ranges: Vec<[u32; 2]>,
     confidence: Confidence,
+    turn_id: Option<String>,
 }
 
 impl<'a> LocalRetriever<'a> {
@@ -65,12 +72,17 @@ impl<'a> LocalRetriever<'a> {
                 .or_insert(LineMatches {
                     ranges: Vec::new(),
                     confidence: object.confidence,
+                    turn_id: Some(object.turn_id.as_str().to_string()),
                 });
             entry.ranges.push(object.line_range);
             // A session's match confidence is its best one: any exact/manual
             // line object outranks heuristic ones for the strength mapping.
+            // The quoted turn follows the same winner, so the digest quotes the
+            // turn behind the strongest attribution rather than whichever ref
+            // the enumeration reached first.
             if matches!(object.confidence, Confidence::Exact | Confidence::Manual) {
                 entry.confidence = object.confidence;
+                entry.turn_id = Some(object.turn_id.as_str().to_string());
             }
         }
 
@@ -96,21 +108,32 @@ impl<'a> LocalRetriever<'a> {
             return Ok(None);
         }
 
-        let summary = generate_architecture_summary(&conversation);
         let attribution = attribution_for(&conversation);
 
-        let (tier, match_confidence, line_ranges) = match line_matches {
+        let (tier, match_confidence, line_ranges, turn_id) = match line_matches {
             Some(matches) => (
                 EvidenceTier::LineObjects,
                 Some(matches.confidence),
                 matches.ranges,
+                matches.turn_id,
             ),
-            None => (EvidenceTier::FilesTouched, None, Vec::new()),
+            None => (EvidenceTier::FilesTouched, None, Vec::new(), None),
         };
+
+        // Quote the attributing turn when there is one. The session-level
+        // summary keys off the FIRST user turn, which is a near-constant for
+        // anyone who opens sessions with a standing preamble — it made a
+        // 1,219-turn build session read as a generic repo tour, so a reader
+        // concluded there was nothing to pursue. Fall back to it only for
+        // files_touched evidence, where no turn is attributed.
+        let summary = turn_id
+            .as_deref()
+            .and_then(|id| turn_summary(&conversation, id))
+            .unwrap_or_else(|| generate_architecture_summary(&conversation));
 
         Ok(Some(Evidence {
             session_id: conversation.id,
-            turn_id: None,
+            turn_id: turn_id.map(LineageId::from),
             tier,
             strength: strength_for(tier, match_confidence),
             match_confidence,
@@ -119,6 +142,24 @@ impl<'a> LocalRetriever<'a> {
             attribution,
         }))
     }
+}
+
+/// The attributed turn's own words, capped like any other verbatim evidence.
+/// Quotes exactly the turn `turn_id` names — never a neighbour — so the
+/// rendered handle and the rendered text always describe the same node.
+/// Returns `None` when the turn is absent from the stored conversation (a line
+/// object can outlive an amended session) or carries no text, so the caller
+/// falls back rather than emitting an empty summary.
+fn turn_summary(conversation: &Conversation, turn_id: &str) -> Option<String> {
+    let turn = conversation
+        .turns
+        .iter()
+        .find(|t| t.id.as_str() == turn_id)?;
+    let text = turn_indexable_text(turn);
+    if text.trim().is_empty() {
+        return None;
+    }
+    Some(verbatim_summary(&text))
 }
 
 impl Retriever for LocalRetriever<'_> {

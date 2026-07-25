@@ -20,7 +20,7 @@ pub enum Plan {
     /// FTS ∥ dense → RRF → materialize verbatim turns. The default; degrades to
     /// honest-nothing.
     Fused,
-    /// A file[:line] anchor → line_objects/ancestry → time-ordered turns.
+    /// A `file[:line]` anchor → line_objects/ancestry → time-ordered turns.
     Temporal,
 }
 
