@@ -307,6 +307,51 @@ fn aggregation_by_committed_at_orders_newest_first() {
     assert!(objs[0].committed_at >= objs[1].committed_at);
 }
 
+/// The turn → line object direction: `idx_line_objects_turn` read the way
+/// nothing read it before, which is what makes the graph two-way.
+#[test]
+fn line_objects_for_turn_walks_from_a_turn_to_the_code_it_produced() {
+    let dir = init_repo();
+    let repo = open_repo(dir.path()).unwrap();
+
+    let c1 = commit_file(dir.path(), "f.txt", "a\nb\n", "c1");
+    let c2 = commit_file(dir.path(), "g.txt", "c\n", "c2");
+
+    let (conv, t) = conv_with_turn(dir.path(), "f.txt", [1, 1]);
+    let (other_conv, other_t) = conv_with_turn(dir.path(), "g.txt", [1, 1]);
+    persist_conversation(repo.inner(), &conv).unwrap();
+    persist_conversation(repo.inner(), &other_conv).unwrap();
+    // One turn wrote two files across two commits; another turn wrote one.
+    attach_line_object(&repo, &conv, &t, "f.txt", [1, 1], &c1, Confidence::Exact);
+    attach_line_object(&repo, &conv, &t, "g.txt", [1, 1], &c2, Confidence::Exact);
+    attach_line_object(
+        &repo,
+        &other_conv,
+        &other_t,
+        "g.txt",
+        [1, 1],
+        &c2,
+        Confidence::Heuristic,
+    );
+
+    let index = open_index(dir.path());
+    index
+        .populate_line_tables(repo.inner(), &mut |_, _| {})
+        .unwrap();
+
+    let objs = index.line_objects_for_turn(t.as_str(), 10).unwrap();
+    assert_eq!(objs.len(), 2, "only this turn's objects");
+    assert!(objs.iter().all(|o| o.turn_id == t.as_str()));
+    let mut files: Vec<&str> = objs.iter().map(|o| o.file_path.as_str()).collect();
+    files.sort();
+    assert_eq!(files, vec!["f.txt", "g.txt"]);
+    assert_eq!(index.line_objects_for_turn(t.as_str(), 1).unwrap().len(), 1);
+    assert!(index
+        .line_objects_for_turn("no-such-turn", 10)
+        .unwrap()
+        .is_empty());
+}
+
 /// Full recompute wipes and rebuilds both tables: a stale object dropped from
 /// the refs does not survive a repopulate.
 #[test]
