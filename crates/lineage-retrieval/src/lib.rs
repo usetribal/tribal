@@ -18,6 +18,7 @@ mod primitives;
 mod retriever;
 mod session;
 mod types;
+mod verbs;
 
 pub use cache::{CacheKey, RetrievalCache};
 pub use dense::{embed_and_store_session, DenseRetriever, DENSE_RETRIEVER_VERSION};
@@ -29,8 +30,9 @@ pub use plan::{
     fused_salient_turn_plan, line_anchored_temporal_plan, PlanResult, PlanRun, StageTiming,
 };
 pub use primitives::{
-    affordances_for, materialize_turns, time_search, turns_from_line_objects, turns_to_sessions,
-    AnchoredTurn, LineRef, MaterializeAnchor, RankedSession, TurnRef, MAX_AFFORDANCES,
+    line_objects_of_turn, materialize_turns, search_within_sessions, sessions_for_commit,
+    time_search, turn_neighbourhood, turns_from_line_objects, turns_to_sessions, AnchoredTurn,
+    LineRef, MaterializeAnchor, ProducedLines, RankedSession, SessionRef, TurnRef,
     MIN_ADMITTED_STRENGTH,
 };
 pub use retriever::{IntentRetriever, Result, RetrievalError, Retriever};
@@ -39,3 +41,4 @@ pub use types::{
     strength_for, ContextQuery, Evidence, EvidenceTier, IntentQuery, Retrieval, Strength,
     CONTEXT_QUERY_SCHEMA, RETRIEVAL_SCHEMA,
 };
+pub use verbs::{verb_for_relation, Verb, VERBS};

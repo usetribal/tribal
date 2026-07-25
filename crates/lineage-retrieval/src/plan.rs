@@ -322,8 +322,7 @@ mod tests {
     }
 
     #[test]
-    fn temporal_plan_returns_line_anchored_evidence_with_affordances() {
-        use crate::primitives::affordances_for;
+    fn temporal_plan_returns_line_anchored_evidence() {
         use lineage_core::{AgentKind, Conversation, LineObject, Role, Turn};
 
         let dir = tempfile::tempdir().unwrap();
@@ -377,11 +376,9 @@ mod tests {
         assert_eq!(ev.tier, EvidenceTier::LineObjects);
         assert!(ev.summary.contains("caching decision"));
         assert!(result.timings.iter().any(|t| t.name == "time_search"));
-
-        let cmds = affordances_for(ev, result.anchor_file.as_deref());
-        assert!(cmds
-            .iter()
-            .any(|c| c == "git lineage context chain lib.rs:1"));
+        // The anchor file is what lets the CLI render an `earlier-edits`
+        // pointer; the rendering itself is the CLI's concern now.
+        assert_eq!(result.anchor_file.as_deref(), Some("lib.rs"));
     }
 
     #[test]

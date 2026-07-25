@@ -119,6 +119,26 @@ impl<'a> SessionGate<'a> {
     pub(crate) fn seal<T>(&mut self, value: T) -> Gated<T> {
         Gated(value)
     }
+
+    /// Gate a batch of session-keyed items in one pass: drop what the gate
+    /// refuses, hand each survivor its attribution, and seal the result. Every
+    /// traversal verb has this shape, and routing them all through one method
+    /// means a new verb cannot gate *some* of its rows and still compile.
+    pub(crate) fn admit_all<In, Out>(
+        &mut self,
+        items: Vec<In>,
+        session_id_of: impl Fn(&In) -> &str,
+        build: impl Fn(In, &str) -> Out,
+    ) -> Result<Gated<Vec<Out>>> {
+        let mut out = Vec::new();
+        for item in items {
+            let Some(attribution) = self.attribution(session_id_of(&item))? else {
+                continue;
+            };
+            out.push(build(item, &attribution));
+        }
+        Ok(self.seal(out))
+    }
 }
 
 /// A payload carrying turn *text*, proven to have passed [`SessionGate`].
