@@ -9,6 +9,57 @@ This document describes how Lineage is structured and how data flows through the
 3. **Policy-first** — sensitive content is redacted before persistence
 4. **Agent-agnostic** — a canonical conversation schema; adapters translate vendor formats
 
+## Invariants
+
+Design goals describe what Lineage aims for; these are the rules a change must not
+break. They are load-bearing — each exists because violating it produced a real defect.
+If a change appears to require breaking one, that is a signal the model needs extending,
+not that the rule needs an exception.
+
+### 1. The provenance graph is deterministic
+
+Every node and edge must be computable from data that is already durably stored — the
+conversation refs, the git history, and the notes. The same inputs must yield the same
+graph on any machine, at any time, for any user.
+
+No node or edge may depend on a heuristic whose output could reasonably differ between
+runs, on a model's judgement, or on an inference nobody can reproduce. A relation that
+cannot be computed deterministically does not belong in the graph. It may belong in a
+derived, clearly-labelled layer above it — but the graph itself stays reproducible,
+because everything downstream (attribution, blame, sync, team sharing) assumes two people
+looking at the same repo see the same provenance.
+
+### 2. The provenance graph is backfillable
+
+Prefer relations that can be reconstructed from history over relations that must be
+captured as work happens. `rebuild` and re-import are the upgrade path (see **Release
+status** in [AGENTS.md](../AGENTS.md)), and that only holds while the graph can be
+rederived from what git already contains.
+
+An "as-you-go" capture mechanism — one that only records the edge if the tool was
+installed and running at the moment the work occurred — creates provenance that existing
+repositories can never gain. It splits the corpus into instrumented and dark regions and
+makes coverage a function of adoption date rather than of history. When a new relation is
+proposed, ask first whether it can be backfilled; if it cannot, that is a real cost to
+weigh, not a detail.
+
+### 3. Rendering decides how to show, never what to show
+
+A surface that displays provenance — the injected digest, `git lineage show`, the MCP
+tool responses, the VS Code panel, the web UI — formats what it is given. It must not
+select, substitute, or infer content.
+
+Concretely: if evidence names turn N, the surface renders turn N's text. It does not
+quote a neighbouring turn because that one reads better, and it does not silently swap
+one node for another. Doing so makes the rendered output inconsistent with the identifiers
+beside it, so any follow-up traversal on those identifiers returns something the reader
+did not see. Choosing *which* node is evidence is a retrieval and graph concern, expressed
+through typed relations and salience — both of which are inspectable and testable.
+Formatting, truncating, ordering, and laying out are rendering concerns.
+
+When a surface looks thin, the fix is upstream: a missing edge, or a selection rule that
+should be explicit. It is never a substitution made at render time.
+
 ## Crate dependency graph
 
 ```text
