@@ -4,6 +4,7 @@ mod blob_gc;
 mod commit_map;
 mod compact;
 mod config;
+mod coverage;
 mod delete;
 mod doctor;
 mod funnel;
@@ -34,6 +35,10 @@ pub use blame::{blame_with_lineage, BlameMatch, BlameResult};
 pub use blob_gc::{purge_orphans, PurgeReport};
 pub use commit_map::{best_commit_for_conversation, map_conversation_to_commits, CommitMatch};
 pub use config::{read_repo_config, write_repo_config, LINEAGE_CONFIG_REF};
+pub use coverage::{
+    commit_note_coverage, summarize_coverage, tracked_file_line_counts, CoverageReport,
+    COVERAGE_BUCKETS,
+};
 pub use delete::{delete_session, DeleteReport};
 pub use doctor::{run_doctor, run_doctor_refs, DoctorReport};
 pub use funnel::{audit_materialization, MaterializationFunnel};
