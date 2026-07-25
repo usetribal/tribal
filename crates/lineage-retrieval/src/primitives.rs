@@ -1,8 +1,10 @@
 //! The typed primitive layer: small, independently testable operations the plan
 //! runner composes by ordinary Rust — not a DAG engine. Composition is type
 //! compatibility (a primitive that yields `TurnRef`s feeds one that consumes
-//! them), and the privacy filter is pinned inside `materialize_turns` so no plan
-//! can emit evidence without it (spec: Privacy — filtering at the source).
+//! them), and every primitive that yields turn *text* returns it as
+//! [`Gated`], which only `SessionGate` can construct — so no plan and no
+//! agent-facing verb can emit evidence without the privacy filter having run
+//! (spec: Privacy — filtering at the source).
 //!
 //! The producer primitives (FTS / dense / fusion) already exist as
 //! `IntentRetriever`s and are not re-wrapped here; this module adds the
@@ -13,7 +15,7 @@ use lineage_core::Confidence;
 use lineage_search::{Hop, LineObjectRow, LineageIndex};
 
 use crate::retriever::{Result, RetrievalError};
-use crate::session::{verbatim_summary, SessionGate};
+use crate::session::{verbatim_summary, Gated, SessionGate};
 use crate::types::{strength_for, Evidence, EvidenceTier, Strength};
 
 /// A conversation turn, identified with its session (privacy and attribution are
@@ -130,18 +132,21 @@ pub fn turns_to_sessions(ranked_turns: &[TurnRef]) -> Vec<RankedSession> {
 }
 
 /// `materialize_turns` — turn refs → wire `Evidence`. The privacy filter and
-/// attribution run here through `SessionGate`, before any evidence exists, so
-/// this is structurally the only way a plan produces emittable evidence
+/// attribution run here through `SessionGate`, before any evidence exists
 /// (spec: Privacy enforced at the source). A turn whose session is private (or
 /// whose fork chain reaches a private one) or whose text is missing yields no
 /// evidence. `anchors[i]` optionally line-anchors turn `i` so the evidence
 /// carries a file:line for the `earlier-edits` affordance.
+///
+/// The result is [`Gated`]: turn text can only be constructed on the far side
+/// of the gate, so this stays the only shape a plan can emit even though it is
+/// no longer the only exit.
 pub fn materialize_turns(
     repo: &Repository,
     index: &LineageIndex,
     turns: &[TurnRef],
     anchors: &[Option<MaterializeAnchor>],
-) -> Result<Vec<Evidence>> {
+) -> Result<Gated<Vec<Evidence>>> {
     let mut gate = SessionGate::new(repo);
     let mut evidence = Vec::new();
     for (i, turn) in turns.iter().enumerate() {
@@ -157,7 +162,7 @@ pub fn materialize_turns(
         let anchor = anchors.get(i).and_then(|a| a.as_ref());
         evidence.push(evidence_from_turn(turn, &row.body, &attribution, anchor));
     }
-    Ok(evidence)
+    Ok(gate.seal(evidence))
 }
 
 /// The line anchor a materialized turn carries: its confidence sets strength and
@@ -398,7 +403,9 @@ mod tests {
             session_id: conv.id.as_str().to_string(),
             turn_id: conv.turns[0].id.as_str().to_string(),
         }];
-        let evidence = materialize_turns(repo.inner(), &index, &turns, &[None]).unwrap();
+        let evidence = materialize_turns(repo.inner(), &index, &turns, &[None])
+            .unwrap()
+            .into_inner();
         assert!(
             evidence.is_empty(),
             "private session must never materialize"
@@ -423,7 +430,9 @@ mod tests {
             line_range: [10, 12],
             confidence: Confidence::Exact,
         })];
-        let evidence = materialize_turns(repo.inner(), &index, &turns, &anchors).unwrap();
+        let evidence = materialize_turns(repo.inner(), &index, &turns, &anchors)
+            .unwrap()
+            .into_inner();
         assert_eq!(evidence.len(), 1);
         assert_eq!(evidence[0].tier, EvidenceTier::LineObjects);
         assert_eq!(evidence[0].strength, Strength::High);

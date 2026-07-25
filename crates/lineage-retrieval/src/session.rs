@@ -112,4 +112,128 @@ impl<'a> SessionGate<'a> {
             .insert(session_id.to_string(), verdict.clone());
         Ok(verdict)
     }
+
+    /// Seal turn-text-bearing output as [`Gated`]. Takes `&mut self` so a caller
+    /// can only reach it while holding a live gate — the same gate it must have
+    /// asked about every session whose text it is sealing.
+    pub(crate) fn seal<T>(&mut self, value: T) -> Gated<T> {
+        Gated(value)
+    }
+}
+
+/// A payload carrying turn *text*, proven to have passed [`SessionGate`].
+///
+/// The gate used to be structurally safe because `materialize_turns` was its
+/// single exit; agent-facing traversal adds more exits, so the invariant is
+/// restated as a type instead of a convention. The inner field is private to
+/// this module and [`SessionGate::seal`] is the only constructor, so a
+/// primitive cannot return turn text without having run the gate — a future
+/// author who forgets gets a compile error, not a leak.
+///
+/// The guarantee is a compile error, so it is proven by one:
+///
+/// ```compile_fail
+/// let leaked = lineage_retrieval::Gated("private turn text");
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Gated<T>(T);
+
+impl<T> Gated<T> {
+    /// Unwrap at the emit boundary. Reading is unrestricted by design: the
+    /// guarantee is about what may be *constructed*, and a consumer that holds a
+    /// `Gated` already holds gated data.
+    pub fn into_inner(self) -> T {
+        self.0
+    }
+
+    pub fn get(&self) -> &T {
+        &self.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use lineage_core::{AgentKind, Conversation, LineageId, Role, Turn};
+    use lineage_git::{open_repo, persist_conversation};
+
+    use super::*;
+
+    fn init_repo() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        dir
+    }
+
+    fn session(dir: &std::path::Path, private: bool) -> Conversation {
+        let mut conv = Conversation::new(AgentKind::Claude, dir.display().to_string());
+        conv.private = private;
+        conv.turns.push(Turn {
+            id: LineageId::new(),
+            role: Role::User,
+            content: "the private words".into(),
+            tool_calls: vec![],
+            model: None,
+            timestamp: None,
+            artifacts: vec![],
+        });
+        conv
+    }
+
+    #[test]
+    fn gate_refuses_private_sessions_and_admits_the_rest() {
+        let dir = init_repo();
+        let repo = open_repo(dir.path()).unwrap();
+        let public = session(dir.path(), false);
+        let private = session(dir.path(), true);
+        persist_conversation(repo.inner(), &public).unwrap();
+        persist_conversation(repo.inner(), &private).unwrap();
+
+        let mut gate = SessionGate::new(repo.inner());
+        assert!(gate.attribution(private.id.as_str()).unwrap().is_none());
+        let admitted = gate.attribution(public.id.as_str()).unwrap();
+        assert!(admitted.unwrap().contains("claude session"));
+    }
+
+    /// A fork of a private session is private too, so text reached through a
+    /// child id must not escape either.
+    #[test]
+    fn gate_refuses_a_fork_of_a_private_session() {
+        let dir = init_repo();
+        let repo = open_repo(dir.path()).unwrap();
+        let parent = session(dir.path(), true);
+        let mut child = session(dir.path(), false);
+        child.parent_session_id = Some(parent.id.clone());
+        persist_conversation(repo.inner(), &parent).unwrap();
+        persist_conversation(repo.inner(), &child).unwrap();
+
+        let mut gate = SessionGate::new(repo.inner());
+        assert!(gate.attribution(child.id.as_str()).unwrap().is_none());
+    }
+
+    /// An unknown session id has no readable privacy verdict, so it is refused
+    /// rather than assumed public.
+    #[test]
+    fn gate_refuses_an_unknown_session() {
+        let dir = init_repo();
+        let repo = open_repo(dir.path()).unwrap();
+        let mut gate = SessionGate::new(repo.inner());
+        assert!(gate.attribution("nope").unwrap().is_none());
+    }
+
+    /// The only way to a `Gated` payload is through a live gate — the
+    /// compile-fail doctest on `Gated` proves the negative, this proves the
+    /// positive path still works.
+    #[test]
+    fn seal_round_trips_through_a_live_gate() {
+        let dir = init_repo();
+        let repo = open_repo(dir.path()).unwrap();
+        let mut gate = SessionGate::new(repo.inner());
+        let sealed = gate.seal(vec!["turn text"]);
+        assert_eq!(sealed.get().len(), 1);
+        assert_eq!(sealed.into_inner(), vec!["turn text"]);
+    }
 }

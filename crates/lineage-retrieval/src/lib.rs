@@ -34,6 +34,7 @@ pub use primitives::{
     MIN_ADMITTED_STRENGTH,
 };
 pub use retriever::{IntentRetriever, Result, RetrievalError, Retriever};
+pub use session::Gated;
 pub use types::{
     strength_for, ContextQuery, Evidence, EvidenceTier, IntentQuery, Retrieval, Strength,
     CONTEXT_QUERY_SCHEMA, RETRIEVAL_SCHEMA,
