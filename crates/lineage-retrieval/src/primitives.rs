@@ -208,24 +208,139 @@ fn evidence_from_turn(
     }
 }
 
-/// The affordance relations the installed CLI can honour today, rendered as
-/// runnable `git lineage` commands (spec: Verbatim-turn digest — a selector MUST
-/// omit relations it cannot honour). `session` is always available; a
-/// line-anchored evidence entry additionally offers `earlier-edits`. `full-turn`
-/// is folded into `session` — the whole conversation prints the turn uncapped,
-/// so no new subcommand is invented.
-///
-/// Capped at `MAX_AFFORDANCES` lines so the pointers stay a footer, not the
-/// payload.
-pub const MAX_AFFORDANCES: usize = 3;
+/// `search_within_sessions` — scoped FTS over a given session set: the repair
+/// for "right sessions, wrong turns". One indexed query rather than N greps over
+/// materialized transcripts, which is the whole point of having it as a verb.
+/// Bounded by `limit`; an empty session set matches nothing.
+pub fn search_within_sessions(
+    repo: &Repository,
+    index: &LineageIndex,
+    session_ids: &[String],
+    query: &str,
+    limit: usize,
+) -> Result<Gated<Vec<Evidence>>> {
+    let hits = index
+        .search_turns_in_sessions(session_ids, query, limit)
+        .map_err(|e| RetrievalError::Retrieval(e.to_string()))?;
+    let mut gate = SessionGate::new(repo);
+    gate.admit_all(
+        hits,
+        |hit| hit.session_id.as_str(),
+        |hit, attribution| {
+            evidence_from_turn(
+                &TurnRef {
+                    session_id: hit.session_id,
+                    turn_id: hit.turn_id,
+                },
+                &hit.body,
+                attribution,
+                None,
+            )
+        },
+    )
+}
 
-pub fn affordances_for(evidence: &Evidence, anchor_file: Option<&str>) -> Vec<String> {
-    let mut lines = vec![format!("git lineage show {}", evidence.session_id.as_str())];
-    if let (Some(file), Some([start, _])) = (anchor_file, evidence.line_ranges.first()) {
-        lines.push(format!("git lineage context chain {file}:{start}"));
+/// `turn_neighbourhood` — the turns within `radius` positions of `turn_id` in
+/// its own session, in conversation order: the repair for "right turn, missing
+/// its argument". Bounded by `limit` as well as by `radius`, so a wide radius on
+/// a long session cannot blow the budget.
+pub fn turn_neighbourhood(
+    repo: &Repository,
+    index: &LineageIndex,
+    turn_id: &str,
+    radius: u32,
+    limit: usize,
+) -> Result<Gated<Vec<Evidence>>> {
+    let rows = index
+        .turns_around(turn_id, radius, limit)
+        .map_err(|e| RetrievalError::Retrieval(e.to_string()))?;
+    let mut gate = SessionGate::new(repo);
+    gate.admit_all(
+        rows,
+        |row| row.session_id.as_str(),
+        |row, attribution| {
+            evidence_from_turn(
+                &TurnRef {
+                    session_id: row.session_id,
+                    turn_id: row.turn_id,
+                },
+                &row.body,
+                attribution,
+                None,
+            )
+        },
+    )
+}
+
+/// One region of code a turn produced: where it landed and how confidently it
+/// is attributed. Refs only — no turn text — so this is ungated; the gate
+/// applies at materialization, as it always has.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProducedLines {
+    pub anchor: LineRef,
+    pub line_range: [u32; 2],
+    pub confidence: Confidence,
+}
+
+/// `line_objects_of_turn` — the code a turn produced: the repair for "right
+/// turn, want its outcome", and the direction that makes the graph two-way.
+/// Bounded by `limit`.
+pub fn line_objects_of_turn(
+    index: &LineageIndex,
+    turn_id: &str,
+    limit: usize,
+) -> Result<Vec<ProducedLines>> {
+    let rows = index
+        .line_objects_for_turn(turn_id, limit)
+        .map_err(|e| RetrievalError::Retrieval(e.to_string()))?;
+    Ok(rows.into_iter().map(produced_lines_from_row).collect())
+}
+
+fn produced_lines_from_row(row: LineObjectRow) -> ProducedLines {
+    ProducedLines {
+        confidence: parse_confidence(&row.confidence),
+        line_range: [row.start_line, row.end_line],
+        anchor: LineRef {
+            file_path: row.file_path,
+            line: row.start_line,
+            commit_sha: row.commit_sha,
+        },
     }
-    lines.truncate(MAX_AFFORDANCES);
-    lines
+}
+
+/// A session reached by traversal, with the display label the gate produced for
+/// it. The gate is what makes this shape safe to emit: a private session (or a
+/// fork of one) never has an attribution, so it never becomes a `SessionRef`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionRef {
+    pub session_id: String,
+    pub attribution: String,
+}
+
+/// `sessions_for_commit` — the sessions behind a commit: the one v1 verb whose
+/// entry point is ordinary git work rather than an injected digest. Reads the
+/// `session_commits` mirror, so it is one indexed lookup. Bounded by `limit`.
+///
+/// Gated even though it emits no turn text: a private session must not be named
+/// as evidence at all (spec: Privacy).
+pub fn sessions_for_commit(
+    repo: &Repository,
+    index: &LineageIndex,
+    commit_sha: &str,
+    limit: usize,
+) -> Result<Gated<Vec<SessionRef>>> {
+    let ids = index
+        .sessions_for_commit(commit_sha, limit)
+        .map_err(|e| RetrievalError::Retrieval(e.to_string()))?;
+    let mut gate = SessionGate::new(repo);
+    gate.admit_all(
+        ids,
+        |id| id.as_str(),
+        |session_id, attribution| SessionRef {
+            session_id,
+            attribution: attribution.to_string(),
+        },
+    )
 }
 
 /// The strength floor a plan admits (spec: minimum strength `low`). Shared so
@@ -438,29 +553,6 @@ mod tests {
         assert_eq!(evidence[0].strength, Strength::High);
         assert_eq!(evidence[0].line_ranges, vec![[10, 12]]);
         assert!(evidence[0].summary.contains("deciding words"));
-
-        let cmds = affordances_for(&evidence[0], Some("src/lib.rs"));
-        assert!(cmds[0].starts_with("git lineage show "));
-        assert!(cmds
-            .iter()
-            .any(|c| c == "git lineage context chain src/lib.rs:10"));
-    }
-
-    #[test]
-    fn affordances_omit_earlier_edits_without_a_line_anchor() {
-        let ev = Evidence {
-            session_id: LineageId::from("s1".to_string()),
-            turn_id: Some(LineageId::from("t1".to_string())),
-            tier: EvidenceTier::IntentMatch,
-            strength: Strength::Medium,
-            match_confidence: None,
-            line_ranges: Vec::new(),
-            summary: "body".into(),
-            attribution: "claude".into(),
-        };
-        let cmds = affordances_for(&ev, None);
-        assert_eq!(cmds.len(), 1, "only session is honourable");
-        assert!(cmds[0].contains("git lineage show s1"));
     }
 
     #[test]
@@ -468,5 +560,197 @@ mod tests {
         assert_eq!(parse_confidence("exact"), Confidence::Exact);
         assert_eq!(parse_confidence("manual"), Confidence::Manual);
         assert_eq!(parse_confidence("nonsense"), Confidence::Heuristic);
+    }
+
+    /// A session of plain user prompts, so every turn is salient and reaches the
+    /// index — the corpus the traversal verbs walk.
+    fn session_saying(dir: &std::path::Path, prompts: &[&str]) -> Conversation {
+        let mut conv = Conversation::new(AgentKind::Claude, dir.display().to_string());
+        for prompt in prompts {
+            conv.turns.push(Turn {
+                id: LineageId::new(),
+                role: Role::User,
+                content: (*prompt).into(),
+                tool_calls: vec![],
+                model: None,
+                timestamp: None,
+                artifacts: vec![],
+            });
+        }
+        conv
+    }
+
+    /// Persist and index a session, returning the index it was written to.
+    fn indexed(dir: &std::path::Path, convs: &[&Conversation]) -> LineageIndex {
+        let repo = open_repo(dir).unwrap();
+        let index = LineageIndex::open(dir.join(".git/lineage/index.db")).unwrap();
+        for conv in convs {
+            persist_conversation(repo.inner(), conv).unwrap();
+            index.index_conversation(conv).unwrap();
+        }
+        index
+    }
+
+    #[test]
+    fn search_within_sessions_stays_scoped_and_is_bounded() {
+        let dir = init_repo();
+        let repo = open_repo(dir.path()).unwrap();
+        let inside = session_saying(dir.path(), &["redis for the cache", "redis again"]);
+        let outside = session_saying(dir.path(), &["redis but out of scope"]);
+        let index = indexed(dir.path(), &[&inside, &outside]);
+
+        let scoped = search_within_sessions(
+            repo.inner(),
+            &index,
+            &[inside.id.as_str().to_string()],
+            "redis",
+            10,
+        )
+        .unwrap()
+        .into_inner();
+        assert_eq!(scoped.len(), 2);
+        assert!(scoped
+            .iter()
+            .all(|e| e.session_id.as_str() == inside.id.as_str()));
+
+        let bounded = search_within_sessions(
+            repo.inner(),
+            &index,
+            &[inside.id.as_str().to_string()],
+            "redis",
+            1,
+        )
+        .unwrap()
+        .into_inner();
+        assert_eq!(bounded.len(), 1, "the bound is honoured");
+    }
+
+    #[test]
+    fn search_within_sessions_never_emits_a_private_session() {
+        let dir = init_repo();
+        let repo = open_repo(dir.path()).unwrap();
+        let mut private = session_saying(dir.path(), &["the private redis decision"]);
+        private.private = true;
+        let index = indexed(dir.path(), &[&private]);
+
+        // The index holds the turn; only the gate keeps it out of evidence.
+        assert_eq!(
+            index
+                .search_turns_in_sessions(&[private.id.as_str().to_string()], "redis", 10)
+                .unwrap()
+                .len(),
+            1
+        );
+        let evidence = search_within_sessions(
+            repo.inner(),
+            &index,
+            &[private.id.as_str().to_string()],
+            "redis",
+            10,
+        )
+        .unwrap()
+        .into_inner();
+        assert!(evidence.is_empty());
+    }
+
+    #[test]
+    fn turn_neighbourhood_returns_the_surrounding_turns_in_order() {
+        let dir = init_repo();
+        let repo = open_repo(dir.path()).unwrap();
+        let conv = session_saying(dir.path(), &["first", "second", "third", "fourth"]);
+        let index = indexed(dir.path(), &[&conv]);
+
+        let around = turn_neighbourhood(repo.inner(), &index, conv.turns[1].id.as_str(), 1, 10)
+            .unwrap()
+            .into_inner();
+        let bodies: Vec<&str> = around.iter().map(|e| e.summary.as_str()).collect();
+        assert_eq!(bodies, vec!["first", "second", "third"]);
+
+        // An unknown turn is silence, not an error — a stale handle must not
+        // break the agent's traversal.
+        assert!(
+            turn_neighbourhood(repo.inner(), &index, "no-such-turn", 1, 10)
+                .unwrap()
+                .into_inner()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn turn_neighbourhood_never_emits_a_private_session() {
+        let dir = init_repo();
+        let repo = open_repo(dir.path()).unwrap();
+        let mut private = session_saying(dir.path(), &["one", "two"]);
+        private.private = true;
+        let index = indexed(dir.path(), &[&private]);
+
+        let around = turn_neighbourhood(repo.inner(), &index, private.turns[0].id.as_str(), 1, 10)
+            .unwrap()
+            .into_inner();
+        assert!(around.is_empty());
+    }
+
+    #[test]
+    fn line_objects_of_turn_resolves_the_code_a_turn_produced() {
+        let dir = init_repo();
+        let repo = open_repo(dir.path()).unwrap();
+        let conv = session_writing(dir.path(), "add the fn", "src/lib.rs");
+        persist_conversation(repo.inner(), &conv).unwrap();
+        let commit = commit_file(dir.path(), "lib.rs", "fn added() {}\n");
+
+        let obj = LineObject::new(
+            "lib.rs",
+            [1, 3],
+            commit.clone(),
+            conv.id.clone(),
+            conv.turns[0].id.clone(),
+            Confidence::Exact,
+        );
+        write_line_object(repo.inner(), &obj).unwrap();
+
+        let index = LineageIndex::open(dir.path().join(".git/lineage/index.db")).unwrap();
+        index
+            .populate_line_tables(repo.inner(), &mut |_, _| {})
+            .unwrap();
+
+        let produced = line_objects_of_turn(&index, conv.turns[0].id.as_str(), 10).unwrap();
+        assert_eq!(produced.len(), 1);
+        assert_eq!(produced[0].anchor.file_path, "lib.rs");
+        assert_eq!(produced[0].anchor.commit_sha, commit);
+        assert_eq!(produced[0].line_range, [1, 3]);
+        assert_eq!(produced[0].confidence, Confidence::Exact);
+
+        assert!(line_objects_of_turn(&index, "no-such-turn", 10)
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn sessions_for_commit_resolves_and_gates() {
+        let dir = init_repo();
+        let repo = open_repo(dir.path()).unwrap();
+        let sha = commit_file(dir.path(), "lib.rs", "fn linked() {}\n");
+        let mut public = session_saying(dir.path(), &["the public decision"]);
+        public.commit_shas.push(sha.clone());
+        let mut private = session_saying(dir.path(), &["the private decision"]);
+        private.private = true;
+        private.commit_shas.push(sha.clone());
+        let index = indexed(dir.path(), &[&public, &private]);
+
+        // Both sessions are mirrored; only the public one survives the gate.
+        assert_eq!(index.sessions_for_commit(&sha, 10).unwrap().len(), 2);
+        let found = sessions_for_commit(repo.inner(), &index, &sha, 10)
+            .unwrap()
+            .into_inner();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].session_id, public.id.as_str());
+        assert!(found[0].attribution.contains("claude session"));
+
+        assert!(
+            sessions_for_commit(repo.inner(), &index, &"b".repeat(40), 10)
+                .unwrap()
+                .into_inner()
+                .is_empty()
+        );
     }
 }

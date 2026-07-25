@@ -14,12 +14,13 @@ use lineage_core::normalize_repo_path;
 use lineage_embed::Model2VecEmbedder;
 use lineage_git::{open_repo, resolve_anchor};
 use lineage_retrieval::{
-    affordances_for, fused_salient_turn_plan, line_anchored_temporal_plan, route, DenseRetriever,
-    Evidence, FtsRetriever, FusedRetriever, IntentQuery, IntentRetriever, LineRef, Plan,
-    PlanResult, Retrieval, RouteDecision, StageTiming,
+    fused_salient_turn_plan, line_anchored_temporal_plan, route, DenseRetriever, Evidence,
+    FtsRetriever, FusedRetriever, IntentQuery, IntentRetriever, LineRef, Plan, PlanResult,
+    Retrieval, RouteDecision, StageTiming,
 };
 use lineage_search::LineageIndex;
 
+use crate::digest::affordances_for;
 use crate::events::{EventLog, Outcome};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
