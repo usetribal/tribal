@@ -356,13 +356,22 @@ mod tests {
     };
     use lineage_git::{open_repo, persist_conversation, write_line_object};
 
+    /// A fixture repo with its own identity. Set locally rather than inherited:
+    /// `persist_conversation` needs a signature, and a runner with no global
+    /// `user.name` (CI) would otherwise fail where a developer machine passes.
     fn init_repo() -> tempfile::TempDir {
         let dir = tempfile::tempdir().unwrap();
-        std::process::Command::new("git")
-            .args(["init"])
-            .current_dir(dir.path())
-            .output()
-            .unwrap();
+        for args in [
+            vec!["init"],
+            vec!["config", "user.email", "t@t"],
+            vec!["config", "user.name", "t"],
+        ] {
+            std::process::Command::new("git")
+                .args(&args)
+                .current_dir(dir.path())
+                .output()
+                .unwrap();
+        }
         dir
     }
 
