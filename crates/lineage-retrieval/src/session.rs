@@ -141,12 +141,12 @@ impl<'a> SessionGate<'a> {
     }
 }
 
-/// A payload carrying turn *text*, proven to have passed [`SessionGate`].
+/// A payload carrying turn *text*, proven to have passed the privacy gate.
 ///
 /// The gate used to be structurally safe because `materialize_turns` was its
 /// single exit; agent-facing traversal adds more exits, so the invariant is
 /// restated as a type instead of a convention. The inner field is private to
-/// this module and [`SessionGate::seal`] is the only constructor, so a
+/// this module and the gate's own `seal` is the only constructor, so a
 /// primitive cannot return turn text without having run the gate — a future
 /// author who forgets gets a compile error, not a leak.
 ///

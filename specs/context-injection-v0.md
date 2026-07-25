@@ -16,13 +16,13 @@ Status: **draft for review** — written against `conversation-schema-v0`,
   by the user submitting a message; the transport-neutral retrieval contract
   (`context-query-v0`, `intent-query-v0`, `retrieval-v0`); evidence tiers and
   strength; the digest formats (summary and verbatim-turn) and attribution;
-  affordance pointers; cache keying and invalidation; privacy; the injection
-  log.
-- **Out of scope, not foreclosed:** session-start triggers; adapters for other
-  harnesses (the trigger section is per-adapter by design); the server-side
-  retrieval endpoint and team-mode cache hydration (the contract here is
-  written so a server can implement it; endpoint semantics version
-  separately).
+  affordance pointers, addressable handles, and the traversal verb vocabulary;
+  the session-start trigger that teaches it; cache keying and invalidation;
+  privacy; the injection log.
+- **Out of scope, not foreclosed:** adapters for other harnesses (the trigger
+  section is per-adapter by design); the server-side retrieval endpoint and
+  team-mode cache hydration (the contract here is written so a server can
+  implement it; endpoint semantics version separately).
 - **Never in scope:** injection without visible attribution, and injection of
   `private` objects (see [Privacy](#privacy)).
 
@@ -69,6 +69,35 @@ harness-agnostic.
   output — identical fail-open discipline to the file-keyed trigger. The
   miss path is latency-sensitive (it runs on every message): a retriever
   SHOULD answer "nothing" well inside the budget rather than exhaust it.
+
+### Claude Code adapter — session-start trigger
+
+Teaches the [traversal vocabulary](#traversal-vocabulary) once per session.
+Unlike the other two triggers this one runs no retrieval: it names capability,
+so it fires whether or not the corpus has anything to say.
+
+- **Event:** `SessionStart`, configured in the harness settings by the
+  installer. `SessionStart` groups carry no matcher — there is no tool to
+  match on. Payload shape probed live 2026-07-25: stdin carries `session_id`,
+  `transcript_path`, `cwd`, `hook_event_name`, and `source`
+  (`startup` | `resume` | `clear` | `compact` | `fork`).
+- **Output:** `hookSpecificOutput.additionalContext` carrying the vocabulary.
+  The adapter MUST NOT read the payload for anything it needs — the vocabulary
+  is identical across every `source` — so a payload that fails to parse still
+  emits it. This is the fail-open shape for a trigger whose whole output is
+  static.
+- **A hook of this kind MUST state capability, never instruct.** Telling an
+  agent to use lineage would make any measurement of injection a measurement
+  of the prompt instead.
+
+Delivery is a hook rather than an agent skill deliberately: whether a skill
+loads depends on how many are installed, the shape of the opening prompt, and
+where the harness looks. A hook fires deterministically — the same property
+that makes the other triggers trustworthy.
+
+MCP consumers need no equivalent: `tools/list` is verb discovery for free on
+that path. A CLI session has no such channel, which is the whole reason this
+trigger exists.
 
 ## Retrieval contract
 
@@ -145,14 +174,42 @@ at presentation time, never cached:
 - First line is the attribution header and MUST identify the injection as
   Lineage-originated, e.g.
   `Lineage: 2 past sessions touched src/auth.rs — details below.`
-- One block per selected evidence entry: attribution, line ranges when
-  present, then the summary.
-- Selection defaults (all locally configurable): minimum strength `low`
-  (inject `files_touched` evidence; silence still wins when there is none),
-  at most 3 evidence entries, total digest capped at 1,024 tokens
-  (~4 KiB UTF-8).
+- One block per selected evidence entry: its **handle**, attribution, line
+  ranges when present, then the summary.
+- Minimum strength `low` (inject `files_touched` evidence; silence still wins
+  when there is none). Entry and byte caps are per trigger — see below.
 - A selector MUST render only what the retrieval contains — no derivation,
   aggregation, or external lookups at render time.
+
+### Handles
+
+Every entry carries an addressable handle so the agent can name what it was
+given to a [traversal verb](#traversal-vocabulary). The handle is
+`<session_id>#<turn_id>` for turn-grained evidence and the bare `<session_id>`
+when the entry has no `turn_id`. It is the one string in a digest that MUST
+round-trip: a verb accepts a handle exactly as rendered.
+
+### Per-trigger budgets
+
+The two evidence-bearing triggers fire under different conditions and MUST NOT
+share one budget:
+
+| | `PostToolUse`/`Read` (file-keyed) | `UserPromptSubmit` (intent) |
+|---|---|---|
+| Entry cap | 1 | 3 |
+| Byte cap | ~200 tokens (~800 B UTF-8) | 1,024 tokens (~4 KiB UTF-8) |
+| Verb footer | absent | present |
+| Position | bottom | bottom |
+
+The file-keyed trigger fires constantly mid-task and is appended into a tool
+result the agent is actively reading, so a false positive costs more (it
+repeats per read) and the agent mostly does not want diverting. The intent
+trigger fires at a decision point before the agent has committed to an
+approach, where exploration is worth most.
+
+**Position is bottom on both.** For the file-keyed hook, appending after
+content preserves what a `Read` is expected to return; front-loading
+provenance ahead of file content would be hostile to the primary task.
 
 ### Verbatim-turn digest (intent trigger)
 
@@ -164,17 +221,48 @@ pure formatting step:
 - The attribution header identifies the injection as Lineage-originated and
   names the trigger, e.g.
   `Lineage: 2 past turns match this prompt — details below.`
-- One block per selected turn: attribution (agent, session date, author when
-  known), then the verbatim turn text.
-- Each block MAY end with **affordance pointers**: one line per adjacent
-  provenance edge the agent can follow itself, rendered as a runnable
-  `git lineage` command with a fixed, small relation vocabulary —
-  `session` (the full conversation), `full-turn` (uncapped turn text),
-  `earlier-edits` (temporal chain for the turn's lines). Affordances teach
-  the agent the graph exists; they MUST be commands that work in the
-  installed CLI, and a selector MUST omit relations it cannot honour.
-- Selection defaults are shared with the file-keyed digest (entry cap, byte
-  cap, minimum strength).
+- One block per selected turn: handle, attribution (agent, session date,
+  author when known), then the verbatim turn text.
+- A block states **which edges its node has** — it names nouns, not commands.
+  Rendering a command per edge per entry costs over 13% of the intent budget on
+  navigation; naming the vocabulary once recovers that.
+- The digest ends with a single **verb footer** naming the traversal vocabulary
+  the installed CLI supports. Reconciling with "a selector MUST omit relations
+  it cannot honour": the footer names verbs the CLI has, the per-entry edge
+  statements name edges the node has, and the agent intersects them. Still
+  truthful, materially cheaper.
+- Navigation MUST cost under 5% of the trigger's byte cap.
+
+## Traversal vocabulary
+
+The digest is an entry point, not an answer. A receiving agent handed evidence
+that is close but not right needs to move through the provenance graph itself,
+so the injection surface is paired with a **closed, named vocabulary** of
+moves. Each verb is derived from a way the injected set can be wrong:
+
+| Failure of the injected set | Verb | Repairs by |
+|---|---|---|
+| Right sessions, wrong turns | `search-within` | Searching the text of named sessions — one call, not N greps |
+| Right turn, missing its argument | `around` | Reading the turns adjacent to it in its session |
+| Right turn, want its outcome | `produced-by` | Listing the code that turn produced |
+| Have a commit, want the reasoning | `sessions-for-commit` | Naming the sessions behind it |
+
+Every verb MUST be:
+
+- **read-only** — indexing and rebuild operations are never exposed;
+- **gated** — anything returning turn text passes the same privacy filter as
+  the digest (see [Privacy](#privacy));
+- **bounded** — every verb takes a limit.
+
+The vocabulary is one set with two renderings, and **no capability may exist
+for one consumer and not the other**: a conforming implementation exposes
+exactly this set on every surface it offers (CLI subcommands, MCP tools), and
+the relation names above are abstract — each surface spells them its own way.
+An MCP consumer never shells out, so a runnable command string is a rendering
+detail and MUST NOT be the vocabulary's definition.
+
+`sessions-for-commit` is the one verb whose entry point is not an injected
+digest: it composes lineage with ordinary git work.
 
 ## Cache
 
@@ -217,6 +305,18 @@ and merely costs re-retrieval.
   source is the guarantee, not a downstream courtesy.
 - Cached values inherit the guarantee: a conforming retriever never emits
   private evidence, so no private content can enter the cache.
+- The guarantee holds across **many exits**. Digest rendering was once the
+  single path out, and the filter could sit on it; the
+  [traversal vocabulary](#traversal-vocabulary) adds a path per verb. An
+  implementation MUST therefore enforce the filter structurally rather than
+  by convention — in a typed language, by making "turn text that has passed
+  the gate" a distinct type that only the gate can construct, so a new verb
+  that forgets to filter fails to compile. Auditing each exit by hand is not
+  a conforming substitute: the failure mode is a future exit nobody audits.
+- A private session is refused **whole**, not merely redacted: verbs that
+  return no turn text (`sessions-for-commit`) still MUST NOT name it, because
+  the spec's rule is that it is never evidence at all. A session id that
+  cannot be read is refused for the same reason — unknown is not public.
 
 ## Injection log
 
@@ -227,3 +327,8 @@ append-only, local plumbing (never syncs — same class as
 [Object mapping](sync-protocol-v0.md#object-mapping)), and is the surface a
 user consults to see what their agent was told. Silent enrichment without a
 consultable record is out of contract.
+
+The session-start trigger is recorded too, with its `source`. It injects no
+evidence, so it has no session ids or strength to log — but an agent that was
+told the vocabulary exists was told something, and the log is where a user
+sees that.
