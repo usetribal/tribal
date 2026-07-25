@@ -95,6 +95,9 @@ async fn mcp_tool_calls_on_repo_with_session() {
     assert_eq!(doctor_report["schema_version"], "lineage-doctor-v0");
     assert_eq!(doctor_report["capture"]["sessions_imported"], 1);
     assert!(doctor_report["materialization"]["failure_reasons"].is_object());
+    // The MCP payload is the unfiltered report, so new sections reach agents
+    // without the server enumerating them.
+    assert!(doctor_report["coverage"].is_object());
 
     let list = handle_request(
         dir.path(),
