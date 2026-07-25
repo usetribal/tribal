@@ -233,6 +233,89 @@ fn agent_hook_install_is_idempotent_and_merge_preserving() {
 }
 
 #[test]
+fn install_writes_both_hook_groups_and_backfills_a_missing_one() {
+    let dir = init_repo();
+    let settings_path = dir.path().join(".claude/settings.json");
+    context_cmd::install_claude_agent_hook(dir.path()).unwrap();
+
+    let settings: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&settings_path).unwrap()).unwrap();
+    let session_start = settings["hooks"]["SessionStart"].as_array().unwrap();
+    assert_eq!(session_start.len(), 1);
+    assert_eq!(
+        session_start[0]["hooks"][0]["command"],
+        "git lineage context hook claude-session-start"
+    );
+    // SessionStart has no tool to match on, so the group carries no matcher.
+    assert!(session_start[0].get("matcher").is_none());
+
+    // A repo wired by an older binary has only the PostToolUse group; install
+    // must add the missing one rather than see the shared prefix and stop.
+    fs::write(
+        &settings_path,
+        r#"{"hooks": {"PostToolUse": [{"matcher": "Read", "hooks": [{"type": "command", "command": "git lineage context hook claude"}]}]}}"#,
+    )
+    .unwrap();
+    assert!(context_cmd::install_claude_agent_hook(dir.path()).unwrap());
+    let settings: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&settings_path).unwrap()).unwrap();
+    assert_eq!(
+        settings["hooks"]["PostToolUse"].as_array().unwrap().len(),
+        1
+    );
+    assert_eq!(
+        settings["hooks"]["SessionStart"].as_array().unwrap().len(),
+        1
+    );
+}
+
+#[test]
+fn session_start_hook_emits_the_verb_vocabulary() {
+    let dir = init_repo();
+    let input = serde_json::json!({
+        "hook_event_name": "SessionStart",
+        "session_id": "abc123",
+        "source": "startup",
+        "cwd": dir.path().to_string_lossy(),
+    })
+    .to_string();
+
+    let output = context_cmd::hook_claude_session_start(dir.path(), &input, 0).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+    assert_eq!(
+        parsed["hookSpecificOutput"]["hookEventName"],
+        "SessionStart"
+    );
+    let context = parsed["hookSpecificOutput"]["additionalContext"]
+        .as_str()
+        .unwrap();
+    for verb in lineage_retrieval::VERBS {
+        assert!(
+            context.contains(verb.cli),
+            "vocabulary omits {}: {context}",
+            verb.relation
+        );
+    }
+    // It states a capability; it must never instruct the agent to use lineage,
+    // or the A/B harness measures the prompt instead of the tool.
+    assert!(!context.to_lowercase().contains("you should"));
+    assert!(!context.to_lowercase().contains("always"));
+}
+
+/// Fail-open: a payload we cannot parse still gets the vocabulary rather than
+/// killing the session that injection exists to help.
+#[test]
+fn session_start_hook_fails_open_on_a_malformed_payload() {
+    let dir = init_repo();
+    let output = context_cmd::hook_claude_session_start(dir.path(), "not json at all", 0).unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&output).unwrap();
+    assert!(parsed["hookSpecificOutput"]["additionalContext"]
+        .as_str()
+        .unwrap()
+        .contains("git lineage context"));
+}
+
+#[test]
 fn agent_hook_uninstall_removes_only_lineage_wiring() {
     let dir = init_repo();
     let settings_path = dir.path().join(".claude/settings.json");
@@ -252,6 +335,12 @@ fn agent_hook_uninstall_removes_only_lineage_wiring() {
     let groups = settings["hooks"]["PostToolUse"].as_array().unwrap();
     assert_eq!(groups.len(), 1);
     assert_eq!(groups[0]["matcher"], "Bash");
+    // Both groups go, and the now-empty SessionStart key is left in place
+    // rather than pruned — it is the user's file, not ours to tidy.
+    assert!(settings["hooks"]["SessionStart"]
+        .as_array()
+        .unwrap()
+        .is_empty());
 }
 
 #[test]

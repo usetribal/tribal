@@ -26,6 +26,11 @@ lineage-cli = { workspace = true }
 lineage-core = { workspace = true }
 lineage-git = { workspace = true }
 lineage-policy = { workspace = true }
+# A direct dependency, not a reach through lineage-cli: MCP is a sibling
+# consumer of retrieval exactly as the CLI is, and routing traversal through a
+# binary crate whose handlers print rather than return would make the existing
+# `doctor_report` reach-through load-bearing.
+lineage-retrieval = { workspace = true }
 lineage-search = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -9,10 +9,162 @@
 //! MCP consumes that crate and never shells out, so `git lineage …` strings must
 //! not be visible to it. The registry names relations; each surface spells them.
 
-use lineage_retrieval::{verb_for_relation, Evidence};
+use lineage_retrieval::{verb_for_relation, Evidence, Retrieval, Strength, VERBS};
+
+/// Selection defaults from context-injection-v0 "Digest format".
+const MIN_STRENGTH: Strength = Strength::Low;
+
+/// Which trigger a digest is being rendered for. The two want different amounts
+/// of navigation and the spec used to treat them alike:
+///
+/// - `FileKeyed` fires constantly mid-task, appended into a `Read` result. The
+///   agent is in flight and mostly does not want diverting, and a false positive
+///   costs more because it repeats per read. Tight cap, one entry, no footer.
+/// - `Intent` fires at a decision point, before the agent has committed to an
+///   approach. Exploration has its highest value here and the budget is there
+///   for it, so: full digest and the verb footer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Trigger {
+    FileKeyed,
+    Intent,
+}
+
+impl Trigger {
+    /// Roughly 4 bytes per token, matching how the spec's 1,024-token cap was
+    /// already expressed as 4 KiB.
+    const BYTES_PER_TOKEN: usize = 4;
+
+    fn max_entries(self) -> usize {
+        match self {
+            // At most one pointer mid-task; the read is the primary task.
+            Self::FileKeyed => 1,
+            Self::Intent => 3,
+        }
+    }
+
+    fn max_bytes(self) -> usize {
+        match self {
+            Self::FileKeyed => 200 * Self::BYTES_PER_TOKEN,
+            Self::Intent => 1024 * Self::BYTES_PER_TOKEN,
+        }
+    }
+
+    fn wants_footer(self) -> bool {
+        matches!(self, Self::Intent)
+    }
+}
+
+/// The selector: presentation policy over an already-final retrieval.
+/// Evidence arrives strongest-first, so truncation keeps the best entries.
+pub fn select(retrieval: &Retrieval, trigger: Trigger) -> Vec<&Evidence> {
+    retrieval
+        .evidence
+        .iter()
+        .filter(|e| e.strength >= MIN_STRENGTH)
+        .take(trigger.max_entries())
+        .collect()
+}
+
+/// The injected text. Each entry carries an addressable handle and the edges
+/// that node actually has — nouns, not commands — and the verbs are named once
+/// in a shared footer rather than repeated per entry, because three entries ×
+/// three affordances is over 13% of the intent cap spent on navigation.
+pub fn render_digest(file_path: &str, selected: &[&Evidence], trigger: Trigger) -> String {
+    let mut digest = format!(
+        "Lineage: {} past session(s) touched {file_path} — details below.\n",
+        selected.len(),
+    );
+    for evidence in selected {
+        digest.push_str(&render_entry(evidence));
+    }
+    if trigger.wants_footer() && !selected.is_empty() {
+        digest.push_str(&verb_footer());
+    }
+    truncate_to_bytes(&digest, trigger.max_bytes())
+}
+
+/// One entry: its handle, its attribution, the edges it has, then its words.
+fn render_entry(evidence: &Evidence) -> String {
+    let mut entry = format!("- {} {}", turn_handle(evidence), evidence.attribution);
+    if !evidence.line_ranges.is_empty() {
+        let ranges: Vec<String> = evidence
+            .line_ranges
+            .iter()
+            .map(|[start, end]| format!("{start}-{end}"))
+            .collect();
+        entry.push_str(&format!(" (lines {})", ranges.join(", ")));
+    }
+    entry.push('\n');
+    for line in evidence.summary.lines() {
+        entry.push_str(&format!("  {line}\n"));
+    }
+    entry
+}
+
+/// The vocabulary named once per digest. The `SessionStart` hook teaches it in
+/// full; this is the reminder that the handles above are addressable, so it
+/// stays one line.
+fn verb_footer() -> String {
+    let verbs: Vec<&str> = VERBS.iter().map(|verb| verb.cli).collect();
+    format!(
+        "Follow a handle with: git lineage context <{}> <handle>\n",
+        verbs.join("|"),
+    )
+}
+
+fn truncate_to_bytes(text: &str, max_bytes: usize) -> String {
+    if text.len() <= max_bytes {
+        return text.to_string();
+    }
+    let mut end = max_bytes;
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}…", &text[..end])
+}
+
+/// The vocabulary in full, for the once-per-session `SessionStart` injection.
+/// A statement of capability, never an instruction to use it — an agent told to
+/// use lineage would make the A/B harness measure the prompt rather than the
+/// tool.
+pub fn verb_vocabulary() -> String {
+    let mut text = String::from(
+        "Lineage indexes past agent sessions in this repo and can be traversed. \
+         Injected evidence carries a `session#turn` handle; these commands take one:\n",
+    );
+    for verb in VERBS {
+        text.push_str(&format!(
+            "  git lineage context {:<20} {}\n",
+            verb.cli, verb.summary,
+        ));
+    }
+    text.push_str("  git lineage context query \"<question>\"  search every session by intent\n");
+    text
+}
 
 /// Capped so the pointers stay a footer, not the payload.
 pub const MAX_AFFORDANCES: usize = 3;
+
+/// The addressable handle for an evidence entry: `session#turn`, or the bare
+/// session id when the evidence is session-grained. This is what an agent quotes
+/// back to a traversal verb, so it is the one string in the digest that has to
+/// round-trip.
+pub fn turn_handle(evidence: &Evidence) -> String {
+    match &evidence.turn_id {
+        Some(turn_id) => format!("{}#{}", evidence.session_id.as_str(), turn_id.as_str()),
+        None => evidence.session_id.as_str().to_string(),
+    }
+}
+
+/// Split a `session#turn` handle back into its parts. A bare id is a session
+/// with no turn — the same shape `turn_handle` emits for session-grained
+/// evidence.
+pub fn parse_handle(handle: &str) -> (&str, Option<&str>) {
+    match handle.split_once('#') {
+        Some((session_id, turn_id)) => (session_id, Some(turn_id)),
+        None => (handle, None),
+    }
+}
 
 /// The affordance relations this evidence entry can honour, rendered as runnable
 /// `git lineage` commands (spec: Verbatim-turn digest — a selector MUST omit
@@ -56,6 +208,81 @@ mod tests {
             summary: "body".into(),
             attribution: "claude".into(),
         }
+    }
+
+    #[test]
+    fn handles_round_trip_through_the_verbs() {
+        let entry = evidence(Some("t1"), Vec::new());
+        assert_eq!(turn_handle(&entry), "s1#t1");
+        assert_eq!(parse_handle("s1#t1"), ("s1", Some("t1")));
+
+        // Session-grained evidence has no turn, and the bare form round-trips.
+        let session_only = evidence(None, Vec::new());
+        assert_eq!(turn_handle(&session_only), "s1");
+        assert_eq!(parse_handle("s1"), ("s1", None));
+    }
+
+    fn retrieval_of(entries: usize) -> Retrieval {
+        Retrieval::from_evidence(
+            (0..entries)
+                .map(|i| {
+                    let mut e = evidence(Some(&format!("t{i}")), Vec::new());
+                    e.summary = format!("the words of turn {i}");
+                    e
+                })
+                .collect(),
+        )
+    }
+
+    #[test]
+    fn the_file_keyed_digest_is_tight_and_carries_no_footer() {
+        let retrieval = retrieval_of(3);
+        let selected = select(&retrieval, Trigger::FileKeyed);
+        assert_eq!(selected.len(), 1, "at most one pointer mid-task");
+
+        let rendered = render_digest("src/lib.rs", &selected, Trigger::FileKeyed);
+        assert!(!rendered.contains("Follow a handle with"));
+        assert!(rendered.len() <= 200 * 4);
+    }
+
+    #[test]
+    fn the_intent_digest_carries_handles_and_one_shared_footer() {
+        let retrieval = retrieval_of(3);
+        let selected = select(&retrieval, Trigger::Intent);
+        assert_eq!(selected.len(), 3);
+
+        let rendered = render_digest("src/lib.rs", &selected, Trigger::Intent);
+        for i in 0..3 {
+            assert!(
+                rendered.contains(&format!("s1#t{i}")),
+                "entry {i} is addressable: {rendered}"
+            );
+        }
+        assert_eq!(
+            rendered.matches("Follow a handle with").count(),
+            1,
+            "the vocabulary is named once, not per entry",
+        );
+    }
+
+    /// The budget claim the reshape exists to make: navigation must cost under
+    /// 5% of the intent cap. The footer is the whole navigation cost now — the
+    /// handles ride along with attribution lines that would exist anyway.
+    #[test]
+    fn navigation_costs_under_five_percent_of_the_intent_budget() {
+        let footer = verb_footer();
+        let budget = 1024 * 4;
+        assert!(
+            footer.len() * 20 < budget,
+            "footer is {} bytes of a {budget}-byte budget",
+            footer.len(),
+        );
+    }
+
+    #[test]
+    fn an_empty_selection_renders_no_footer() {
+        let rendered = render_digest("src/lib.rs", &[], Trigger::Intent);
+        assert!(!rendered.contains("Follow a handle with"));
     }
 
     #[test]

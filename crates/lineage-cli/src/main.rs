@@ -1,8 +1,9 @@
 use std::path::PathBuf;
 
 use lineage_cli::{
-    commands, context_cmd, doctor_cmd, hooks_cmd, init_cmd, retrieval_cmd, skill_cmd,
+    commands, context_cmd, digest, doctor_cmd, hooks_cmd, init_cmd, retrieval_cmd, skill_cmd,
 };
+use lineage_retrieval::{DEFAULT_AROUND_RADIUS, DEFAULT_TRAVERSAL_LIMIT};
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
@@ -222,7 +223,8 @@ enum RebuildTarget {
 enum ContextAction {
     /// Agent-hook endpoint: read a hook event on stdin, emit injection JSON
     Hook {
-        /// Harness whose hook payload is on stdin (only: claude)
+        /// Harness whose hook payload is on stdin: claude (PostToolUse/Read) or
+        /// claude-session-start (SessionStart)
         harness: String,
     },
     /// Show recorded context injections, newest last
@@ -247,6 +249,42 @@ enum ContextAction {
     Chain {
         /// The line to chain, as <file>:<line> (e.g. README.md:40)
         target: String,
+    },
+    /// Search the text of specific sessions (one call, not N greps)
+    SearchWithin {
+        /// The text to match
+        text: String,
+        /// A session to search, repeatable. Accepts a digest handle
+        /// (`session#turn`) as well as a bare session id
+        #[arg(long = "session", required = true)]
+        session: Vec<String>,
+        #[arg(long, default_value_t = DEFAULT_TRAVERSAL_LIMIT)]
+        limit: usize,
+    },
+    /// Read the turns immediately before and after a turn
+    Around {
+        /// The turn to read around, as a digest handle (`session#turn`) or a
+        /// bare turn id
+        handle: String,
+        /// How many turns either side
+        #[arg(long, default_value_t = DEFAULT_AROUND_RADIUS)]
+        radius: u32,
+        #[arg(long, default_value_t = DEFAULT_TRAVERSAL_LIMIT)]
+        limit: usize,
+    },
+    /// List the code a turn produced (file:line ranges)
+    ProducedBy {
+        /// The turn, as a digest handle (`session#turn`) or a bare turn id
+        handle: String,
+        #[arg(long, default_value_t = DEFAULT_TRAVERSAL_LIMIT)]
+        limit: usize,
+    },
+    /// Find the sessions behind a commit
+    SessionsForCommit {
+        /// Commit sha (short shas resolve as they do elsewhere in git)
+        commit: String,
+        #[arg(long, default_value_t = DEFAULT_TRAVERSAL_LIMIT)]
+        limit: usize,
     },
     /// Retrieve past turns matching a free-text intent or a file[:line] anchor
     ///
@@ -297,6 +335,13 @@ fn select_leg(lexical: bool, dense: bool, fused: bool) -> Result<retrieval_cmd::
         (false, false, false) => Ok(retrieval_cmd::Leg::Default),
         _ => Err("choose at most one of --lexical / --dense / --fused".into()),
     }
+}
+
+/// The turn half of a digest handle. A bare id is already a turn id — the verbs
+/// that take one are turn-addressed, so there is nothing else it could be.
+fn turn_of(handle: &str) -> &str {
+    let (session_id, turn_id) = digest::parse_handle(handle);
+    turn_id.unwrap_or(session_id)
 }
 
 fn main() -> ExitCode {
@@ -374,8 +419,20 @@ fn main() -> ExitCode {
             ContextAction::Hook { harness } => {
                 // Fail open unconditionally: this runs inside an agent's tool
                 // call, where a nonzero exit or stderr noise breaks a session
-                // that context injection exists to help.
-                if harness == "claude" {
+                // that context injection exists to help. An unknown harness is
+                // silence, not an error.
+                let endpoint = match harness.as_str() {
+                    "claude" => Some(
+                        context_cmd::hook_claude
+                            as fn(&std::path::Path, &str, i64) -> Option<String>,
+                    ),
+                    "claude-session-start" => Some(
+                        context_cmd::hook_claude_session_start
+                            as fn(&std::path::Path, &str, i64) -> Option<String>,
+                    ),
+                    _ => None,
+                };
+                if let Some(endpoint) = endpoint {
                     let mut input = String::new();
                     use std::io::Read as _;
                     let _ = std::io::stdin().read_to_string(&mut input);
@@ -383,7 +440,7 @@ fn main() -> ExitCode {
                         .duration_since(std::time::UNIX_EPOCH)
                         .map(|d| d.as_secs() as i64)
                         .unwrap_or(0);
-                    if let Some(output) = context_cmd::hook_claude(&repo_path, &input, now_unix) {
+                    if let Some(output) = endpoint(&repo_path, &input, now_unix) {
                         println!("{output}");
                     }
                 }
@@ -422,6 +479,30 @@ fn main() -> ExitCode {
             }
             ContextAction::Salience => retrieval_cmd::salience_report(&repo_path),
             ContextAction::Chain { target } => context_cmd::chain(&repo_path, &target),
+            // Handles come back from a digest as `session#turn`; each verb takes
+            // the half it addresses, so an agent can paste a handle unmodified.
+            ContextAction::SearchWithin {
+                text,
+                session,
+                limit,
+            } => {
+                let sessions: Vec<String> = session
+                    .iter()
+                    .map(|s| digest::parse_handle(s).0.to_string())
+                    .collect();
+                retrieval_cmd::search_within(&repo_path, &sessions, &text, limit)
+            }
+            ContextAction::Around {
+                handle,
+                radius,
+                limit,
+            } => retrieval_cmd::around(&repo_path, turn_of(&handle), radius, limit),
+            ContextAction::ProducedBy { handle, limit } => {
+                retrieval_cmd::produced_by(&repo_path, turn_of(&handle), limit)
+            }
+            ContextAction::SessionsForCommit { commit, limit } => {
+                retrieval_cmd::sessions_for_commit_cmd(&repo_path, &commit, limit)
+            }
             ContextAction::Query {
                 text,
                 file,
