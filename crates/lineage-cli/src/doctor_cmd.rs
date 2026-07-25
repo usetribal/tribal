@@ -1,4 +1,4 @@
-//! `git lineage doctor` — the five-section diagnosis report defined by
+//! `git lineage doctor` — the six-section diagnosis report defined by
 //! `specs/diagnostics-v0.md`, assembled from refs, config, the search index,
 //! and the event log. Read-only: inspecting a repo never repairs it.
 
@@ -8,8 +8,9 @@ use std::path::Path;
 
 use lineage_core::Conversation;
 use lineage_git::{
-    audit_materialization, list_notes, list_session_ids, open_repo, read_conversation_stored,
-    run_doctor, run_doctor_refs, LineageRepo,
+    audit_materialization, commit_note_coverage, list_notes, list_session_ids, open_repo,
+    read_conversation_stored, run_doctor, run_doctor_refs, summarize_coverage,
+    tracked_file_line_counts, CoverageReport, LineageRepo, COVERAGE_BUCKETS,
 };
 
 use crate::context_cmd;
@@ -18,7 +19,14 @@ use crate::events::EventLog;
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 pub const DOCTOR_SCHEMA_VERSION: &str = "lineage-doctor-v0";
-const SECTIONS: [&str; 5] = ["setup", "capture", "materialization", "links", "activity"];
+const SECTIONS: [&str; 6] = [
+    "setup",
+    "capture",
+    "materialization",
+    "coverage",
+    "links",
+    "activity",
+];
 pub const DEFAULT_ACTIVITY_LIMIT: usize = 20;
 
 pub struct DoctorArgs {
@@ -86,6 +94,9 @@ fn doctor_report_sections(
     }
     if wants("materialization") {
         report["materialization"] = materialization_section(&repo)?;
+    }
+    if wants("coverage") {
+        report["coverage"] = coverage_section(&repo)?;
     }
     if wants("links") {
         report["links"] = links_section(&repo, &conversations, &events)?;
@@ -248,6 +259,46 @@ fn materialization_section(repo: &LineageRepo) -> Result<serde_json::Value> {
     }))
 }
 
+/// Reach, depth, and the per-file distribution. Sourced from the index mirror
+/// rather than `refs/lineage/lines/*` — same answer, but a single query instead
+/// of one `cat-file` per object, which is what keeps this cheap enough to run
+/// unconditionally.
+fn coverage_section(repo: &LineageRepo) -> Result<serde_json::Value> {
+    let index_path = repo.git_dir().join("lineage").join("index.db");
+    // Opening a missing index would create and migrate one, and doctor must
+    // never repair what it inspects.
+    if !index_path.exists() {
+        return Ok(serde_json::json!({
+            "error": "no search index (run: git lineage rebuild-index)",
+        }));
+    }
+
+    let spans = lineage_search::LineageIndex::open(&index_path)?.coverage_spans()?;
+    let tracked = tracked_file_line_counts(repo.inner())?;
+    let (commits_total, commits_with_notes) = commit_note_coverage(repo.inner())?;
+    let report = summarize_coverage(&tracked, &spans, commits_total, commits_with_notes);
+    Ok(coverage_json(&report))
+}
+
+fn coverage_json(report: &CoverageReport) -> serde_json::Value {
+    let histogram: serde_json::Map<String, serde_json::Value> = COVERAGE_BUCKETS
+        .iter()
+        .zip(report.histogram.iter())
+        .map(|(bucket, count)| ((*bucket).to_string(), serde_json::json!(count)))
+        .collect();
+
+    serde_json::json!({
+        "commits_total": report.commits_total,
+        "commits_with_notes": report.commits_with_notes,
+        "files_total": report.files_total,
+        "files_with_any": report.files_with_any,
+        "lines_total": report.lines_total,
+        "lines_covered": report.lines_covered,
+        "depth_within_covered": report.depth_within_covered,
+        "histogram": histogram,
+    })
+}
+
 fn links_section(
     repo: &LineageRepo,
     conversations: &[Conversation],
@@ -391,6 +442,11 @@ fn render_text(report: &serde_json::Value) {
         }
     }
 
+    if let Some(coverage) = report.get("coverage") {
+        println!("coverage");
+        render_coverage(coverage);
+    }
+
     if let Some(links) = report.get("links").and_then(|l| l.as_array()) {
         println!("links");
         for link in links {
@@ -411,6 +467,71 @@ fn render_text(report: &serde_json::Value) {
             );
         }
     }
+}
+
+/// Widest bar in the histogram. Bars are scaled to the largest bucket rather
+/// than to the file count, so the shape of the distribution stays legible in a
+/// repo of any size.
+const HISTOGRAM_WIDTH: usize = 59;
+
+fn render_coverage(coverage: &serde_json::Value) {
+    if let Some(error) = coverage.get("error").and_then(|e| e.as_str()) {
+        println!("  {error}");
+        return;
+    }
+
+    let commits_total = coverage["commits_total"].as_u64().unwrap_or(0);
+    let files_total = coverage["files_total"].as_u64().unwrap_or(0);
+    let lines_total = coverage["lines_total"].as_u64().unwrap_or(0);
+    println!(
+        "  commits with notes:  {}/{} ({})",
+        coverage["commits_with_notes"],
+        commits_total,
+        percent(
+            coverage["commits_with_notes"].as_u64().unwrap_or(0),
+            commits_total
+        )
+    );
+    println!(
+        "  files with any:      {}/{} ({})",
+        coverage["files_with_any"],
+        files_total,
+        percent(
+            coverage["files_with_any"].as_u64().unwrap_or(0),
+            files_total
+        )
+    );
+    println!(
+        "  lines covered:       {}/{} ({})",
+        coverage["lines_covered"],
+        lines_total,
+        percent(coverage["lines_covered"].as_u64().unwrap_or(0), lines_total)
+    );
+    println!(
+        "  depth (within covered files): {:.1}% mean",
+        coverage["depth_within_covered"].as_f64().unwrap_or(0.0) * 100.0
+    );
+
+    let counts: Vec<u64> = COVERAGE_BUCKETS
+        .iter()
+        .map(|bucket| coverage["histogram"][*bucket].as_u64().unwrap_or(0))
+        .collect();
+    let peak = counts.iter().copied().max().unwrap_or(0);
+    if peak == 0 {
+        return;
+    }
+    println!();
+    for (bucket, count) in COVERAGE_BUCKETS.iter().zip(counts.iter()) {
+        let width = (*count as usize * HISTOGRAM_WIDTH).div_ceil(peak as usize);
+        println!("  {bucket:>6}:  {count:>4}  {}", "\u{2588}".repeat(width));
+    }
+}
+
+fn percent(part: u64, whole: u64) -> String {
+    if whole == 0 {
+        return "n/a".into();
+    }
+    format!("{:.1}%", part as f64 / whole as f64 * 100.0)
 }
 
 fn str_of(value: &serde_json::Value) -> &str {
