@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use git2::Repository;
@@ -953,6 +954,34 @@ impl LineageIndex {
         Ok(out)
     }
 
+    /// Every recorded line span, grouped by file — the input to doctor's
+    /// coverage section. Reading the mirror table costs one scan; deriving the
+    /// same answer from `refs/lineage/lines/*` costs a `cat-file` per object.
+    /// Degenerate spans (`end_line` before `start_line`) are dropped here so
+    /// callers never have to defend against them.
+    pub fn coverage_spans(&self) -> Result<BTreeMap<String, Vec<(u32, u32)>>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT file_path, start_line, end_line FROM line_objects
+             WHERE end_line >= start_line",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, u32>(1)?,
+                row.get::<_, u32>(2)?,
+            ))
+        })?;
+        let mut by_file: BTreeMap<String, Vec<(u32, u32)>> = BTreeMap::new();
+        for row in rows {
+            let (file_path, start_line, end_line) = row?;
+            by_file
+                .entry(file_path)
+                .or_default()
+                .push((start_line, end_line));
+        }
+        Ok(by_file)
+    }
+
     /// Monotonic counter observed by derived caches: any change means the
     /// session corpus may have changed. 0 = nothing indexed yet.
     pub fn generation(&self) -> Result<i64> {
@@ -1301,5 +1330,41 @@ mod tests {
             index.sessions_that_wrote_file("src/a.rs").unwrap(),
             vec![writer.id.as_str().to_string()]
         );
+    }
+
+    /// Mirror rows normally arrive via `insert_line_object_row`, which needs a
+    /// real commit; coverage only reads three columns, so the rows are written
+    /// directly to keep the test about the query.
+    fn insert_span(index: &LineageIndex, id: &str, file_path: &str, start: i64, end: i64) {
+        index
+            .conn
+            .execute(
+                "INSERT INTO line_objects
+                 (id, file_path, start_line, end_line, commit_sha, committed_at,
+                  session_id, turn_id, confidence)
+                 VALUES (?1, ?2, ?3, ?4, 'sha', 0, 'sess', 'turn', 'exact')",
+                params![id, file_path, start, end],
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn coverage_spans_groups_by_file_and_drops_degenerate_rows() {
+        let (_dir, index) = open_index();
+        insert_span(&index, "a", "src/a.rs", 1, 10);
+        insert_span(&index, "b", "src/a.rs", 20, 25);
+        insert_span(&index, "c", "src/b.rs", 3, 3);
+        insert_span(&index, "d", "src/b.rs", 9, 4);
+
+        let spans = index.coverage_spans().unwrap();
+        assert_eq!(spans.len(), 2);
+        assert_eq!(spans["src/a.rs"], vec![(1, 10), (20, 25)]);
+        assert_eq!(spans["src/b.rs"], vec![(3, 3)]);
+    }
+
+    #[test]
+    fn coverage_spans_is_empty_for_a_fresh_index() {
+        let (_dir, index) = open_index();
+        assert!(index.coverage_spans().unwrap().is_empty());
     }
 }
