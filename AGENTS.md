@@ -2,7 +2,7 @@
 
 Lineage is a Rust monorepo for **git-native AI agent provenance**: it imports sessions from Cursor, Claude Code, and Codex into git refs and notes, links them to commits and lines, and exposes that context through a CLI, MCP server, and VS Code extension. No external database — data lives in `refs/lineage/*` and `refs/notes/lineage`.
 
-Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for crate boundaries and import flow before changing behavior. **Release status: pre-release, unpublished — simplicity beats backwards compatibility; no data migrations or deprecation aliases required (re-import/rebuild is the upgrade path). The full policy lives in the enclosing workspace until publication.** `lineage-core` has no `git2`; git I/O stays in `lineage-git`.
+Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for crate boundaries and import flow before changing behavior — including its **Invariants**, which are rules a change must not break: the provenance graph is deterministic and backfillable, and rendering decides how to show, never what to show. If a change seems to need an exception, the model needs extending instead. **Release status: pre-release, unpublished — simplicity beats backwards compatibility; no data migrations or deprecation aliases required (re-import/rebuild is the upgrade path). The full policy lives in the enclosing workspace until publication.** `lineage-core` has no `git2`; git I/O stays in `lineage-git`.
 
 ## Setup
 
@@ -137,5 +137,6 @@ cargo test -p lineage-core
 1. Minimize scope — focused diffs
 2. Types are the contract source — regenerate `specs/schema/` and bindings after type changes (see `specs/decisions/0001-contract-bindings-pipeline.md`)
 3. Policy before persist — no unredacted secrets in git objects
-4. Add tests for behavior changes; run `make coverage` before a PR if logic changed
-5. Comment the *why* in plain language, next to the code; no "comment golf" and no narrating discarded approaches
+4. Graph before rendering — provenance edges are deterministic and backfillable; display surfaces format what they are given and never select or substitute content ([docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#invariants))
+5. Add tests for behavior changes; run `make coverage` before a PR if logic changed
+6. Comment the *why* in plain language, next to the code; no "comment golf" and no narrating discarded approaches
