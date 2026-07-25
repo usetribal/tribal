@@ -113,6 +113,7 @@ See [LFS](../lfs.md).
 | Command | Description |
 |---------|-------------|
 | `git lineage context hook claude` | Agent-hook endpoint (Claude Code PostToolUse on stdin); emits injection JSON or nothing |
+| `git lineage context hook claude-session-start` | Agent-hook endpoint (Claude Code SessionStart); emits the traversal vocabulary once per session |
 | `git lineage context log [--limit N]` | Show recorded context injections, newest last |
 | `git lineage context install [--user]` | Wire the context hook per-repo or user-level (all repos) |
 | `git lineage context uninstall [--user]` | Remove lineage context-hook wiring |
@@ -121,6 +122,25 @@ See [LFS](../lfs.md).
 | `git lineage context query --file <path>[:<line>] ["text"]` | Force the line-anchored temporal plan (skips the dispatcher): the turns that authored the file/line, time-ordered (walked back through ancestry); with text, the text re-ranks those anchored turns |
 | `git lineage context salience` | Report the corpus's turn-salience breakdown (what indexing keeps and drops) |
 | `git lineage context chain <file>:<line>` | Print the temporal chain for a line — one hop per row (short sha, date, session, turn, confidence, or `DARK(kind)`) — resolved from the index (one live blame anchors HEAD, the rest are indexed reads) |
+
+#### Traversal verbs
+
+The moves a receiving agent makes when the injected evidence is close but not
+right. Each takes a digest handle (`session#turn`) exactly as rendered, is
+read-only and privacy-gated, and is bounded by `--limit`.
+
+| Command | Repairs |
+|---------|---------|
+| `git lineage context search-within "<text>" --session <handle>...` | Right sessions, wrong turns — searches the text of named sessions in one call rather than N greps |
+| `git lineage context around <handle> [--radius N]` | Right turn, missing its argument — the turns adjacent to it in its session |
+| `git lineage context produced-by <handle>` | Right turn, want its outcome — the code that turn produced, as `file:lines` |
+| `git lineage context sessions-for-commit <sha>` | Have a commit, want the reasoning — the sessions behind it (short shas resolve as elsewhere in git) |
+
+The same four are MCP tools (`lineage_search_within`, `lineage_turns_around`,
+`lineage_produced_by`, `lineage_sessions_for_commit`); paired registry tests
+assert neither surface can gain or lose a verb without the other. MCP agents
+discover them from `tools/list`; CLI sessions learn them from the `SessionStart`
+hook that `context install` wires.
 
 `context hook` is wired into the agent harness, not run by hand: when the agent
 reads a file with provenance, a digest (attribution, line ranges, session

@@ -35,6 +35,24 @@ The server reads through the same git and policy layers as the CLI. It does not 
 | `lineage_export` | Export sessions with optional redaction |
 | `lineage_remap` | Remap notes after rebase |
 
+### Traversal verbs
+
+The moves an agent makes when the evidence it was handed is close but not
+right. Each is read-only, privacy-gated, and bounded by an optional `limit`.
+
+| Tool | Repairs |
+|------|---------|
+| `lineage_search_within` | Right sessions, wrong turns — searches the text of given `session_ids` in one call |
+| `lineage_turns_around` | Right turn, missing its argument — the turns within `radius` of `turn_id` in its session |
+| `lineage_produced_by` | Right turn, want its outcome — the code that turn produced |
+| `lineage_sessions_for_commit` | Have a commit, want the reasoning — the sessions behind `commit_sha` |
+
+These are the same four verbs the CLI exposes as `git lineage context <verb>`,
+defined once in `lineage-retrieval::VERBS`; registry tests assert neither
+surface can gain or lose one without the other. `tools/list` is verb discovery
+for free on this path, so MCP needs no equivalent of the CLI's `SessionStart`
+hook.
+
 Not yet exposed via MCP: import, delete, gc (see project roadmap).
 
 ## Cursor configuration
