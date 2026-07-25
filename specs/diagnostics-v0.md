@@ -84,6 +84,7 @@ to report still appear, with empty arrays and zero counts. The MCP
   "setup": {},
   "capture": {},
   "materialization": {},
+  "coverage": {},
   "links": {},
   "activity": {}
 }
@@ -143,6 +144,53 @@ reasons.
 | `missing_old_string` | The artifact's resolve strategy needs the pre-edit text, which was never captured |
 | `old_string_not_found` | The artifact's pre-edit text no longer exists in the file at the linked commit |
 | `commit_not_linked` | The session is not linked to any commit that touched the file |
+
+### `coverage`
+
+How much of the tracked tree line objects can explain, measured against the
+files present at `HEAD`.
+
+```json
+{
+  "commits_total": 233,
+  "commits_with_notes": 213,
+  "files_total": 780,
+  "files_with_any": 212,
+  "lines_total": 113457,
+  "lines_covered": 16983,
+  "depth_within_covered": 0.675,
+  "histogram": {
+    "0%": 568,
+    "1-25%": 56,
+    "25-50%": 24,
+    "50-75%": 7,
+    "75-99%": 10,
+    "100%": 115
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `commits_total` | number | Commits reachable from `HEAD` |
+| `commits_with_notes` | number | Of those, how many carry a lineage note |
+| `files_total` | number | Tracked non-empty text files at `HEAD` |
+| `files_with_any` | number | Of those, how many have at least one covered line |
+| `lines_total` | number | Total lines across `files_total` |
+| `lines_covered` | number | Lines covered by at least one line object |
+| `depth_within_covered` | number | Mean per-file coverage fraction across covered files only, 0–1 |
+| `histogram` | object | Count of files per coverage bucket |
+
+Reach (`files_with_any`) and depth (`depth_within_covered`) are separate
+figures because they answer different questions, and `depth_within_covered`
+is a mean over files rather than `lines_covered / lines_total`, so a few
+large files cannot dominate it. Overlapping and adjacent line-object spans
+are counted once; spans extending past a file's current length are clamped to
+it, so coverage never exceeds 100%. Binary and empty files are excluded from
+every denominator.
+
+If no search index exists, the section is `{"error": "…"}` — doctor reports
+the absence rather than creating one.
 
 ### `links`
 
