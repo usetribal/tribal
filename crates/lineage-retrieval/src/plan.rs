@@ -167,6 +167,7 @@ pub fn line_anchored_temporal_plan(
         materialize_turns(repo, index, &turns, &anchors)
     })?;
     let admitted: Vec<_> = evidence
+        .into_inner()
         .into_iter()
         .filter(|e| e.strength >= MIN_ADMITTED_STRENGTH)
         .collect();
