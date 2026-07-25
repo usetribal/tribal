@@ -76,21 +76,29 @@ pub fn post_commit(repo_path: &Path) -> Result<()> {
         eprintln!("lineage: linked {} session(s) to HEAD", report.linked.len());
     }
 
-    // Linking just materialized line objects at HEAD; mirror them so
-    // `context chain` sees this commit without waiting for a full rebuild.
-    if !report.linked.is_empty() {
-        let index = LineageIndex::open(repo.git_dir().join("lineage").join("index.db"))?;
-        let linked_ids: Vec<LineageId> =
-            report.linked.iter().map(|s| s.session_id.clone()).collect();
-        index.populate_line_tables_for_sessions(repo.inner(), &linked_ids)?;
-    }
-
     let head_sha = repo
         .inner()
         .head()
         .ok()
         .and_then(|h| h.peel_to_commit().ok())
         .map(|c| c.id().to_string());
+
+    // Linking just materialized line objects at HEAD; mirror them so
+    // `context chain` sees this commit without waiting for a full rebuild, and
+    // record the session↔commit edges so `sessions-for-commit` resolves the
+    // commit that was just made.
+    if !report.linked.is_empty() {
+        let index = LineageIndex::open(repo.git_dir().join("lineage").join("index.db"))?;
+        let linked_ids: Vec<LineageId> =
+            report.linked.iter().map(|s| s.session_id.clone()).collect();
+        index.populate_line_tables_for_sessions(repo.inner(), &linked_ids)?;
+        if let Some(sha) = &head_sha {
+            for id in &linked_ids {
+                index.link_session_commit(id.as_str(), sha)?;
+            }
+        }
+    }
+
     let sessions: Vec<serde_json::Value> = report
         .linked
         .iter()

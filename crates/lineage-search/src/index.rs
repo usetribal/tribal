@@ -234,6 +234,13 @@ impl LineageIndex {
                 INSERT INTO turns_fts(turns_fts, rowid, body) VALUES('delete', old.rowid, old.body);
                 INSERT INTO turns_fts(rowid, body) VALUES (new.rowid, new.body);
             END;
+            CREATE TABLE IF NOT EXISTS session_commits (
+                session_id TEXT NOT NULL,
+                commit_sha TEXT NOT NULL,
+                PRIMARY KEY (session_id, commit_sha)
+            );
+            CREATE INDEX IF NOT EXISTS idx_session_commits_commit
+                ON session_commits(commit_sha);
             CREATE TABLE IF NOT EXISTS session_files (
                 file_path TEXT NOT NULL,
                 session_id TEXT NOT NULL,
@@ -390,6 +397,21 @@ impl LineageIndex {
             )?;
         }
 
+        // The session↔commit edge lives in the conversation ref (git notes are
+        // the other half); mirroring it here is what makes `sessions-for-commit`
+        // one indexed lookup instead of a scan of every session ref. Same
+        // delete-then-insert discipline as session_files.
+        self.conn.execute(
+            "DELETE FROM session_commits WHERE session_id = ?1",
+            params![conversation.id.as_str()],
+        )?;
+        for commit_sha in &conversation.commit_shas {
+            self.conn.execute(
+                "INSERT OR IGNORE INTO session_commits (session_id, commit_sha) VALUES (?1, ?2)",
+                params![conversation.id.as_str(), commit_sha],
+            )?;
+        }
+
         // The generation is what lets a derived cache (lineage-retrieval) detect
         // that the session corpus changed without being told about imports.
         self.conn.execute(
@@ -453,16 +475,7 @@ impl LineageIndex {
             "#,
         )?;
 
-        let rows = stmt.query_map(params![fts_or_query(query), limit as i64], |row| {
-            Ok(TurnHit {
-                turn_id: row.get(0)?,
-                session_id: row.get(1)?,
-                salience_class: row.get(2)?,
-                body: row.get(3)?,
-                snippet: row.get(4)?,
-                score: row.get::<_, f64>(5)?.abs(),
-            })
-        })?;
+        let rows = stmt.query_map(params![fts_or_query(query), limit as i64], row_to_turn_hit)?;
 
         let mut hits = Vec::new();
         for row in rows {
@@ -478,15 +491,143 @@ impl LineageIndex {
         let mut stmt = self.conn.prepare(
             "SELECT turn_id, session_id, salience_class, body FROM turns WHERE turn_id = ?1",
         )?;
-        let mut rows = stmt.query_map(params![turn_id], |row| {
-            Ok(TurnRow {
-                turn_id: row.get(0)?,
-                session_id: row.get(1)?,
-                salience_class: row.get(2)?,
-                body: row.get(3)?,
-            })
-        })?;
+        let mut rows = stmt.query_map(params![turn_id], row_to_turn_row)?;
         rows.next().transpose().map_err(SearchError::Sqlite)
+    }
+
+    /// Turn-level search restricted to a session set — the batching win behind
+    /// the `search-within` verb: one indexed query instead of N greps over
+    /// materialized transcripts. An empty session set matches nothing rather
+    /// than everything, so a caller that lost its session list gets silence, not
+    /// the whole corpus.
+    pub fn search_turns_in_sessions(
+        &self,
+        session_ids: &[String],
+        query: &str,
+        limit: usize,
+    ) -> Result<Vec<TurnHit>> {
+        if session_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let placeholders = sql_placeholders(session_ids.len(), 3);
+        let mut stmt = self.conn.prepare(&format!(
+            r#"
+            SELECT t.turn_id, t.session_id, t.salience_class, t.body,
+                   snippet(turns_fts, 1, '>>>', '<<<', '...', 32) as snippet,
+                   bm25(turns_fts) as score
+            FROM turns_fts
+            JOIN turns t ON turns_fts.rowid = t.rowid
+            WHERE turns_fts MATCH ?1 AND t.session_id IN ({placeholders})
+            ORDER BY score
+            LIMIT ?2
+            "#
+        ))?;
+
+        let mut args: Vec<Box<dyn rusqlite::ToSql>> =
+            vec![Box::new(fts_or_query(query)), Box::new(limit as i64)];
+        args.extend(
+            session_ids
+                .iter()
+                .map(|id| Box::new(id.clone()) as Box<dyn rusqlite::ToSql>),
+        );
+        let rows = stmt.query_map(rusqlite::params_from_iter(args.iter()), row_to_turn_hit)?;
+
+        let mut hits = Vec::new();
+        for row in rows {
+            hits.push(row?);
+        }
+        Ok(hits)
+    }
+
+    /// The turns immediately before and after `turn_id` in its own session,
+    /// within `radius` positions, in conversation order — what the `around` verb
+    /// reads. `turns.turn_index` finally earns its column here. A turn unknown to
+    /// the index (or dropped by salience) yields nothing rather than an error:
+    /// an agent following a stale handle should see silence.
+    pub fn turns_around(&self, turn_id: &str, radius: u32, limit: usize) -> Result<Vec<TurnRow>> {
+        let Some(anchor) = self.turn_position(turn_id)? else {
+            return Ok(Vec::new());
+        };
+        let (session_id, turn_index) = anchor;
+        let mut stmt = self.conn.prepare(
+            "SELECT turn_id, session_id, salience_class, body FROM turns
+             WHERE session_id = ?1 AND turn_index BETWEEN ?2 AND ?3
+             ORDER BY turn_index
+             LIMIT ?4",
+        )?;
+        let rows = stmt.query_map(
+            params![
+                session_id,
+                turn_index - i64::from(radius),
+                turn_index + i64::from(radius),
+                limit as i64,
+            ],
+            row_to_turn_row,
+        )?;
+
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row?);
+        }
+        Ok(out)
+    }
+
+    /// Where an indexed turn sits: its session and position in it.
+    fn turn_position(&self, turn_id: &str) -> Result<Option<(String, i64)>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT session_id, turn_index FROM turns WHERE turn_id = ?1")?;
+        let mut rows = stmt.query_map(params![turn_id], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        rows.next().transpose().map_err(SearchError::Sqlite)
+    }
+
+    /// The line objects a turn produced, most recent first — `idx_line_objects_turn`
+    /// read in the direction nothing used before, which is what makes the graph
+    /// two-way (turn → code, not only code → turn).
+    pub fn line_objects_for_turn(&self, turn_id: &str, limit: usize) -> Result<Vec<LineObjectRow>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, file_path, start_line, end_line, commit_sha, committed_at,
+                    session_id, turn_id, confidence
+             FROM line_objects WHERE turn_id = ?1
+             ORDER BY committed_at DESC
+             LIMIT ?2",
+        )?;
+        let rows = stmt.query_map(params![turn_id, limit as i64], row_to_line_object)?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row?);
+        }
+        Ok(out)
+    }
+
+    /// Sessions linked to a commit, from the `session_commits` mirror — the one
+    /// traversal whose entry point is ordinary git work rather than an injected
+    /// digest.
+    pub fn sessions_for_commit(&self, commit_sha: &str, limit: usize) -> Result<Vec<String>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT session_id FROM session_commits WHERE commit_sha = ?1
+             ORDER BY session_id LIMIT ?2",
+        )?;
+        let rows = stmt.query_map(params![commit_sha, limit as i64], |row| {
+            row.get::<_, String>(0)
+        })?;
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row?);
+        }
+        Ok(out)
+    }
+
+    /// Record one session↔commit edge without re-indexing the session. The link
+    /// paths (post-commit hook, `git lineage link`) write the edge to the
+    /// conversation ref but never re-run `index_conversation`, so the mirror
+    /// would otherwise go stale until the next rebuild.
+    pub fn link_session_commit(&self, session_id: &str, commit_sha: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR IGNORE INTO session_commits (session_id, commit_sha) VALUES (?1, ?2)",
+            params![session_id, commit_sha],
+        )?;
+        Ok(())
     }
 
     /// Sessions that *wrote* this path — the authorship signal the
@@ -1019,6 +1160,7 @@ impl LineageIndex {
         // The delete trigger clears turns_fts alongside.
         self.conn.execute("DELETE FROM turns", [])?;
         self.conn.execute("DELETE FROM session_files", [])?;
+        self.conn.execute("DELETE FROM session_commits", [])?;
 
         let ids = list_session_ids(repo).map_err(SearchError::Lineage)?;
         let total = ids.len();
@@ -1052,6 +1194,36 @@ struct AncestryEdgeParent {
     commit_sha: String,
     file_path: String,
     start_line: u32,
+}
+
+fn row_to_turn_hit(row: &rusqlite::Row) -> rusqlite::Result<TurnHit> {
+    Ok(TurnHit {
+        turn_id: row.get(0)?,
+        session_id: row.get(1)?,
+        salience_class: row.get(2)?,
+        body: row.get(3)?,
+        snippet: row.get(4)?,
+        score: row.get::<_, f64>(5)?.abs(),
+    })
+}
+
+fn row_to_turn_row(row: &rusqlite::Row) -> rusqlite::Result<TurnRow> {
+    Ok(TurnRow {
+        turn_id: row.get(0)?,
+        session_id: row.get(1)?,
+        salience_class: row.get(2)?,
+        body: row.get(3)?,
+    })
+}
+
+/// `?n, ?n+1, …` for an IN clause of `count` values starting at `?first`.
+/// SQLite has no array binding, so a variable-length IN list must be built as
+/// text; the values themselves still bind as parameters.
+fn sql_placeholders(count: usize, first: usize) -> String {
+    (first..first + count)
+        .map(|i| format!("?{i}"))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn row_to_line_object(row: &rusqlite::Row) -> rusqlite::Result<LineObjectRow> {
@@ -1297,6 +1469,141 @@ mod tests {
 
         index.index_conversation(&conv).unwrap();
         assert!(index.generation().unwrap() > after_first);
+    }
+
+    /// A session whose turns are salient prose, so the traversal verbs have a
+    /// corpus to walk. Bodies differ so FTS can pick one out.
+    fn conversation_saying(workspace_root: &str, prompts: &[&str]) -> Conversation {
+        let mut conv = Conversation::new(AgentKind::Claude, workspace_root);
+        for prompt in prompts {
+            conv.turns.push(Turn {
+                id: LineageId::new(),
+                role: Role::User,
+                content: (*prompt).into(),
+                tool_calls: vec![],
+                model: None,
+                timestamp: None,
+                artifacts: vec![],
+            });
+        }
+        conv
+    }
+
+    #[test]
+    fn scoped_search_stays_inside_the_given_sessions() {
+        let (_dir, index) = open_index();
+        let inside = conversation_saying("/repo", &["we chose redis for the session cache"]);
+        let outside = conversation_saying("/repo", &["redis appears here too but out of scope"]);
+        index.index_conversation(&inside).unwrap();
+        index.index_conversation(&outside).unwrap();
+
+        let hits = index
+            .search_turns_in_sessions(&[inside.id.as_str().to_string()], "redis", 10)
+            .unwrap();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].session_id, inside.id.as_str());
+
+        // Global search still sees both, so the scoping is the filter and not a
+        // corpus difference.
+        assert_eq!(index.search_turns("redis", 10).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn scoped_search_with_no_sessions_matches_nothing() {
+        let (_dir, index) = open_index();
+        let conv = conversation_saying("/repo", &["redis"]);
+        index.index_conversation(&conv).unwrap();
+        assert!(index
+            .search_turns_in_sessions(&[], "redis", 10)
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn turns_around_returns_the_neighbourhood_in_conversation_order() {
+        let (_dir, index) = open_index();
+        let conv = conversation_saying("/repo", &["first", "second", "third", "fourth", "fifth"]);
+        index.index_conversation(&conv).unwrap();
+
+        let around = index
+            .turns_around(conv.turns[2].id.as_str(), 1, 10)
+            .unwrap();
+        let bodies: Vec<&str> = around.iter().map(|t| t.body.as_str()).collect();
+        assert_eq!(bodies, vec!["second", "third", "fourth"]);
+
+        // The bound is honoured even when the radius would reach further.
+        assert_eq!(
+            index
+                .turns_around(conv.turns[2].id.as_str(), 2, 3)
+                .unwrap()
+                .len(),
+            3
+        );
+    }
+
+    #[test]
+    fn turns_around_clamps_at_session_edges_and_is_silent_on_unknown_turns() {
+        let (_dir, index) = open_index();
+        let conv = conversation_saying("/repo", &["first", "second"]);
+        index.index_conversation(&conv).unwrap();
+
+        let around = index
+            .turns_around(conv.turns[0].id.as_str(), 5, 10)
+            .unwrap();
+        assert_eq!(around.len(), 2, "never walks past the session boundary");
+        assert!(index
+            .turns_around("no-such-turn", 1, 10)
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn session_commits_mirror_resolves_a_commit_to_its_sessions() {
+        let (_dir, index) = open_index();
+        let mut conv = conversation_saying("/repo", &["the deciding turn"]);
+        conv.commit_shas.push("a".repeat(40));
+        index.index_conversation(&conv).unwrap();
+
+        assert_eq!(
+            index.sessions_for_commit(&"a".repeat(40), 10).unwrap(),
+            vec![conv.id.as_str().to_string()]
+        );
+        assert!(index
+            .sessions_for_commit(&"b".repeat(40), 10)
+            .unwrap()
+            .is_empty());
+
+        // A link made after indexing (post-commit hook, `git lineage link`)
+        // reaches the mirror without a re-index.
+        index
+            .link_session_commit(conv.id.as_str(), &"b".repeat(40))
+            .unwrap();
+        assert_eq!(
+            index.sessions_for_commit(&"b".repeat(40), 10).unwrap(),
+            vec![conv.id.as_str().to_string()]
+        );
+    }
+
+    #[test]
+    fn session_commits_are_replaced_not_accumulated_on_reindex() {
+        let (_dir, index) = open_index();
+        let mut conv = conversation_saying("/repo", &["turn"]);
+        conv.commit_shas.push("a".repeat(40));
+        index.index_conversation(&conv).unwrap();
+
+        conv.commit_shas = vec!["c".repeat(40)];
+        index.index_conversation(&conv).unwrap();
+        assert!(index
+            .sessions_for_commit(&"a".repeat(40), 10)
+            .unwrap()
+            .is_empty());
+        assert_eq!(
+            index
+                .sessions_for_commit(&"c".repeat(40), 10)
+                .unwrap()
+                .len(),
+            1
+        );
     }
 
     #[test]

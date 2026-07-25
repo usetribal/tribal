@@ -716,6 +716,11 @@ pub fn link(repo_path: &Path, session_id: &str, commit_sha: &str) -> Result<()> 
     let repo = open_repo(repo_path)?;
     let id = LineageId::from(session_id);
     let lines = link_session_to_commit(repo.inner(), &id, commit_sha)?;
+    // The link is written to the conversation ref, not through
+    // `index_conversation`, so the session↔commit mirror is maintained here or
+    // it goes stale until the next rebuild.
+    LineageIndex::open(repo.git_dir().join("lineage").join("index.db"))?
+        .link_session_commit(session_id, commit_sha)?;
     println!("linked {session_id} -> {commit_sha} ({lines} line object(s))");
     EventLog::for_git_dir(&repo.git_dir()).append(
         Utc::now(),
