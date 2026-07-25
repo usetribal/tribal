@@ -5,12 +5,12 @@ use chrono::{DateTime, Utc};
 use lineage_core::{normalize_repo_path, RepoBinding};
 use lineage_git::{open_repo, resolve_repo_binding};
 use lineage_retrieval::{
-    CacheKey, ContextQuery, Evidence, LocalRetriever, Retrieval, RetrievalCache, Retriever,
-    Strength, LOCAL_RETRIEVER_VERSION,
+    CacheKey, ContextQuery, LocalRetriever, RetrievalCache, Retriever, LOCAL_RETRIEVER_VERSION,
 };
 use lineage_search::LineageIndex;
 use sha2::{Digest, Sha256};
 
+use crate::digest::{render_digest, select, Trigger};
 use crate::events::{EventLog, Outcome};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -18,10 +18,6 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 /// Wall budget for the whole hook fire. The agent's tool call blocks on us,
 /// so overrunning is worse than answering with nothing.
 const DEFAULT_BUDGET_MS: u64 = 200;
-/// Selection defaults from context-injection-v0 "Digest format".
-const MIN_STRENGTH: Strength = Strength::Low;
-const MAX_EVIDENCE_ENTRIES: usize = 3;
-const MAX_DIGEST_BYTES: usize = 4096;
 
 const HOOK_HARNESS: &str = "claude";
 
@@ -140,7 +136,9 @@ fn run_claude_hook(repo_path: &Path, input: &str, now_unix: i64) -> Result<Optio
     };
 
     let log = EventLog::for_git_dir(&git_dir);
-    let selected = select(&retrieval);
+    // This endpoint is the `PostToolUse`/`Read` trigger: mid-task, appended into
+    // a tool result the agent is actively reading, so it takes the tight budget.
+    let selected = select(&retrieval, Trigger::FileKeyed);
     if selected.is_empty() {
         // Truncation only explains an empty result; a nonempty one that all
         // fell below the floor is below_floor even if time also ran out.
@@ -155,7 +153,7 @@ fn run_claude_hook(repo_path: &Path, input: &str, now_unix: i64) -> Result<Optio
         return Ok(None);
     }
 
-    let digest = render_digest(&relative_path, &selected);
+    let digest = render_digest(&relative_path, &selected, Trigger::FileKeyed);
     let Some(updated) = append_digest_to_response(&event["tool_response"], &digest) else {
         log_silent(&log, &relative_path, now_unix, "unappendable_shape");
         return Ok(None);
@@ -222,51 +220,6 @@ fn repo_binding_or_local(repo: &lineage_git::LineageRepo) -> RepoBinding {
         root_commit_sha: String::new(),
         server_repo_id: None,
     })
-}
-
-/// The selector: presentation policy over an already-final retrieval.
-/// Evidence arrives strongest-first, so truncation keeps the best entries.
-fn select(retrieval: &Retrieval) -> Vec<&Evidence> {
-    retrieval
-        .evidence
-        .iter()
-        .filter(|e| e.strength >= MIN_STRENGTH)
-        .take(MAX_EVIDENCE_ENTRIES)
-        .collect()
-}
-
-fn render_digest(file_path: &str, selected: &[&Evidence]) -> String {
-    let mut digest = format!(
-        "Lineage: {} past session(s) touched {file_path} — details below.\n",
-        selected.len(),
-    );
-    for evidence in selected {
-        digest.push_str(&format!("- {}", evidence.attribution));
-        if !evidence.line_ranges.is_empty() {
-            let ranges: Vec<String> = evidence
-                .line_ranges
-                .iter()
-                .map(|[start, end]| format!("{start}-{end}"))
-                .collect();
-            digest.push_str(&format!(" (lines {})", ranges.join(", ")));
-        }
-        digest.push('\n');
-        for line in evidence.summary.lines() {
-            digest.push_str(&format!("  {line}\n"));
-        }
-    }
-    truncate_to_bytes(&digest, MAX_DIGEST_BYTES)
-}
-
-fn truncate_to_bytes(text: &str, max_bytes: usize) -> String {
-    if text.len() <= max_bytes {
-        return text.to_string();
-    }
-    let mut end = max_bytes;
-    while !text.is_char_boundary(end) {
-        end -= 1;
-    }
-    format!("{}…", &text[..end])
 }
 
 /// `git lineage context log` — what was injected, newest last. The injection
@@ -392,8 +345,46 @@ fn parse_chain_target(target: &str) -> Result<(String, u32)> {
     Ok((normalize_repo_path(path, None), line))
 }
 
+/// Claude Code `SessionStart` endpoint: teach the traversal vocabulary once per
+/// session. MCP-connected agents discover the verbs free via `tools/list`; a CLI
+/// session has no such channel, so without this it would have capability it
+/// could not find.
+///
+/// The hook *states a capability*, it does not instruct — an agent is never told
+/// to use lineage, which is what keeps the A/B harness's treatment arm honest.
+///
+/// Fails open like the others: a payload that does not parse still gets the
+/// vocabulary, and nothing here can exit nonzero.
+pub fn hook_claude_session_start(repo_path: &Path, input: &str, now_unix: i64) -> Option<String> {
+    // The payload is not read for content — the vocabulary is the same whatever
+    // the session or its `source` (startup/resume/clear/compact). Parsing it
+    // only to reject a malformed one would make the hook *more* fragile for no
+    // gain, so a bad payload still gets the vocabulary.
+    let source = serde_json::from_str::<serde_json::Value>(input)
+        .ok()
+        .and_then(|event| event["source"].as_str().map(str::to_string));
+
+    if let Some(log) = EventLog::for_repo_path(repo_path) {
+        log.append(
+            hook_timestamp(now_unix),
+            "context_session_start",
+            Outcome::Ok,
+            serde_json::json!({ "harness": HOOK_HARNESS, "source": source }),
+        );
+    }
+
+    let output = serde_json::json!({
+        "hookSpecificOutput": {
+            "hookEventName": "SessionStart",
+            "additionalContext": crate::digest::verb_vocabulary(),
+        }
+    });
+    Some(output.to_string())
+}
+
 const CLAUDE_SETTINGS_FILE: &str = ".claude/settings.json";
 const HOOK_COMMAND: &str = "git lineage context hook claude";
+const SESSION_START_HOOK_COMMAND: &str = "git lineage context hook claude-session-start";
 
 /// Wires the injection endpoint into Claude Code's project settings.
 /// Idempotent, and merges into existing settings rather than replacing them —
@@ -428,6 +419,14 @@ fn user_settings_path() -> Result<std::path::PathBuf> {
     Ok(Path::new(&home).join(CLAUDE_SETTINGS_FILE))
 }
 
+/// The two hook groups lineage owns: the file-keyed injection endpoint and the
+/// once-per-session vocabulary. `SessionStart` groups carry no matcher — there
+/// is no tool to match on.
+const LINEAGE_HOOK_GROUPS: &[(&str, Option<&str>, &str)] = &[
+    ("PostToolUse", Some("Read"), HOOK_COMMAND),
+    ("SessionStart", None, SESSION_START_HOOK_COMMAND),
+];
+
 fn install_claude_agent_hook_at(path: &Path) -> Result<bool> {
     let path = path.to_path_buf();
     let mut settings: serde_json::Value = match fs::read_to_string(&path) {
@@ -436,32 +435,59 @@ fn install_claude_agent_hook_at(path: &Path) -> Result<bool> {
         Err(_) => serde_json::json!({}),
     };
 
-    let post_tool_use = settings
+    let mut wrote_any = false;
+    for (event, matcher, command) in LINEAGE_HOOK_GROUPS {
+        wrote_any |= add_hook_group(&mut settings, event, *matcher, command)?;
+    }
+    // Nothing to write means every group was already present; leaving the file
+    // untouched keeps install idempotent down to its mtime.
+    if !wrote_any {
+        return Ok(false);
+    }
+
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(&path, format!("{:#}\n", settings))?;
+    Ok(true)
+}
+
+/// Append one lineage hook group under `hooks.<event>`, or report that an
+/// equivalent one is already there. Merges into existing settings rather than
+/// replacing them — the file is shared user configuration, not ours.
+fn add_hook_group(
+    settings: &mut serde_json::Value,
+    event: &str,
+    matcher: Option<&str>,
+    command: &str,
+) -> Result<bool> {
+    let entry = settings
         .as_object_mut()
         .ok_or(format!("{CLAUDE_SETTINGS_FILE} root is not an object"))?
         .entry("hooks")
         .or_insert_with(|| serde_json::json!({}))
         .as_object_mut()
         .ok_or("settings 'hooks' is not an object")?
-        .entry("PostToolUse")
+        .entry(event.to_string())
         .or_insert_with(|| serde_json::json!([]));
-    let groups = post_tool_use
+    let groups = entry
         .as_array_mut()
-        .ok_or("settings 'hooks.PostToolUse' is not an array")?;
+        .ok_or(format!("settings 'hooks.{event}' is not an array"))?;
 
-    if groups.iter().any(group_has_lineage_hook) {
+    if groups
+        .iter()
+        .any(|group| group_has_lineage_command(group, command))
+    {
         return Ok(false);
     }
 
-    groups.push(serde_json::json!({
-        "matcher": "Read",
-        "hooks": [{ "type": "command", "command": HOOK_COMMAND }],
-    }));
-
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
+    let mut group = serde_json::json!({
+        "hooks": [{ "type": "command", "command": command }],
+    });
+    if let Some(matcher) = matcher {
+        group["matcher"] = serde_json::json!(matcher);
     }
-    fs::write(&path, format!("{:#}\n", settings))?;
+    groups.push(group);
     Ok(true)
 }
 
@@ -477,17 +503,20 @@ fn uninstall_claude_agent_hook_at(path: &Path) -> Result<bool> {
     };
     let mut settings: serde_json::Value = serde_json::from_str(&contents)?;
 
-    let Some(groups) = settings
-        .get_mut("hooks")
-        .and_then(|h| h.get_mut("PostToolUse"))
-        .and_then(|p| p.as_array_mut())
-    else {
-        return Ok(false);
-    };
-
-    let before = groups.len();
-    groups.retain(|group| !group_has_lineage_hook(group));
-    if groups.len() == before {
+    let mut removed_any = false;
+    for (event, _, _) in LINEAGE_HOOK_GROUPS {
+        let Some(groups) = settings
+            .get_mut("hooks")
+            .and_then(|hooks| hooks.get_mut(*event))
+            .and_then(|groups| groups.as_array_mut())
+        else {
+            continue;
+        };
+        let before = groups.len();
+        groups.retain(|group| !group_has_lineage_hook(group));
+        removed_any |= groups.len() != before;
+    }
+    if !removed_any {
         return Ok(false);
     }
 
@@ -512,10 +541,22 @@ pub(crate) fn claude_hook_status(root: &Path) -> (bool, bool) {
     (true, registered)
 }
 
+/// Any lineage-owned hook group — what uninstall and doctor look for.
 fn group_has_lineage_hook(group: &serde_json::Value) -> bool {
     group["hooks"].as_array().into_iter().flatten().any(|hook| {
         hook["command"]
             .as_str()
             .is_some_and(|c| c.contains("git lineage context hook"))
     })
+}
+
+/// One *specific* lineage hook group. Install matches on the exact command
+/// because the two groups share a prefix: a repo with the file-keyed hook
+/// already installed must still gain the `SessionStart` one.
+fn group_has_lineage_command(group: &serde_json::Value, command: &str) -> bool {
+    group["hooks"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .any(|hook| hook["command"].as_str() == Some(command))
 }

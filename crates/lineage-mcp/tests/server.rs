@@ -57,6 +57,166 @@ async fn mcp_initialize_and_tools_list() {
     assert!(names.contains(&"lineage_search"));
 }
 
+/// The MCP half of the anti-drift guarantee: the tool set carries exactly the
+/// verb registry. The CLI half lives in `lineage-cli/tests/verb_registry.rs`; a
+/// verb reaching one surface and not the other is what this pair forbids, and
+/// `tools/list` is also verb discovery for free on this path.
+#[tokio::test]
+async fn tools_list_carries_the_whole_verb_registry() {
+    let dir = init_repo();
+    let tools = handle_request(dir.path(), "tools/list", &json!({}))
+        .await
+        .unwrap();
+    let names: Vec<String> = tools["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| t["name"].as_str().unwrap().to_string())
+        .collect();
+
+    for verb in lineage_retrieval::VERBS {
+        assert!(
+            names.contains(&verb.mcp.to_string()),
+            "verb {} is in the registry but not an MCP tool (have: {names:?})",
+            verb.relation,
+        );
+    }
+
+    // The other direction: every `lineage_`-prefixed tool is either pre-existing
+    // plumbing or a registry verb, so a traversal tool cannot be added here
+    // without being registered.
+    const NON_VERB_TOOLS: &[&str] = &[
+        "lineage_list_sessions",
+        "lineage_get_session",
+        "lineage_blame_line",
+        "lineage_search",
+        "lineage_doctor",
+        "lineage_materialize",
+        "lineage_rebuild_index",
+        "lineage_export",
+        "lineage_remap",
+    ];
+    for name in &names {
+        let known = NON_VERB_TOOLS.contains(&name.as_str())
+            || lineage_retrieval::VERBS.iter().any(|v| v.mcp == *name);
+        assert!(known, "tool {name} is neither plumbing nor a registry verb");
+    }
+}
+
+/// Each verb answers over MCP, and a private session never appears in any of
+/// them — the gate runs inside the primitive, so this surface cannot bypass it.
+#[tokio::test]
+async fn traversal_verbs_answer_and_never_emit_private_sessions() {
+    let dir = init_repo();
+    let repo = open_repo(dir.path()).unwrap();
+    let head = String::from_utf8(
+        Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap()
+    .trim()
+    .to_string();
+
+    let mut public = session_saying(dir.path(), &["we chose redis for the cache", "and why"]);
+    public.commit_shas.push(head.clone());
+    let mut private = session_saying(dir.path(), &["the private redis decision"]);
+    private.private = true;
+    private.commit_shas.push(head.clone());
+    for conv in [&public, &private] {
+        persist_conversation(repo.inner(), conv).unwrap();
+        lineage_search::LineageIndex::open(repo.git_dir().join("lineage").join("index.db"))
+            .unwrap()
+            .index_conversation(conv)
+            .unwrap();
+    }
+
+    let search = call_tool(
+        dir.path(),
+        "lineage_search_within",
+        json!({
+            "session_ids": [public.id.as_str(), private.id.as_str()],
+            "query": "redis",
+        }),
+    )
+    .await;
+    assert!(search.contains(public.id.as_str()));
+    assert!(
+        !search.contains(private.id.as_str()),
+        "a private session must never surface: {search}"
+    );
+
+    let around = call_tool(
+        dir.path(),
+        "lineage_turns_around",
+        json!({ "turn_id": public.turns[0].id.as_str(), "radius": 1 }),
+    )
+    .await;
+    assert!(around.contains("and why"), "neighbour turn is present");
+
+    let private_around = call_tool(
+        dir.path(),
+        "lineage_turns_around",
+        json!({ "turn_id": private.turns[0].id.as_str(), "radius": 1 }),
+    )
+    .await;
+    assert_eq!(private_around.trim(), "[]");
+
+    let sessions = call_tool(
+        dir.path(),
+        "lineage_sessions_for_commit",
+        json!({ "commit_sha": head }),
+    )
+    .await;
+    assert!(sessions.contains(public.id.as_str()));
+    assert!(!sessions.contains(private.id.as_str()));
+
+    // No line objects were materialized, so the honest answer is an empty list.
+    let produced = call_tool(
+        dir.path(),
+        "lineage_produced_by",
+        json!({ "turn_id": public.turns[0].id.as_str() }),
+    )
+    .await;
+    assert_eq!(produced.trim(), "[]");
+}
+
+/// The text payload of one `tools/call`, which is where every tool puts its
+/// answer.
+async fn call_tool(
+    repo_path: &std::path::Path,
+    name: &str,
+    arguments: serde_json::Value,
+) -> String {
+    let result = handle_request(
+        repo_path,
+        "tools/call",
+        &json!({ "name": name, "arguments": arguments }),
+    )
+    .await
+    .unwrap_or_else(|e| panic!("{name} failed: {e}"));
+    result["content"][0]["text"].as_str().unwrap().to_string()
+}
+
+fn session_saying(workspace_root: &std::path::Path, prompts: &[&str]) -> Conversation {
+    let mut conv = Conversation::new(AgentKind::Claude, workspace_root.to_string_lossy());
+    for prompt in prompts {
+        conv.turns.push(Turn {
+            id: LineageId::new(),
+            role: Role::User,
+            content: (*prompt).into(),
+            tool_calls: vec![],
+            model: None,
+            timestamp: None,
+            artifacts: vec![],
+        });
+    }
+    conv
+}
+
 #[tokio::test]
 async fn mcp_tool_calls_on_repo_with_session() {
     let dir = init_repo();

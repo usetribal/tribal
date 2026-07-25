@@ -7,6 +7,10 @@ use lineage_git::{
     read_conversation, read_repo_config, remap_orphaned_commits,
 };
 use lineage_policy::{apply_policy, policy_from_repo_config, prepare_for_export};
+use lineage_retrieval::{
+    line_objects_of_turn, search_within_sessions, sessions_for_commit, turn_neighbourhood,
+    DEFAULT_AROUND_RADIUS, DEFAULT_TRAVERSAL_LIMIT,
+};
 use lineage_search::LineageIndex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -136,12 +140,51 @@ pub async fn handle_request(
                     "redact": { "type": "boolean" },
                     "format": { "type": "string" }
                 }), &[]),
-                tool_schema("lineage_remap", "Remap lineage after rebase", json!({}), &[])
+                tool_schema("lineage_remap", "Remap lineage after rebase", json!({}), &[]),
+                // The traversal vocabulary (lineage_retrieval::VERBS). An
+                // MCP-connected agent gets verb discovery free from this list,
+                // which is why the CLI needs a SessionStart hook and this does
+                // not. The registry test asserts this set equals VERBS.
+                tool_schema("lineage_search_within", "Search the text of specific sessions (one call, not N greps)", json!({
+                    "session_ids": { "type": "array", "items": { "type": "string" } },
+                    "query": { "type": "string" },
+                    "limit": { "type": "integer" }
+                }), &["session_ids", "query"]),
+                tool_schema("lineage_turns_around", "Read the turns immediately before and after a turn", json!({
+                    "turn_id": { "type": "string" },
+                    "radius": { "type": "integer" },
+                    "limit": { "type": "integer" }
+                }), &["turn_id"]),
+                tool_schema("lineage_produced_by", "List the code a turn produced (file:line ranges)", json!({
+                    "turn_id": { "type": "string" },
+                    "limit": { "type": "integer" }
+                }), &["turn_id"]),
+                tool_schema("lineage_sessions_for_commit", "Find the sessions behind a commit", json!({
+                    "commit_sha": { "type": "string" },
+                    "limit": { "type": "integer" }
+                }), &["commit_sha"])
             ]
         })),
         "tools/call" => handle_tool_call(repo_path, params).await,
         _ => Err(format!("unknown method: {method}")),
     }
+}
+
+fn open_index(repo: &lineage_git::LineageRepo) -> Result<LineageIndex, String> {
+    LineageIndex::open(repo.git_dir().join("lineage").join("index.db")).map_err(|e| e.to_string())
+}
+
+fn required_str<'a>(args: &'a Value, key: &str) -> Result<&'a str, String> {
+    args.get(key)
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| format!("{key} required"))
+}
+
+fn traversal_limit(args: &Value) -> usize {
+    args.get("limit")
+        .and_then(|v| v.as_u64())
+        .map(|l| l as usize)
+        .unwrap_or(DEFAULT_TRAVERSAL_LIMIT)
 }
 
 fn tool_schema(name: &str, description: &str, properties: Value, required: &[&str]) -> Value {
@@ -298,6 +341,80 @@ async fn handle_tool_call(repo_path: &Path, params: &Value) -> Result<Value, Str
                 "line_objects_updated": report.line_objects_updated,
             }))
             .unwrap()
+        }
+        "lineage_search_within" => {
+            let session_ids: Vec<String> = args
+                .get("session_ids")
+                .and_then(|v| v.as_array())
+                .map(|ids| {
+                    ids.iter()
+                        .filter_map(|id| id.as_str().map(str::to_string))
+                        .collect()
+                })
+                .ok_or_else(|| "session_ids required".to_string())?;
+            let query = args
+                .get("query")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| "query required".to_string())?;
+            let index = open_index(&repo)?;
+            let evidence =
+                search_within_sessions(inner, &index, &session_ids, query, traversal_limit(&args))
+                    .map_err(|e| e.to_string())?;
+            serde_json::to_string_pretty(evidence.get()).unwrap()
+        }
+        "lineage_turns_around" => {
+            let turn_id = required_str(&args, "turn_id")?;
+            let radius = args
+                .get("radius")
+                .and_then(|v| v.as_u64())
+                .map(|r| r as u32)
+                .unwrap_or(DEFAULT_AROUND_RADIUS);
+            let index = open_index(&repo)?;
+            let evidence =
+                turn_neighbourhood(inner, &index, turn_id, radius, traversal_limit(&args))
+                    .map_err(|e| e.to_string())?;
+            serde_json::to_string_pretty(evidence.get()).unwrap()
+        }
+        "lineage_produced_by" => {
+            let turn_id = required_str(&args, "turn_id")?;
+            let index = open_index(&repo)?;
+            let produced = line_objects_of_turn(&index, turn_id, traversal_limit(&args))
+                .map_err(|e| e.to_string())?;
+            let rendered: Vec<Value> = produced
+                .iter()
+                .map(|line| {
+                    json!({
+                        "file_path": line.anchor.file_path,
+                        "line_range": line.line_range,
+                        "commit_sha": line.anchor.commit_sha,
+                        "confidence": line.confidence,
+                    })
+                })
+                .collect();
+            serde_json::to_string_pretty(&rendered).unwrap()
+        }
+        "lineage_sessions_for_commit" => {
+            let commit_sha = required_str(&args, "commit_sha")?;
+            // Short shas resolve as they do everywhere else in git; the mirror
+            // is keyed by full sha.
+            let full_sha = inner
+                .revparse_single(commit_sha)
+                .map(|obj| obj.id().to_string())
+                .unwrap_or_else(|_| commit_sha.to_string());
+            let index = open_index(&repo)?;
+            let sessions = sessions_for_commit(inner, &index, &full_sha, traversal_limit(&args))
+                .map_err(|e| e.to_string())?;
+            let rendered: Vec<Value> = sessions
+                .get()
+                .iter()
+                .map(|session| {
+                    json!({
+                        "session_id": session.session_id,
+                        "attribution": session.attribution,
+                    })
+                })
+                .collect();
+            serde_json::to_string_pretty(&rendered).unwrap()
         }
         other => return Err(format!("unknown tool: {other}")),
     };

@@ -11,6 +11,15 @@
 //! into a tool name. An MCP-connected agent never shells out, so command strings
 //! must not live in a crate MCP consumes.
 
+/// Default bound on every traversal verb. Small on purpose: an agent following
+/// a handle wants the neighbourhood, not the transcript, and the point of the
+/// verbs is that each is one bounded command. Shared by both surfaces — the same
+/// vocabulary must also be the same shape.
+pub const DEFAULT_TRAVERSAL_LIMIT: usize = 10;
+
+/// How many turns either side of the anchor `around` reads by default.
+pub const DEFAULT_AROUND_RADIUS: u32 = 2;
+
 /// One agent-exposed traversal move. `relation` is the abstract edge name that
 /// appears in a digest's per-entry edge statements; `cli` and `mcp` are the two
 /// surfaces' spellings, kept here so the equality test can assert both surfaces

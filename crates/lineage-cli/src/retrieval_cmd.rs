@@ -14,13 +14,14 @@ use lineage_core::normalize_repo_path;
 use lineage_embed::Model2VecEmbedder;
 use lineage_git::{open_repo, resolve_anchor};
 use lineage_retrieval::{
-    fused_salient_turn_plan, line_anchored_temporal_plan, route, DenseRetriever, Evidence,
+    fused_salient_turn_plan, line_anchored_temporal_plan, line_objects_of_turn, route,
+    search_within_sessions, sessions_for_commit, turn_neighbourhood, DenseRetriever, Evidence,
     FtsRetriever, FusedRetriever, IntentQuery, IntentRetriever, LineRef, Plan, PlanResult,
     Retrieval, RouteDecision, StageTiming,
 };
 use lineage_search::LineageIndex;
 
-use crate::digest::affordances_for;
+use crate::digest::{affordances_for, turn_handle};
 use crate::events::{EventLog, Outcome};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -284,6 +285,105 @@ fn print_affordances(evidence: &Evidence, anchor_file: Option<&str>) {
     for cmd in affordances_for(evidence, anchor_file) {
         println!("       → {cmd}");
     }
+}
+
+/// `git lineage context search-within <session-id>... <text>` — scoped FTS: the
+/// repair for "right sessions, wrong turns".
+pub fn search_within(
+    repo_path: &Path,
+    session_ids: &[String],
+    text: &str,
+    limit: usize,
+) -> Result<()> {
+    let repo = open_repo(repo_path)?;
+    let index = LineageIndex::open(repo.git_dir().join("lineage").join("index.db"))?;
+    let evidence = search_within_sessions(repo.inner(), &index, session_ids, text, limit)?;
+    print_turn_evidence(
+        &format!("search-within {} session(s): {text:?}", session_ids.len()),
+        evidence.get(),
+    );
+    Ok(())
+}
+
+/// `git lineage context around <turn-id>` — the turns either side of one turn,
+/// in conversation order: the repair for "right turn, missing its argument".
+pub fn around(repo_path: &Path, turn_id: &str, radius: u32, limit: usize) -> Result<()> {
+    let repo = open_repo(repo_path)?;
+    let index = LineageIndex::open(repo.git_dir().join("lineage").join("index.db"))?;
+    let evidence = turn_neighbourhood(repo.inner(), &index, turn_id, radius, limit)?;
+    print_turn_evidence(&format!("around {turn_id} (±{radius})"), evidence.get());
+    Ok(())
+}
+
+/// `git lineage context produced-by <turn-id>` — the code a turn produced. Refs
+/// only, so no privacy gate is needed and none is claimed.
+pub fn produced_by(repo_path: &Path, turn_id: &str, limit: usize) -> Result<()> {
+    let repo = open_repo(repo_path)?;
+    let index = LineageIndex::open(repo.git_dir().join("lineage").join("index.db"))?;
+    let produced = line_objects_of_turn(&index, turn_id, limit)?;
+
+    println!("produced-by {turn_id}");
+    if produced.is_empty() {
+        println!("  (no code attributed to this turn — honest nothing)");
+        return Ok(());
+    }
+    for line in &produced {
+        println!(
+            "  {}:{}-{}  {}  [{:?}]",
+            line.anchor.file_path,
+            line.line_range[0],
+            line.line_range[1],
+            short(&line.anchor.commit_sha),
+            line.confidence,
+        );
+    }
+    Ok(())
+}
+
+/// `git lineage context sessions-for-commit <sha>` — the sessions behind a
+/// commit: the one verb whose entry point is ordinary git work.
+pub fn sessions_for_commit_cmd(repo_path: &Path, commit_sha: &str, limit: usize) -> Result<()> {
+    let repo = open_repo(repo_path)?;
+    let index = LineageIndex::open(repo.git_dir().join("lineage").join("index.db"))?;
+    // A short sha from `git log` must resolve like it does everywhere else in
+    // git; the mirror is keyed by full sha.
+    let full_sha = repo
+        .inner()
+        .revparse_single(commit_sha)
+        .map(|obj| obj.id().to_string())
+        .unwrap_or_else(|_| commit_sha.to_string());
+    let sessions = sessions_for_commit(repo.inner(), &index, &full_sha, limit)?;
+
+    println!("sessions-for-commit {}", short(&full_sha));
+    if sessions.get().is_empty() {
+        println!("  (no sessions linked to this commit — honest nothing)");
+        return Ok(());
+    }
+    for session in sessions.get() {
+        println!("  {}  {}", session.session_id, session.attribution);
+    }
+    Ok(())
+}
+
+/// The shared rendering for the two text-returning verbs: a `session#turn`
+/// handle per entry so the agent can address what it found, then the turn's own
+/// words.
+fn print_turn_evidence(header: &str, evidence: &[Evidence]) {
+    println!("{header}");
+    if evidence.is_empty() {
+        println!("  (no matches — honest nothing)");
+        return;
+    }
+    for entry in evidence {
+        println!("  {}  {}", turn_handle(entry), entry.attribution);
+        for line in entry.summary.lines() {
+            println!("       {line}");
+        }
+    }
+}
+
+fn short(sha: &str) -> &str {
+    &sha[..sha.len().min(9)]
 }
 
 /// Per-corpus breakdown of the v0 salience rules: how many turns land in each
