@@ -220,12 +220,89 @@ fn edit_artifacts_resolving_to_zero_show_their_loss_reason() {
 }
 
 #[test]
+fn coverage_reports_reach_depth_and_the_bucket_histogram() {
+    let dir = tempfile::tempdir().unwrap();
+    init_repo_at(dir.path());
+    let root = dir.path().display().to_string();
+
+    // Two tracked files, only one of which a session ever edited: reach must
+    // come out 1/2 rather than being hidden by the line-level ratio.
+    fs::write(dir.path().join("covered.txt"), "a\nb\nc\nd\n").unwrap();
+    fs::write(dir.path().join("dark.txt"), "x\ny\n").unwrap();
+    git(dir.path(), &["add", "."]);
+    git(dir.path(), &["commit", "-m", "files"]);
+    let sha = head_sha(dir.path());
+
+    let session = store_session(
+        dir.path(),
+        &root,
+        vec![edit_artifact(
+            "covered.txt",
+            Some(ArtifactResolve {
+                strategy: ResolveStrategy::OldString,
+                old_string: Some("b\nc".into()),
+                new_string: None,
+                patch: None,
+            }),
+        )],
+    );
+    commands::link(dir.path(), &session, &sha).unwrap();
+    commands::rebuild_index(dir.path(), false).unwrap();
+
+    let coverage = &report(dir.path())["coverage"];
+
+    // src.txt (1 line) + covered.txt (4) + dark.txt (2) are all tracked.
+    assert_eq!(coverage["files_total"], 3);
+    assert_eq!(coverage["files_with_any"], 1);
+    assert_eq!(coverage["lines_total"], 7);
+    // Only the "b\nc" region of covered.txt resolved.
+    assert_eq!(coverage["lines_covered"], 2);
+
+    // Depth is measured within covered files only: 2/4, not 2/7.
+    let depth = coverage["depth_within_covered"].as_f64().unwrap();
+    assert!((depth - 0.5).abs() < 1e-9, "depth was {depth}");
+
+    // Both commits carry notes only for the linked one.
+    assert_eq!(coverage["commits_total"], 2);
+    assert_eq!(coverage["commits_with_notes"], 1);
+
+    // The two untouched files land at 0%, the partially covered one at 50-75%.
+    let histogram = &coverage["histogram"];
+    assert_eq!(histogram["0%"], 2);
+    assert_eq!(histogram["50-75%"], 1);
+    assert_eq!(histogram["100%"], 0);
+}
+
+#[test]
+fn coverage_reports_an_error_rather_than_creating_a_missing_index() {
+    let dir = tempfile::tempdir().unwrap();
+    init_repo_at(dir.path());
+    let index_path = dir.path().join(".git").join("lineage").join("index.db");
+
+    let coverage = &report(dir.path())["coverage"];
+
+    assert!(coverage["error"]
+        .as_str()
+        .unwrap()
+        .contains("rebuild-index"));
+    // Doctor inspects; it must never repair the very state setup exists to flag.
+    assert!(!index_path.exists());
+}
+
+#[test]
 fn section_filter_keeps_only_requested_sections_in_json() {
     let dir = tempfile::tempdir().unwrap();
     init_repo_at(dir.path());
 
     let full = report(dir.path());
-    for section in ["setup", "capture", "materialization", "links", "activity"] {
+    for section in [
+        "setup",
+        "capture",
+        "materialization",
+        "coverage",
+        "links",
+        "activity",
+    ] {
         assert!(full.get(section).is_some(), "missing section {section}");
     }
 
