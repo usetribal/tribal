@@ -113,7 +113,7 @@ pub fn fused_salient_turn_plan<R: IntentRetriever>(
     })
 }
 
-/// The line-anchored temporal plan: a file[:line] anchor →
+/// The line-anchored temporal plan: a `file[:line]` anchor →
 /// `line_objects`/ancestry → turns (time-ordered) → salience-admitted →
 /// materialize with `session` + `earlier-edits` affordances. When `text` is
 /// given it re-ranks the anchored turns by FTS score of their bodies (a cheap

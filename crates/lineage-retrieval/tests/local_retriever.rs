@@ -110,8 +110,26 @@ fn line_object_evidence_outranks_files_touched() {
     assert_eq!(strongest.tier, EvidenceTier::LineObjects);
     assert_eq!(strongest.match_confidence, Some(Confidence::Exact));
     assert_eq!(strongest.line_ranges, vec![[10, 14]]);
-    assert!(strongest.summary.contains("Refactor auth token handling"));
     assert!(strongest.attribution.contains("claude"));
+
+    // Line-object evidence quotes the turn it attributes the lines to, and
+    // names that same turn in `turn_id` — the handle and the text must always
+    // describe one node. Previously the summary came from the session as a
+    // whole (keyed off its first user turn), which for a real corpus is a
+    // standing preamble carrying no information about what the session did.
+    assert_eq!(
+        strongest.turn_id.as_ref().map(|id| id.as_str()),
+        Some(with_lines.turns[1].id.as_str()),
+    );
+    assert!(
+        strongest.summary.contains("src/auth.rs"),
+        "expected the attributed edit turn's own text, got: {}",
+        strongest.summary,
+    );
+    assert!(
+        !strongest.summary.contains("Refactor auth token handling"),
+        "the first user turn must not stand in for the attributed turn",
+    );
 
     let weaker = &retrieval.evidence[1];
     assert_eq!(weaker.session_id, touched_only.id);
