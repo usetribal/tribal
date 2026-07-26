@@ -125,6 +125,7 @@ impl SessionReader for CodexAdapter {
                 .clone()
                 .unwrap_or_else(|| self.workspace_root.display().to_string()),
             parent_session_id: None,
+            fork_origin: None,
             private: false,
             turns: parsed.turns,
             commit_shas: Vec::new(),

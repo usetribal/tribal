@@ -153,6 +153,7 @@ impl SessionReader for CursorAdapter {
             ended_at: None,
             workspace_root: self.workspace_root.display().to_string(),
             parent_session_id: None,
+            fork_origin: None,
             private: false,
             turns: Vec::new(),
             commit_shas: Vec::new(),

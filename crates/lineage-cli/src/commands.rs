@@ -263,6 +263,10 @@ struct SessionSummary {
     parent_session_id: Option<String>,
     #[serde(skip_serializing_if = "is_false_bool")]
     is_sidechain: bool,
+    /// A fork also has a parent, so it must be reported separately or a
+    /// consumer reading `is_sidechain` would call it a harness-spawned branch.
+    #[serde(skip_serializing_if = "is_false_bool")]
+    is_fork: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     vendor_session_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -319,7 +323,8 @@ pub fn list(repo_path: &Path, commit: Option<&str>, json: bool) -> Result<()> {
                     .get("is_sidechain")
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false)
-                    || conv.parent_session_id.is_some(),
+                    || (conv.parent_session_id.is_some() && !conv.is_fork()),
+                is_fork: conv.is_fork(),
                 vendor_session_id: vendor_session_id(&conv),
                 prompted_by_email: conv
                     .metadata
@@ -365,6 +370,13 @@ pub fn show(repo_path: &Path, session_id: &str, json: bool, hydrate_images: bool
         println!("Turns:   {}", conv.turns.len());
         if conv.private {
             println!("Private: true");
+        }
+        if let Some(origin) = &conv.fork_origin {
+            println!(
+                "Forked:  from session {} on {}",
+                origin.source_session_id,
+                origin.forked_at.format("%Y-%m-%d")
+            );
         }
         if let Some(model) = conv.primary_model() {
             println!("Model:   {model}");

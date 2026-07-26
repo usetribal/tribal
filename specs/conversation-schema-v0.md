@@ -13,6 +13,7 @@ Stable contract for agent session data stored in lineage.
   "ended_at": "2026-06-06T10:45:00Z",
   "workspace_root": "/Users/dev/myproject",
   "parent_session_id": null,
+  "fork_origin": null,
   "private": false,
   "turns": [],
   "commit_shas": ["abc123def456"],
@@ -28,11 +29,47 @@ Stable contract for agent session data stored in lineage.
 | `started_at` | ISO8601 | yes | Session start |
 | `ended_at` | ISO8601 | no | Session end |
 | `workspace_root` | string | yes | Absolute path at import time |
-| `parent_session_id` | string | no | Forked session |
+| `parent_session_id` | string | no | Session this one descends from — a fork's source, or the parent of a harness-spawned branch |
+| `fork_origin` | ForkOrigin | no | Present only on a session created by forking another (see [Fork origin](#fork-origin)) |
 | `private` | bool | no | Excluded from export by default |
 | `turns` | Turn[] | yes | Ordered conversation turns |
 | `commit_shas` | string[] | no | Linked git commits |
 | `metadata` | object | no | Adapter-specific extras (e.g. `model`, `models_used`, `prompted_by_email`, `prompted_by_name`, `claude_code_version`, `codex_cli_version`) |
+
+### Fork origin
+
+A fork is one developer picking up another's session and continuing it. It is a
+new session id with its own turns; the source session is unchanged.
+
+```json
+{
+  "source_session_id": "01HQZX8K9V2M3N4P5Q6R7S8T9U",
+  "forked_session_handle": "7c1e9d02-4a3b-4f18-9c07-2e5b8a1d6f30",
+  "forked_at": "2026-06-07T09:12:00Z",
+  "lineage_version": "0.1.0",
+  "source_tenant": null,
+  "source_repo": null
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `source_session_id` | string | yes | Lineage id of the forked session; mirrors `parent_session_id` |
+| `forked_session_handle` | string | yes | Vendor id minted for the forked copy — never the source session's |
+| `forked_at` | ISO8601 | yes | When the fork was taken |
+| `lineage_version` | string | yes | Version that wrote the edge |
+| `source_tenant` | string | no | Tenant the source came from, when the fork crossed a server |
+| `source_repo` | string | no | Repo the source belonged to, when known |
+
+`parent_session_id` alone does not mean a fork: harness-spawned branches
+(Claude sidechains and subagents) set it too. `fork_origin` is what distinguishes
+the two, and consumers that care about the difference must read it rather than
+infer from the parent.
+
+**Attribution.** Turns recorded after a fork belong to the forker. The source
+session's author is an ancestor edge, never a co-author of the forked session's
+lines. Line objects materialized from a forked session bind to the fork's own
+conversation id.
 
 ### Author metadata
 

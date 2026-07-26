@@ -133,6 +133,47 @@ pub struct Turn {
     pub artifacts: Vec<Artifact>,
 }
 
+/// Where a forked session came from: the deliberate act of picking up someone
+/// else's session and continuing it.
+///
+/// This is a separate field from `parent_session_id` rather than a flag beside
+/// it, because that field is already overloaded. Claude sidechains set it for
+/// subagent branches the harness spawned on its own, and `git lineage list`
+/// currently reports *any* conversation with a parent as a sidechain. A fork is
+/// a different relation with different semantics — the forker owns the lines
+/// going forward, the source author is an ancestor and never a co-author — so
+/// it needs to be readable as one without a caller inferring from absence.
+///
+/// It is a typed field rather than a `metadata` key for two reasons. Metadata is
+/// adapter-specific extras with a first-write-wins merge rule on sync
+/// (`specs/sync-protocol-v0.md`), which is the wrong rule for a provenance edge;
+/// and a generated schema plus TS bindings make the edge discoverable to every
+/// consumer instead of a string every one of them has to know to look for.
+///
+/// Recording a fork does not breach the backfillable invariant
+/// (`docs/ARCHITECTURE.md`): forking is a new event, like a commit, not a latent
+/// relation that could have been rederived from history.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct ForkOrigin {
+    /// The lineage id of the session that was forked. Mirrors
+    /// `parent_session_id` so the privacy fork-chain walk needs no special case.
+    pub source_session_id: LineageId,
+    /// Vendor id minted for the forked copy — never the source session's, which
+    /// would collide if both users ever share a machine.
+    pub forked_session_handle: String,
+    pub forked_at: DateTime<Utc>,
+    /// Version of lineage that wrote the edge, so a fork made by an older writer
+    /// stays attributable when the transcript renderer changes.
+    pub lineage_version: String,
+    /// Tenant the source session was pulled from, when the fork crossed a
+    /// server. Absent for a local fork — there is no tenant to name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_tenant: Option<String>,
+    /// Repo the source session belonged to, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_repo: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Conversation {
     pub schema_version: String,
@@ -144,6 +185,10 @@ pub struct Conversation {
     pub workspace_root: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_session_id: Option<LineageId>,
+    /// Set only when this session was created by `git lineage fork`. A parent
+    /// with no `fork_origin` is a harness-spawned branch (sidechain/subagent).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fork_origin: Option<ForkOrigin>,
     #[serde(default)]
     pub private: bool,
     pub turns: Vec<Turn>,
@@ -163,11 +208,40 @@ impl Conversation {
             ended_at: None,
             workspace_root: workspace_root.into(),
             parent_session_id: None,
+            fork_origin: None,
             private: false,
             turns: Vec::new(),
             commit_shas: Vec::new(),
             metadata: HashMap::new(),
         }
+    }
+
+    /// A new session continuing `source`, carrying no turns of its own yet.
+    ///
+    /// The turns are deliberately not copied. Alice's words stay hers, on her
+    /// session ref; what Bob writes from here binds to *this* id, which is what
+    /// makes post-fork lines his. `parent_session_id` is set as well as
+    /// `fork_origin` so the privacy fork-chain walk sees the edge without
+    /// knowing forks exist.
+    pub fn fork_from(source: &Conversation, forked_session_handle: String) -> Self {
+        let mut conversation = Self::new(source.agent, source.workspace_root.clone());
+        conversation.parent_session_id = Some(source.id.clone());
+        conversation.fork_origin = Some(ForkOrigin {
+            source_session_id: source.id.clone(),
+            forked_session_handle,
+            forked_at: conversation.started_at,
+            lineage_version: env!("CARGO_PKG_VERSION").to_string(),
+            source_tenant: None,
+            source_repo: None,
+        });
+        conversation
+    }
+
+    /// True when this session was created by forking another. A parent alone is
+    /// not enough: a Claude sidechain has one too, and the two mean different
+    /// things for attribution.
+    pub fn is_fork(&self) -> bool {
+        self.fork_origin.is_some()
     }
 
     pub fn validate(&self) -> Result<()> {
@@ -434,5 +508,70 @@ mod tests {
         c.sync_models_metadata();
         assert_eq!(c.models_used(), vec!["claude-sonnet-4"]);
         assert_eq!(c.primary_model().as_deref(), Some("claude-sonnet-4"));
+    }
+
+    #[test]
+    fn fork_origin_round_trips_through_the_conversation_json() {
+        let source = Conversation::new(AgentKind::Claude, "/tmp/proj");
+        let fork = Conversation::fork_from(&source, "7c1e9d02-4a3b-4f18-9c07-2e5b8a1d6f30".into());
+
+        let back = Conversation::from_json(&fork.to_json().unwrap()).unwrap();
+        let origin = back.fork_origin.expect("fork edge survives serialization");
+        assert_eq!(origin.source_session_id, source.id);
+        assert_eq!(
+            origin.forked_session_handle,
+            "7c1e9d02-4a3b-4f18-9c07-2e5b8a1d6f30"
+        );
+        assert_eq!(origin.lineage_version, env!("CARGO_PKG_VERSION"));
+        // The privacy fork-chain walk reads `parent_session_id`, so the edge has
+        // to be visible there as well as in the typed field.
+        assert_eq!(back.parent_session_id.as_ref(), Some(&source.id));
+    }
+
+    /// The reason the edge is a field and not a flag: a sidechain already sets
+    /// `parent_session_id`, so a caller reading only the parent cannot tell a
+    /// harness-spawned branch from a person continuing someone's work.
+    #[test]
+    fn a_fork_is_distinguishable_from_a_sidechain() {
+        let source = Conversation::new(AgentKind::Claude, "/tmp/proj");
+
+        let mut sidechain = Conversation::new(AgentKind::Claude, "/tmp/proj");
+        sidechain.parent_session_id = Some(source.id.clone());
+        sidechain
+            .metadata
+            .insert("is_sidechain".into(), serde_json::Value::Bool(true));
+
+        let fork = Conversation::fork_from(&source, "handle".into());
+
+        assert!(fork.is_fork());
+        assert!(!sidechain.is_fork());
+        assert!(sidechain.parent_session_id.is_some() && fork.parent_session_id.is_some());
+    }
+
+    /// Post-fork lines are the forker's: the fork carries none of the source's
+    /// turns, so nothing materialized from it can bind to the source session.
+    #[test]
+    fn a_fork_starts_empty_so_its_turns_are_its_own() {
+        let mut source = Conversation::new(AgentKind::Claude, "/tmp/proj");
+        source.turns.push(Turn {
+            id: LineageId::new(),
+            role: Role::User,
+            content: "alice asked this".into(),
+            tool_calls: vec![],
+            model: None,
+            timestamp: None,
+            artifacts: vec![],
+        });
+
+        let fork = Conversation::fork_from(&source, "handle".into());
+
+        assert!(fork.turns.is_empty());
+        assert_ne!(fork.id, source.id);
+    }
+
+    #[test]
+    fn a_session_without_a_fork_origin_serializes_without_the_key() {
+        let plain = Conversation::new(AgentKind::Cursor, "/tmp/proj");
+        assert!(!plain.to_json().unwrap().contains("fork_origin"));
     }
 }

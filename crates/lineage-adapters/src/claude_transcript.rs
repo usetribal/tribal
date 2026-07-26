@@ -89,6 +89,12 @@ pub fn render_claude_transcript(
 
     RenderedTranscript {
         path,
+        // `--fork-session` is deliberately absent. It exists so Claude mints a
+        // new id instead of writing back into the source file, and the fork has
+        // already happened here: this transcript is a fresh id in a fresh file,
+        // so the source is untouchable regardless of the flag.
+        resume_command: format!("claude --resume {session_id}"),
+        resume_cwd: workspace_root.to_path_buf(),
         contents: chain.into_jsonl(),
         session_handle: session_id,
     }
@@ -339,6 +345,23 @@ mod tests {
             format!("{}.jsonl", rendered.session_handle)
         );
         assert!(rendered.path.starts_with("/home/bob/.claude/projects/"));
+    }
+
+    /// The caller prints this verbatim, so the id in it has to be the id the
+    /// file was written under — a mismatch resolves to nothing with no error.
+    #[test]
+    fn the_resume_command_names_the_minted_handle_and_the_workspace() {
+        let conv = conversation(vec![turn(Role::User, "hello")]);
+        let rendered =
+            render_claude_transcript(&conv, Path::new("/home/bob"), Path::new("/tmp/workspace"));
+
+        assert_eq!(
+            rendered.resume_command,
+            format!("claude --resume {}", rendered.session_handle)
+        );
+        // Claude derives the project key from the launch directory, so running
+        // the command anywhere else finds nothing.
+        assert_eq!(rendered.resume_cwd, Path::new("/tmp/workspace"));
     }
 
     #[test]

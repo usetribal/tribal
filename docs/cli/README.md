@@ -80,6 +80,7 @@ See [Import](../import.md).
 | `git lineage list [--commit SHA] [--json]` | List sessions or sessions at commit |
 | `git lineage show <id> [--json] [--hydrate-images]` | Show conversation |
 | `git lineage blame <path>[:line] [--json]` | Lineage for a file line |
+| `git lineage fork <session-id> [--dry-run]` | Continue someone else's session in your own agent (see [Fork a session](#fork-a-session)) |
 | `git lineage search <query>` | Full-text search (auto-rebuilds stale index) |
 | `git lineage rebuild [--embed]` | Rebuild all derived state (links, line objects, index) from stored sessions; `--embed` also runs the dense-embedding backfill |
 | `git lineage rebuild index` | Rebuild only the search index (`rebuild-index` is a deprecated alias) |
@@ -213,6 +214,49 @@ See [Git hooks](../git-hooks.md).
 See [Maintenance](../maintenance.md) and [Privacy](../privacy.md).
 
 ---
+
+## Fork a session
+
+`git lineage fork <session-id>` picks up a teammate's agent session and hands you
+a native, resumable one carrying their context.
+
+```bash
+git lineage fork 01HQZX8K9V2M3N4P5Q6R7S8T9U
+```
+
+```text
+Alice Chen's claude session, 26 July 2026
+  8 turns, claude-sonnet-4
+  Asked for: the login endpoint accepts an empty password when the user record has no salt — figure out why and fix it
+  Changed:   src/auth.rs, src/session.rs
+  Commits:   ad068c4a
+
+Wrote /home/bob/.claude/projects/-home-bob-src-app/019f9d91-3f94-48f4-8cbf-663330ac0cee.jsonl
+Recorded fork 01KYES2FWND56B76290VMWRXXH (continues 01HQZX8K9V2M3N4P5Q6R7S8T9U)
+
+To continue it, run this from /home/bob/src/app:
+
+    claude --resume 019f9d91-3f94-48f4-8cbf-663330ac0cee
+```
+
+The command is printed, not run — so a human can read it before acting on it and
+an agent that invoked the CLI can act on it directly. `--dry-run` shows the path
+and the command without writing the transcript or recording the fork.
+
+Notes:
+
+- The session is resolved from lineage's own refs, not from a local transcript
+  path, so a session pulled from a teammate forks the same as one you imported.
+- A fresh vendor session id is minted; the source session's file is never read
+  or modified, and your continuation is a new session either way.
+- Tool activity is replayed as prose rather than as `tool_use` blocks. You get
+  their context and reasoning; you do not get replayable tool handles, and
+  `/rewind` will not reach back into their session.
+- Forking is recorded as `fork_origin` on the new session
+  ([conversation schema](../../specs/conversation-schema-v0.md)). Lines you write
+  after the fork are attributed to you; the source session is an ancestor, never
+  a co-author.
+- Claude Code only for now. Codex and Cursor sessions decline by name.
 
 ## Session metadata
 

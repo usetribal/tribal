@@ -33,6 +33,15 @@ pub struct RenderedTranscript {
     /// the source session's id: two users sharing a machine would otherwise
     /// collide, and the id would stop identifying one session.
     pub session_handle: String,
+    /// The shell command that opens this transcript in its harness, ready to
+    /// print or run. Adapter-supplied because the verb and flags are vendor
+    /// knowledge (ARCHITECTURE.md invariant 4); a caller that assembled it would
+    /// be the exact leak the invariant exists to stop.
+    pub resume_command: String,
+    /// Directory the resume command must be run from. Claude resolves a session
+    /// through a key derived from the launch directory, so running it elsewhere
+    /// silently finds nothing.
+    pub resume_cwd: PathBuf,
 }
 
 /// Writing a transcript back is a separate capability from reading one: most

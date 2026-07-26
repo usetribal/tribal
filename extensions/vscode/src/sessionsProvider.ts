@@ -28,6 +28,7 @@ export class SessionTreeItem extends vscode.TreeItem {
                 : "",
             session.prompted_by_email ? `prompted by: ${session.prompted_by_email}` : "",
             session.prompted_by_name ? session.prompted_by_name : "",
+            session.is_fork ? "forked from another session" : "",
             session.is_sidechain ? "branched conversation" : "",
             session.models_used?.length ? `models: ${session.models_used.join(", ")}` : "",
         ]
@@ -53,7 +54,9 @@ function sessionTreeDescription(session: SessionSummary): string {
     if (session.git_branch) {
         parts.push(session.git_branch);
     }
-    if (session.is_sidechain || session.parent_session_id) {
+    if (session.is_fork) {
+        parts.push("forked");
+    } else if (session.is_sidechain || session.parent_session_id) {
         parts.push("branched");
     }
     if (session.prompted_by_email) {

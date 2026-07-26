@@ -113,6 +113,48 @@
       ],
       "type": "object"
     },
+    "ForkOrigin": {
+      "description": "Where a forked session came from: the deliberate act of picking up someone\nelse's session and continuing it.\n\nThis is a separate field from `parent_session_id` rather than a flag beside\nit, because that field is already overloaded. Claude sidechains set it for\nsubagent branches the harness spawned on its own, and `git lineage list`\ncurrently reports *any* conversation with a parent as a sidechain. A fork is\na different relation with different semantics — the forker owns the lines\ngoing forward, the source author is an ancestor and never a co-author — so\nit needs to be readable as one without a caller inferring from absence.\n\nIt is a typed field rather than a `metadata` key for two reasons. Metadata is\nadapter-specific extras with a first-write-wins merge rule on sync\n(`specs/sync-protocol-v0.md`), which is the wrong rule for a provenance edge;\nand a generated schema plus TS bindings make the edge discoverable to every\nconsumer instead of a string every one of them has to know to look for.\n\nRecording a fork does not breach the backfillable invariant\n(`docs/ARCHITECTURE.md`): forking is a new event, like a commit, not a latent\nrelation that could have been rederived from history.",
+      "properties": {
+        "forked_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "forked_session_handle": {
+          "description": "Vendor id minted for the forked copy — never the source session's, which\nwould collide if both users ever share a machine.",
+          "type": "string"
+        },
+        "lineage_version": {
+          "description": "Version of lineage that wrote the edge, so a fork made by an older writer\nstays attributable when the transcript renderer changes.",
+          "type": "string"
+        },
+        "source_repo": {
+          "description": "Repo the source session belonged to, when known.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_session_id": {
+          "description": "The lineage id of the session that was forked. Mirrors\n`parent_session_id` so the privacy fork-chain walk needs no special case.",
+          "type": "string"
+        },
+        "source_tenant": {
+          "description": "Tenant the source session was pulled from, when the fork crossed a\nserver. Absent for a local fork — there is no tenant to name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "source_session_id",
+        "forked_session_handle",
+        "forked_at",
+        "lineage_version"
+      ],
+      "type": "object"
+    },
     "ResolveStrategy": {
       "enum": [
         "old_string",
@@ -218,6 +260,17 @@
         "string",
         "null"
       ]
+    },
+    "fork_origin": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ForkOrigin"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Set only when this session was created by `git lineage fork`. A parent\nwith no `fork_origin` is a harness-spawned branch (sidechain/subagent)."
     },
     "id": {
       "type": "string"

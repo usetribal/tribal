@@ -234,6 +234,47 @@ mod tests {
         assert!(gate.attribution(child.id.as_str()).unwrap().is_none());
     }
 
+    /// A fork whose source is not stored locally is the ordinary cross-machine
+    /// case, not corruption: Bob forks a session he pulled and may never hold
+    /// Alice's ref. The local degrade — an unreadable parent is not known to be
+    /// private — must still admit his own session, and adding `fork_origin` must
+    /// not change that. The inverted, unsafe-by-default rule belongs on the
+    /// server's emit path (milestone B), where an absent parent is often one the
+    /// privacy filter removed.
+    #[test]
+    fn gate_admits_a_fork_whose_source_is_absent_locally() {
+        let dir = init_repo();
+        let repo = open_repo(dir.path()).unwrap();
+        let absent_source = session(dir.path(), false);
+        let fork = Conversation::fork_from(&absent_source, "vendor-handle".into());
+        // Only the fork is persisted — the source ref never arrived.
+        persist_conversation(repo.inner(), &fork).unwrap();
+
+        let mut gate = SessionGate::new(repo.inner());
+        let admitted = gate.attribution(fork.id.as_str()).unwrap();
+        assert!(
+            admitted.is_some(),
+            "an absent source must not hide the fork"
+        );
+        assert!(!is_private_or_private_ancestor(repo.inner(), &fork).unwrap());
+    }
+
+    /// The fork chain is walked through `parent_session_id`, which
+    /// `fork_from` sets, so a fork of a private session is refused for the same
+    /// reason a sidechain of one is.
+    #[test]
+    fn gate_refuses_a_fork_edge_reaching_a_private_source() {
+        let dir = init_repo();
+        let repo = open_repo(dir.path()).unwrap();
+        let private_source = session(dir.path(), true);
+        let fork = Conversation::fork_from(&private_source, "vendor-handle".into());
+        persist_conversation(repo.inner(), &private_source).unwrap();
+        persist_conversation(repo.inner(), &fork).unwrap();
+
+        let mut gate = SessionGate::new(repo.inner());
+        assert!(gate.attribution(fork.id.as_str()).unwrap().is_none());
+    }
+
     /// An unknown session id has no readable privacy verdict, so it is refused
     /// rather than assumed public.
     #[test]

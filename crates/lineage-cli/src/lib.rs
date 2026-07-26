@@ -4,6 +4,7 @@ pub mod context_cmd;
 pub mod digest;
 pub mod doctor_cmd;
 pub mod events;
+pub mod fork_cmd;
 pub mod hooks_cmd;
 pub mod init_cmd;
 pub mod progress;
