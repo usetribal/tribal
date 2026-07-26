@@ -21,7 +21,7 @@ pub use ids::{derive_line_object_id, derive_session_id, LineageId};
 pub use import_state::{
     is_valid_import_schema, LastImportState, LAST_IMPORT_SCHEMA, LAST_IMPORT_SCHEMA_LEGACY,
 };
-pub use path_util::{normalize_repo_path, paths_match_repo_file, workspace_root_for};
+pub use path_util::{normalize_repo_path_unscoped, workspace_root_for, RepoPaths};
 pub use salience::{turn_is_salient, turn_salience, SalienceClass};
 pub use sync::{
     BlobManifestEntry, RepoBinding, SessionCommitLink, SyncBatch, SyncObjectKind, SyncObjectResult,

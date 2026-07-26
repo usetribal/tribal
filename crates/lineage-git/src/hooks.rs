@@ -1,7 +1,7 @@
 use git2::Repository;
 use lineage_core::{Confidence, LineageError, LineageId};
 
-use crate::line_resolve::materialize_line_objects;
+use crate::line_resolve::materialize_line_objects_with_paths;
 use crate::notes::write_note_for_commit;
 use crate::patch_id::patch_id_for_commit;
 use crate::refs::{list_session_ids, read_conversation_stored};
@@ -77,13 +77,15 @@ pub fn link_sessions_to_commit(
 
     // Diffing the commit once, then testing every session's written-file set
     // against it, keeps a full-history rebuild from re-diffing the same commit
-    // per session.
+    // per session. The worktree layout is resolved once here for the same
+    // reason — reading git's registry costs more than the comparison it feeds.
     let changed = crate::line_resolve::files_changed_in_commit(repo, commit_sha)?;
+    let paths = crate::repo::repo_paths(repo);
     for id in ids {
         let Some(conversation) = read_conversation_stored(repo, id)? else {
             continue;
         };
-        match link_session_at_commit(repo, commit_sha, id, &conversation, &changed)? {
+        match link_session_at_commit(repo, commit_sha, id, &conversation, &changed, &paths)? {
             LinkAttempt::Linked {
                 line_objects,
                 basis,
@@ -107,15 +109,17 @@ pub(crate) enum LinkAttempt {
 }
 
 /// Evidence-gate one session against one commit, given the session's already
-/// read conversation and the commit's already computed changed-file set. The
-/// caller owns both so a rebuild can read each conversation once and diff each
-/// commit once, rather than per (commit, session) pair.
+/// read conversation, the commit's already computed changed-file set, and the
+/// repository's already resolved path context. The caller owns all three so a
+/// rebuild can read each conversation once, diff each commit once, and read the
+/// worktree registry once, rather than per (commit, session) pair.
 pub(crate) fn link_session_at_commit(
     repo: &Repository,
     commit_sha: &str,
     session_id: &LineageId,
     conversation: &lineage_core::Conversation,
     changed: &std::collections::HashSet<String>,
+    repo_paths: &lineage_core::RepoPaths,
 ) -> Result<LinkAttempt, LineageError> {
     // The gate (gap 8): a link needs evidence — the session must have
     // *written* a file this commit changed. Reads don't count, so a session
@@ -126,16 +130,22 @@ pub(crate) fn link_session_at_commit(
     // whole histories (rebuild). Manual `git lineage link` bypasses this path
     // entirely and stays authoritative.
     let workspace = lineage_core::workspace_root_for(&conversation.workspace_root, repo.workdir());
+    let paths = repo_paths.with_workspace_root(&workspace);
     let overlaps = lineage_core::files_written(conversation)
         .iter()
-        .map(|p| lineage_core::normalize_repo_path(p, Some(&workspace)))
+        .map(|p| paths.normalize(p))
         .any(|p| changed.contains(&p));
     if !overlaps {
         return Ok(LinkAttempt::SkippedNoOverlap);
     }
 
-    let line_objects =
-        materialize_line_objects(repo, conversation, commit_sha, Confidence::Heuristic)?;
+    let line_objects = materialize_line_objects_with_paths(
+        repo,
+        conversation,
+        commit_sha,
+        Confidence::Heuristic,
+        repo_paths,
+    )?;
     let basis = if line_objects.is_empty() {
         LinkBasis::FileOverlap
     } else {

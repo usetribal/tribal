@@ -3,12 +3,14 @@ use std::path::Path;
 
 use git2::Repository;
 use lineage_core::{
-    files_touched, files_written, normalize_repo_path, turn_indexable_text, turn_is_salient,
-    turn_salience, Confidence, Conversation, LineObject, LineageError, LineageId,
+    files_touched, files_written, normalize_repo_path_unscoped, turn_indexable_text,
+    turn_is_salient, turn_salience, Confidence, Conversation, LineObject, LineageError, LineageId,
+    RepoPaths,
 };
 use lineage_git::{
     commit_time, hydrate_conversation, list_line_objects, list_session_ids,
-    read_conversation_stored, read_note_for_commit, walk_line_ancestry_shared, AncestryHop,
+    read_conversation_stored, read_note_for_commit, repo_paths, walk_line_ancestry_shared,
+    AncestryHop,
 };
 use rusqlite::{params, Connection};
 use thiserror::Error;
@@ -104,6 +106,13 @@ pub struct Hop {
 
 pub struct LineageIndex {
     conn: Connection,
+    /// Worktree prefixes for the repository this index describes, so
+    /// `session_files` paths are keyed the same way the provenance graph keys
+    /// its line objects. Without it a session recorded through a worktree is
+    /// stored under `.claude/worktrees/x/AGENTS.md` while every lookup asks for
+    /// `AGENTS.md`, and the file's authorship silently returns no sessions.
+    /// Defaults to repo-unaware for callers that never open a repository.
+    repo_paths: RepoPaths,
 }
 
 #[derive(Debug, Clone)]
@@ -111,6 +120,20 @@ pub struct IndexSchemaInfo {
     pub has_session_files: bool,
     pub has_index_meta: bool,
     pub generation: i64,
+}
+
+/// The repository an index at `<git dir>/lineage/index.db` belongs to, as a
+/// path-normalization context. A path that is not shaped that way, or a git dir
+/// that will not open, yields a repo-unaware context — indexing still works, it
+/// just cannot recognise worktree-recorded paths.
+fn repo_paths_for_index(index_path: &Path) -> RepoPaths {
+    let Some(git_dir) = index_path.parent().and_then(Path::parent) else {
+        return RepoPaths::default();
+    };
+    let Ok(repo) = Repository::open(git_dir) else {
+        return RepoPaths::default();
+    };
+    repo_paths(&repo)
 }
 
 /// Read-only schema introspection for diagnostics. `open` applies DDL, so an
@@ -159,11 +182,21 @@ pub fn inspect_schema(path: impl AsRef<Path>) -> Result<IndexSchemaInfo> {
 
 impl LineageIndex {
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
-        if let Some(parent) = path.as_ref().parent() {
+        let path = path.as_ref();
+        if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| SearchError::Other(e.to_string()))?;
         }
         let conn = Connection::open(path)?;
-        let index = Self { conn };
+        // The index lives at `<git dir>/lineage/index.db`, so the repository it
+        // describes is discoverable from its own location. Resolving the
+        // worktree layout here rather than asking callers to opt in is what
+        // keeps `session_files` keyed the same way the provenance graph keys
+        // line objects — the divergence is otherwise silent, and every one of
+        // the ~18 open sites would have to remember.
+        let index = Self {
+            conn,
+            repo_paths: repo_paths_for_index(path),
+        };
         index.init_schema()?;
         Ok(index)
     }
@@ -380,13 +413,15 @@ impl LineageIndex {
             "DELETE FROM session_files WHERE session_id = ?1",
             params![conversation.id.as_str()],
         )?;
-        let workspace_root = Path::new(&conversation.workspace_root);
+        let paths = self
+            .repo_paths
+            .with_workspace_root(Path::new(&conversation.workspace_root));
         let written: std::collections::HashSet<String> = files_written(conversation)
             .iter()
-            .map(|p| normalize_repo_path(p, Some(workspace_root)))
+            .map(|p| paths.normalize(p))
             .collect();
         for path in files_touched(conversation) {
-            let normalized = normalize_repo_path(&path, Some(workspace_root));
+            let normalized = paths.normalize(&path);
             if normalized.is_empty() {
                 continue;
             }
@@ -634,7 +669,7 @@ impl LineageIndex {
     /// files-touched evidence tier in lineage-retrieval uses; read-only touches
     /// are not evidence (gap 9).
     pub fn sessions_that_wrote_file(&self, file_path: &str) -> Result<Vec<String>> {
-        let normalized = normalize_repo_path(file_path, None);
+        let normalized = self.repo_paths.normalize(file_path);
         let mut stmt = self.conn.prepare(
             "SELECT session_id FROM session_files WHERE file_path = ?1 AND wrote = 1 ORDER BY session_id",
         )?;
@@ -648,7 +683,7 @@ impl LineageIndex {
     }
 
     pub fn sessions_for_file(&self, file_path: &str) -> Result<Vec<String>> {
-        let normalized = normalize_repo_path(file_path, None);
+        let normalized = self.repo_paths.normalize(file_path);
         let mut stmt = self.conn.prepare(
             "SELECT session_id FROM session_files WHERE file_path = ?1 ORDER BY session_id",
         )?;
@@ -755,7 +790,7 @@ impl LineageIndex {
         let Some(committed_at) = commit_time(repo, &obj.commit_sha)? else {
             return Ok(false);
         };
-        let normalized = normalize_repo_path(&obj.file_path, None);
+        let normalized = normalize_repo_path_unscoped(&obj.file_path, None);
         self.conn.execute(
             "INSERT OR REPLACE INTO line_objects
              (id, file_path, start_line, end_line, commit_sha, committed_at,
@@ -907,7 +942,7 @@ impl LineageIndex {
         // for the whole pass, not once per line object.
         let mut seen = std::collections::HashSet::new();
         for (done, obj) in mirrored.iter().enumerate() {
-            let file_path = normalize_repo_path(&obj.file_path, None);
+            let file_path = normalize_repo_path_unscoped(&obj.file_path, None);
             self.populate_ancestry_for_region(
                 repo,
                 &file_path,
@@ -953,7 +988,7 @@ impl LineageIndex {
         }
         let mut seen = std::collections::HashSet::new();
         for obj in &objects {
-            let file_path = normalize_repo_path(&obj.file_path, None);
+            let file_path = normalize_repo_path_unscoped(&obj.file_path, None);
             self.populate_ancestry_for_region(
                 repo,
                 &file_path,
@@ -978,7 +1013,7 @@ impl LineageIndex {
         line: u32,
         anchor_commit: &str,
     ) -> Result<Vec<Hop>> {
-        let file_path = normalize_repo_path(file_path, None);
+        let file_path = normalize_repo_path_unscoped(file_path, None);
         let mut hops = Vec::new();
         let mut cur_file = file_path;
         let mut cur_commit = anchor_commit.to_string();
@@ -1081,7 +1116,7 @@ impl LineageIndex {
     /// aggregation query `committed_at` earns its column for ("why so bloated").
     /// No walking: a single indexed scan of the mirror table.
     pub fn line_objects_for_file(&self, file_path: &str) -> Result<Vec<LineObjectRow>> {
-        let normalized = normalize_repo_path(file_path, None);
+        let normalized = normalize_repo_path_unscoped(file_path, None);
         let mut stmt = self.conn.prepare(
             "SELECT id, file_path, start_line, end_line, commit_sha, committed_at,
                     session_id, turn_id, confidence

@@ -5,9 +5,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use git2::Repository;
-use lineage_core::{
-    normalize_repo_path, workspace_root_for, ArtifactKind, LineageError, ResolveStrategy,
-};
+use lineage_core::{workspace_root_for, ArtifactKind, LineageError, ResolveStrategy};
 
 use crate::line_resolve::files_changed_in_commit;
 use crate::notes::list_notes;
@@ -61,12 +59,16 @@ pub fn audit_materialization(repo: &Repository) -> Result<MaterializationFunnel,
     // sha is diffed at most once across the whole audit.
     let mut changed_by_commit: BTreeMap<String, Option<std::collections::HashSet<String>>> =
         BTreeMap::new();
+    // The worktree registry is a property of the repository, so it is read once
+    // and rebased onto each session's own workspace root below.
+    let repo_paths = crate::repo::repo_paths(repo);
 
     for id in list_session_ids(repo)? {
         let Some(conv) = read_conversation_stored(repo, &id)? else {
             continue;
         };
         let workspace = workspace_root_for(&conv.workspace_root, repo.workdir());
+        let paths = repo_paths.with_workspace_root(&workspace);
         let linked_commits = commits_by_session
             .get(&conv.id.to_string())
             .cloned()
@@ -78,7 +80,7 @@ pub fn audit_materialization(repo: &Repository) -> Result<MaterializationFunnel,
                     continue;
                 }
                 funnel.total_artifacts += 1;
-                let file_path = normalize_repo_path(&artifact.path, Some(&workspace));
+                let file_path = paths.normalize(&artifact.path);
 
                 let strategy = artifact.resolve.as_ref().map(|r| r.strategy);
                 let resolvable = artifact.line_range.is_some()

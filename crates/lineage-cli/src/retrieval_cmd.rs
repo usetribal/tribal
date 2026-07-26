@@ -10,7 +10,7 @@
 use std::path::Path;
 
 use chrono::Utc;
-use lineage_core::normalize_repo_path;
+use lineage_core::normalize_repo_path_unscoped;
 use lineage_embed::Model2VecEmbedder;
 use lineage_git::{open_repo, resolve_anchor};
 use lineage_retrieval::{
@@ -228,10 +228,10 @@ fn temporal_query(
 fn parse_file_anchor(file: &str) -> (String, Option<u32>) {
     if let Some((path, line_str)) = file.rsplit_once(':') {
         if let Ok(line) = line_str.parse::<u32>() {
-            return (normalize_repo_path(path, None), Some(line));
+            return (normalize_repo_path_unscoped(path, None), Some(line));
         }
     }
-    (normalize_repo_path(file, None), None)
+    (normalize_repo_path_unscoped(file, None), None)
 }
 
 fn print_plan_result(query: &str, leg: Leg, plan: &PlanResult, timing: bool) {

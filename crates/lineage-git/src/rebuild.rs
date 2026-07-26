@@ -66,6 +66,11 @@ pub fn rebuild_links_with_progress(
         }
     }
 
+    // Resolved once for the whole walk, for the same reason conversations are
+    // preloaded above: this is a (commit × session) loop, and reading git's
+    // worktree registry per pair costs more than the comparison it feeds.
+    let repo_paths = crate::repo::repo_paths(repo);
+
     let mut walk = repo
         .revwalk()
         .map_err(|e| LineageError::Other(e.to_string()))?;
@@ -80,7 +85,7 @@ pub fn rebuild_links_with_progress(
         let changed = crate::line_resolve::files_changed_in_commit(repo, &sha)?;
         let mut link = LinkReport::default();
         for (id, conversation) in &conversations {
-            match link_session_at_commit(repo, &sha, id, conversation, &changed)? {
+            match link_session_at_commit(repo, &sha, id, conversation, &changed, &repo_paths)? {
                 LinkAttempt::Linked {
                     line_objects,
                     basis,

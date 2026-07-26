@@ -1,7 +1,8 @@
 use std::path::Path;
 
 use lineage_core::{
-    normalize_repo_path, Artifact, ArtifactKind, ArtifactResolve, ResolveStrategy, ToolCall,
+    normalize_repo_path_unscoped, Artifact, ArtifactKind, ArtifactResolve, ResolveStrategy,
+    ToolCall,
 };
 use serde_json::Value;
 
@@ -239,7 +240,7 @@ pub fn artifacts_from_tool_input(
             .to_string();
         return vec![media_artifact(
             ArtifactKind::Image,
-            normalize_repo_path(&path, workspace_root),
+            normalize_repo_path_unscoped(&path, workspace_root),
             guess_mime_from_path(&path),
         )];
     }
@@ -267,7 +268,7 @@ pub fn artifacts_from_tool_input(
             let path = path.unwrap_or_else(|| "unknown".into());
             return vec![artifact_with_resolve(
                 ArtifactKind::Diff,
-                normalize_repo_path(&path, workspace_root),
+                normalize_repo_path_unscoped(&path, workspace_root),
                 None,
                 ArtifactResolve {
                     strategy: ResolveStrategy::DiffHunk,
@@ -290,7 +291,7 @@ pub fn artifacts_from_tool_input(
             if let Some(old_string) = pick_string(input, &["old_string", "old_str", "oldText"]) {
                 return vec![artifact_with_resolve(
                     ArtifactKind::Diff,
-                    normalize_repo_path(&path, workspace_root),
+                    normalize_repo_path_unscoped(&path, workspace_root),
                     line_range,
                     ArtifactResolve {
                         strategy: ResolveStrategy::OldString,
@@ -305,7 +306,7 @@ pub fn artifacts_from_tool_input(
         if is_write_tool(&lower) {
             return vec![artifact_with_resolve(
                 ArtifactKind::FileEdit,
-                normalize_repo_path(&path, workspace_root),
+                normalize_repo_path_unscoped(&path, workspace_root),
                 line_range,
                 ArtifactResolve {
                     strategy: ResolveStrategy::FullFile,
@@ -332,7 +333,7 @@ pub fn artifacts_from_tool_input(
 
         return vec![Artifact {
             kind,
-            path: normalize_repo_path(&path, workspace_root),
+            path: normalize_repo_path_unscoped(&path, workspace_root),
             blob_ref: None,
             content_hash: None,
             mime_type: None,
@@ -367,7 +368,7 @@ fn shell_artifacts(input: &Value, workspace_root: Option<&Path>) -> Vec<Artifact
             .map(|w| {
                 artifact_with_resolve(
                     ArtifactKind::FileEdit,
-                    normalize_repo_path(&w.path, workspace_root),
+                    normalize_repo_path_unscoped(&w.path, workspace_root),
                     None,
                     ArtifactResolve {
                         strategy: w.strategy,

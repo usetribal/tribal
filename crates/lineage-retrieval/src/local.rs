@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use git2::Repository;
 use lineage_core::{
-    generate_architecture_summary, normalize_repo_path, turn_indexable_text, Confidence,
+    generate_architecture_summary, normalize_repo_path_unscoped, turn_indexable_text, Confidence,
     Conversation, LineageId,
 };
 use lineage_git::{read_conversation, read_line_object};
@@ -63,7 +63,7 @@ impl<'a> LocalRetriever<'a> {
             let object = read_line_object(self.repo, &LineageId::from(id))
                 .map_err(|e| RetrievalError::Retrieval(e.to_string()))?;
             let Some(object) = object else { continue };
-            if normalize_repo_path(&object.file_path, None) != file_path {
+            if normalize_repo_path_unscoped(&object.file_path, None) != file_path {
                 continue;
             }
 
@@ -165,7 +165,7 @@ fn turn_summary(conversation: &Conversation, turn_id: &str) -> Option<String> {
 impl Retriever for LocalRetriever<'_> {
     fn retrieve(&self, query: &ContextQuery) -> Result<Retrieval> {
         let started = Instant::now();
-        let file_path = normalize_repo_path(&query.file_path, None);
+        let file_path = normalize_repo_path_unscoped(&query.file_path, None);
 
         let mut line_matches = self.line_matches_for_file(&file_path)?;
 
