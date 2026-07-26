@@ -5,7 +5,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use git2::Repository;
-use lineage_core::{workspace_root_for, ArtifactKind, LineageError, ResolveStrategy};
+use lineage_core::{workspace_root_for, ArtifactKind, LineageError, RepoPaths, ResolveStrategy};
 
 use crate::line_resolve::files_changed_in_commit;
 use crate::notes::list_notes;
@@ -112,7 +112,8 @@ pub fn audit_materialization(repo: &Repository) -> Result<MaterializationFunnel,
                 if !file_reachable_from_links(
                     repo,
                     &linked_commits,
-                    &file_path,
+                    &artifact.path,
+                    &paths,
                     &mut changed_by_commit,
                 ) {
                     funnel.commit_not_linked += 1;
@@ -128,18 +129,26 @@ pub fn audit_materialization(repo: &Repository) -> Result<MaterializationFunnel,
 
 /// Mirrors materialization's commit filter: an empty changed-set means the
 /// commit imposes no file filter. Diff failures cache as `None` (unreachable).
+///
+/// The artifact path is resolved per commit rather than once by the caller,
+/// because deleted-worktree recovery is decided against a specific commit's
+/// file set — the same path may resolve under one linked commit and not another.
 fn file_reachable_from_links(
     repo: &Repository,
     linked_commits: &[String],
-    file_path: &str,
+    artifact_path: &str,
+    paths: &RepoPaths,
     changed_by_commit: &mut BTreeMap<String, Option<std::collections::HashSet<String>>>,
 ) -> bool {
     linked_commits.iter().any(|sha| {
         let changed = changed_by_commit
             .entry(sha.clone())
             .or_insert_with(|| files_changed_in_commit(repo, sha).ok());
-        changed
-            .as_ref()
-            .is_some_and(|files| files.is_empty() || files.contains(file_path))
+        changed.as_ref().is_some_and(|files| {
+            if files.is_empty() {
+                return true;
+            }
+            files.contains(&paths.resolve_against(artifact_path, files).0)
+        })
     })
 }

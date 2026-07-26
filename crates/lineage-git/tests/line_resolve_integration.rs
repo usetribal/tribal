@@ -1,4 +1,5 @@
 use std::fs;
+use std::path::Path;
 use std::process::Command;
 
 use git2::Repository;
@@ -356,6 +357,180 @@ fn materializes_worktree_prefixed_artifact_paths() {
     assert_eq!(
         objects[0].file_path, "src/auth.rs",
         "worktree prefix must be stripped to a repo-relative path"
+    );
+}
+
+/// A session whose single artifact edits `artifact_path`, anchored on text the
+/// fixture repo's `src/auth.rs` contains.
+fn session_editing(workspace_root: &str, artifact_path: &str, commit_sha: &str) -> Conversation {
+    Conversation {
+        schema_version: CONVERSATION_SCHEMA.into(),
+        id: LineageId::from("deleted-worktree-session"),
+        agent: AgentKind::Claude,
+        started_at: chrono::Utc::now(),
+        ended_at: None,
+        workspace_root: workspace_root.to_string(),
+        parent_session_id: None,
+        private: false,
+        turns: vec![Turn {
+            id: LineageId::from("turn-1"),
+            role: Role::Assistant,
+            content: "updated auth".into(),
+            tool_calls: vec![],
+            model: None,
+            timestamp: None,
+            artifacts: vec![Artifact {
+                kind: ArtifactKind::Diff,
+                path: artifact_path.to_string(),
+                blob_ref: None,
+                content_hash: None,
+                mime_type: None,
+                preview_data_url: None,
+                line_range: None,
+                resolve: Some(ArtifactResolve {
+                    strategy: ResolveStrategy::OldString,
+                    old_string: Some("pub fn validate() {}".into()),
+                    new_string: None,
+                    patch: None,
+                }),
+            }],
+        }],
+        commit_shas: vec![commit_sha.to_string()],
+        metadata: Default::default(),
+    }
+}
+
+/// Add a worktree and then prune it, leaving git with no record it existed —
+/// the state that makes its recorded paths unrecoverable from the registry.
+fn add_then_delete_worktree(dir: &Path, relative: &str) {
+    let path = dir.join(relative);
+    Command::new("git")
+        .args([
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "gone",
+            path.to_str().unwrap(),
+        ])
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    std::fs::remove_dir_all(&path).unwrap();
+    Command::new("git")
+        .args(["worktree", "prune"])
+        .current_dir(dir)
+        .output()
+        .unwrap();
+}
+
+#[test]
+fn recovers_paths_prefixed_by_a_deleted_worktree() {
+    // A worktree is usually removed once its branch merges, so git can no
+    // longer vouch for the prefix. Measured at 469 artifacts / 155 files in the
+    // lineage-platform corpus — the bulk of the loss, and invisible to the
+    // registry-backed path.
+    let (dir, repo) = init_repo();
+    let commit_sha = repo
+        .head()
+        .unwrap()
+        .peel_to_commit()
+        .unwrap()
+        .id()
+        .to_string();
+    add_then_delete_worktree(dir.path(), ".claude/worktrees/gone");
+
+    let conversation = session_editing(
+        dir.path().to_str().unwrap(),
+        ".claude/worktrees/gone/src/auth.rs",
+        &commit_sha,
+    );
+
+    let objects =
+        materialize_line_objects(&repo, &conversation, &commit_sha, Confidence::Exact).unwrap();
+    assert!(
+        !objects.is_empty(),
+        "expected the deleted-worktree path to be recovered"
+    );
+    assert_eq!(objects[0].file_path, "src/auth.rs");
+    assert_eq!(
+        objects[0].confidence,
+        Confidence::Heuristic,
+        "a path recovered by inference must not claim exact provenance"
+    );
+}
+
+#[test]
+fn leaves_a_prefixed_path_alone_when_the_remainder_is_not_in_the_commit() {
+    // Containment is the only evidence the worktree existed; without it the
+    // prefix is presumed to be a real directory and the artifact is dropped.
+    let (dir, repo) = init_repo();
+    let commit_sha = repo
+        .head()
+        .unwrap()
+        .peel_to_commit()
+        .unwrap()
+        .id()
+        .to_string();
+    add_then_delete_worktree(dir.path(), ".claude/worktrees/gone");
+
+    let conversation = session_editing(
+        dir.path().to_str().unwrap(),
+        ".claude/worktrees/gone/src/nowhere.rs",
+        &commit_sha,
+    );
+
+    let objects =
+        materialize_line_objects(&repo, &conversation, &commit_sha, Confidence::Exact).unwrap();
+    assert!(
+        objects.is_empty(),
+        "a remainder that names no file in the commit must not be recovered"
+    );
+}
+
+#[test]
+fn leaves_a_prefixed_path_alone_when_it_is_itself_tracked() {
+    // A repository that genuinely tracks files under a worktree-shaped
+    // directory keeps its own paths, even though the suffix also resolves.
+    let (dir, repo) = init_repo();
+    let nested = dir.path().join(".claude/worktrees/gone/src");
+    std::fs::create_dir_all(&nested).unwrap();
+    std::fs::write(nested.join("auth.rs"), "pub fn validate() {}\n").unwrap();
+    Command::new("git")
+        .args(["add", "-A", "-f"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    Command::new("git")
+        .args(["commit", "-qm", "track a worktree-shaped path"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    let commit_sha = repo
+        .head()
+        .unwrap()
+        .peel_to_commit()
+        .unwrap()
+        .id()
+        .to_string();
+
+    let conversation = session_editing(
+        dir.path().to_str().unwrap(),
+        ".claude/worktrees/gone/src/auth.rs",
+        &commit_sha,
+    );
+
+    let objects =
+        materialize_line_objects(&repo, &conversation, &commit_sha, Confidence::Exact).unwrap();
+    assert!(!objects.is_empty(), "the tracked path itself must resolve");
+    assert_eq!(
+        objects[0].file_path, ".claude/worktrees/gone/src/auth.rs",
+        "a tracked worktree-shaped path must not be stripped"
+    );
+    assert_eq!(
+        objects[0].confidence,
+        Confidence::Exact,
+        "no inference happened, so confidence must not be degraded"
     );
 }
 

@@ -131,9 +131,12 @@ pub(crate) fn link_session_at_commit(
     // entirely and stays authoritative.
     let workspace = lineage_core::workspace_root_for(&conversation.workspace_root, repo.workdir());
     let paths = repo_paths.with_workspace_root(&workspace);
+    // Resolved against the commit rather than merely normalized, so a session
+    // whose only evidence is a deleted-worktree path still clears the gate —
+    // otherwise materialization below would never get the chance to recover it.
     let overlaps = lineage_core::files_written(conversation)
         .iter()
-        .map(|p| paths.normalize(p))
+        .map(|p| paths.resolve_against(p, changed).0)
         .any(|p| changed.contains(&p));
     if !overlaps {
         return Ok(LinkAttempt::SkippedNoOverlap);

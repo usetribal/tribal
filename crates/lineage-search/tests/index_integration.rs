@@ -116,3 +116,63 @@ fn session_files_key_worktree_paths_the_way_the_graph_does() {
         "the worktree-recorded edit must be findable under its repo-relative path"
     );
 }
+
+#[test]
+fn session_files_recover_paths_from_a_deleted_worktree() {
+    // The worktree is gone by the time the session is indexed, so git cannot
+    // confirm the prefix. The repository's tracked files stand in: the
+    // remainder names a real file and the path as recorded does not.
+    let dir = init_repo();
+    for args in [
+        vec!["config", "user.email", "test@example.com"],
+        vec!["config", "user.name", "Test"],
+    ] {
+        Command::new("git")
+            .args(&args)
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+    }
+    std::fs::write(dir.path().join("AGENTS.md"), "guide\n").unwrap();
+    Command::new("git")
+        .args(["add", "AGENTS.md"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    Command::new("git")
+        .args(["commit", "-qm", "init"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+
+    let mut conv = Conversation::new(AgentKind::Claude, dir.path().display().to_string());
+    conv.turns.push(Turn {
+        id: LineageId::new(),
+        role: Role::Assistant,
+        content: "updated the guide".into(),
+        tool_calls: vec![],
+        model: None,
+        timestamp: None,
+        artifacts: vec![lineage_core::Artifact {
+            kind: lineage_core::ArtifactKind::FileEdit,
+            // No worktree by this name is registered — it was pruned.
+            path: ".claude/worktrees/gone/AGENTS.md".into(),
+            blob_ref: None,
+            content_hash: None,
+            mime_type: None,
+            preview_data_url: None,
+            line_range: None,
+            resolve: None,
+        }],
+    });
+
+    let db = dir.path().join(".git").join("lineage").join("index.db");
+    let index = LineageIndex::open(&db).unwrap();
+    index.index_conversation(&conv).unwrap();
+
+    assert_eq!(
+        index.sessions_that_wrote_file("AGENTS.md").unwrap(),
+        vec![conv.id.to_string()],
+        "a path from a pruned worktree must still key to its repo-relative file"
+    );
+}

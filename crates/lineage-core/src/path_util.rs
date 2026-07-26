@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 /// Normalize a path with no knowledge of the repository it belongs to.
@@ -178,6 +179,74 @@ impl RepoPaths {
     pub fn paths_match(&self, artifact_path: &str, repo_relative_path: &str) -> bool {
         self.normalize(artifact_path) == self.normalize(repo_relative_path)
     }
+
+    /// Normalize `path`, then — only if the result names nothing in `known` —
+    /// try recovering a path recorded through a worktree git no longer knows
+    /// about.
+    ///
+    /// A worktree is usually deleted once its branch merges, and git keeps no
+    /// record that it ever existed. Sessions run inside one can record edits
+    /// prefixed by its location (`.claude/worktrees/gone/src/auth.rs`), so
+    /// [`Self::normalize`] leaves them untouched and every such edit is dropped.
+    /// The registry cannot vouch for those prefixes, so two properties of the
+    /// stored data stand in for it: the remainder must name something in
+    /// `known`, and the path as recorded must not (a repository that genuinely
+    /// tracks files under a worktree-shaped directory keeps its own paths).
+    ///
+    /// `known` is the commit's file set — durable, pushed, and identical on
+    /// every machine — which keeps the result deterministic and backfillable.
+    /// It is still an inference rather than something git asserts, so a
+    /// recovered path reports [`PathOrigin::InferredWorktree`] and callers
+    /// weaken the confidence of anything derived from it.
+    pub fn resolve_against(&self, path: &str, known: &HashSet<String>) -> (String, PathOrigin) {
+        let normalized = self.normalize(path);
+        // Empty is nothing to resolve; a hit means the path as recorded is
+        // itself tracked, so it means what it says and must not be stripped.
+        if normalized.is_empty() || known.contains(&normalized) {
+            return (normalized, PathOrigin::Recorded);
+        }
+        match strip_leading_segments(&normalized, known) {
+            Some(recovered) => (recovered, PathOrigin::InferredWorktree),
+            None => (normalized, PathOrigin::Recorded),
+        }
+    }
+}
+
+/// How a normalized path was arrived at, so callers can tell a path git vouches
+/// for from one recovered by inference.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PathOrigin {
+    /// Normalized from what the session recorded, via the workspace root or a
+    /// worktree git still has registered.
+    Recorded,
+    /// Recovered by dropping a leading prefix that looked like a deleted
+    /// worktree's location. Provenance derived from this is heuristic.
+    InferredWorktree,
+}
+
+/// Worktree locations are shallow — a directory or two of nesting
+/// (`.claude/worktrees/<name>`, `worktrees/<name>`, `<name>`) — so trying more
+/// depth than this buys nothing and costs a lookup per artifact in the
+/// materialization loop. It also bounds the false-positive surface: the deeper
+/// the strip, the likelier some unrelated suffix coincidentally names a file.
+const MAX_WORKTREE_PREFIX_SEGMENTS: usize = 4;
+
+/// The first suffix of `path` that names something in `known`, dropping one
+/// leading directory segment at a time. Shallowest strip wins, so a path that
+/// resolves after removing one segment is never mistaken for a deeper one.
+fn strip_leading_segments(path: &str, known: &HashSet<String>) -> Option<String> {
+    let mut rest = path;
+    for _ in 0..MAX_WORKTREE_PREFIX_SEGMENTS {
+        let (_, tail) = rest.split_once('/')?;
+        if tail.is_empty() {
+            return None;
+        }
+        if known.contains(tail) {
+            return Some(tail.to_string());
+        }
+        rest = tail;
+    }
+    None
 }
 
 #[cfg(test)]
@@ -288,5 +357,81 @@ mod tests {
     #[test]
     fn matches_a_worktree_path_against_its_repo_relative_twin() {
         assert!(with_worktree().paths_match(".claude/worktrees/feature/AGENTS.md", "AGENTS.md"));
+    }
+
+    fn known(paths: &[&str]) -> HashSet<String> {
+        paths.iter().map(|p| p.to_string()).collect()
+    }
+
+    #[test]
+    fn recovers_a_path_prefixed_by_a_deleted_worktree() {
+        let paths = RepoPaths::rooted_at(Some(Path::new("/repo")));
+        let (resolved, origin) = paths.resolve_against(
+            ".claude/worktrees/gone/src/auth.rs",
+            &known(&["src/auth.rs"]),
+        );
+        assert_eq!(resolved, "src/auth.rs");
+        assert_eq!(origin, PathOrigin::InferredWorktree);
+    }
+
+    #[test]
+    fn leaves_a_path_alone_when_the_remainder_names_nothing() {
+        // Containment is the only evidence a deleted worktree existed; without
+        // it the prefix is presumed to be a real directory.
+        let paths = RepoPaths::rooted_at(Some(Path::new("/repo")));
+        let (resolved, origin) = paths.resolve_against(
+            ".claude/worktrees/gone/src/auth.rs",
+            &known(&["src/other.rs"]),
+        );
+        assert_eq!(resolved, ".claude/worktrees/gone/src/auth.rs");
+        assert_eq!(origin, PathOrigin::Recorded);
+    }
+
+    #[test]
+    fn leaves_a_path_alone_when_it_is_itself_tracked() {
+        // A repository that genuinely tracks files under a worktree-shaped
+        // directory keeps its own paths, even though the suffix also resolves.
+        let paths = RepoPaths::rooted_at(Some(Path::new("/repo")));
+        let (resolved, origin) = paths.resolve_against(
+            ".claude/worktrees/gone/src/auth.rs",
+            &known(&[".claude/worktrees/gone/src/auth.rs", "src/auth.rs"]),
+        );
+        assert_eq!(resolved, ".claude/worktrees/gone/src/auth.rs");
+        assert_eq!(origin, PathOrigin::Recorded);
+    }
+
+    #[test]
+    fn registered_worktree_paths_resolve_without_inference() {
+        let (resolved, origin) = with_worktree().resolve_against(
+            ".claude/worktrees/feature/AGENTS.md",
+            &known(&["AGENTS.md"]),
+        );
+        assert_eq!(resolved, "AGENTS.md");
+        assert_eq!(origin, PathOrigin::Recorded);
+    }
+
+    #[test]
+    fn prefers_the_shallowest_strip_that_resolves() {
+        let paths = RepoPaths::rooted_at(Some(Path::new("/repo")));
+        let (resolved, _) =
+            paths.resolve_against("wt/src/auth.rs", &known(&["src/auth.rs", "auth.rs"]));
+        assert_eq!(resolved, "src/auth.rs");
+    }
+
+    #[test]
+    fn gives_up_beyond_the_segment_bound() {
+        let paths = RepoPaths::rooted_at(Some(Path::new("/repo")));
+        let deep = "a/b/c/d/e/src/auth.rs";
+        let (resolved, origin) = paths.resolve_against(deep, &known(&["src/auth.rs"]));
+        assert_eq!(resolved, deep);
+        assert_eq!(origin, PathOrigin::Recorded);
+    }
+
+    #[test]
+    fn resolves_an_ordinary_tracked_path_without_stripping() {
+        let paths = RepoPaths::rooted_at(Some(Path::new("/repo")));
+        let (resolved, origin) = paths.resolve_against("src/auth.rs", &known(&["src/auth.rs"]));
+        assert_eq!(resolved, "src/auth.rs");
+        assert_eq!(origin, PathOrigin::Recorded);
     }
 }

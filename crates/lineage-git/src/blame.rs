@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use git2::{BlameOptions, Repository};
@@ -81,12 +82,17 @@ pub fn blame_with_lineage(
             if let Some(conv) = read_conversation(repo, session_id)? {
                 let workspace = workspace_root_for(&conv.workspace_root, repo.workdir());
                 let paths = repo_paths.with_workspace_root(&workspace);
+                // The file being blamed is the only path worth recovering to,
+                // so it alone is the containment oracle: a worktree-prefixed
+                // artifact resolves here only when its remainder is this file.
+                let blamed_path = paths.normalize(&file_path_str);
+                let blamed: HashSet<String> = HashSet::from([blamed_path.clone()]);
                 for turn in &conv.turns {
                     for artifact in &turn.artifacts {
-                        if !paths.paths_match(&artifact.path, &file_path_str) {
+                        let (artifact_path, _) = paths.resolve_against(&artifact.path, &blamed);
+                        if artifact_path != blamed_path {
                             continue;
                         }
-                        let artifact_path = paths.normalize(&artifact.path);
 
                         if let Some(range) = artifact.line_range {
                             if line >= range[0] && line <= range[1] {
