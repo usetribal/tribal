@@ -67,6 +67,7 @@ fn materializes_old_string_line_objects() {
         ended_at: None,
         workspace_root: ".".into(),
         parent_session_id: None,
+        fork_origin: None,
         private: false,
         turns: vec![Turn {
             id: turn_id,
@@ -130,6 +131,7 @@ fn materializes_citation_line_range() {
         ended_at: None,
         workspace_root: ".".into(),
         parent_session_id: None,
+        fork_origin: None,
         private: false,
         turns: vec![Turn {
             id: LineageId::from("turn-cite"),
@@ -186,6 +188,7 @@ fn materializes_absolute_path_artifacts() {
         ended_at: None,
         workspace_root: workspace,
         parent_session_id: None,
+        fork_origin: None,
         private: false,
         turns: vec![Turn {
             id: LineageId::from("turn-abs"),
@@ -245,6 +248,7 @@ fn skips_artifacts_for_files_not_in_commit_diff() {
         ended_at: None,
         workspace_root: dir.path().display().to_string(),
         parent_session_id: None,
+        fork_origin: None,
         private: false,
         turns: vec![Turn {
             id: LineageId::from("turn-skip"),
@@ -317,6 +321,7 @@ fn materializes_worktree_prefixed_artifact_paths() {
         ended_at: None,
         workspace_root: worktree_path.to_string_lossy().into_owned(),
         parent_session_id: None,
+        fork_origin: None,
         private: false,
         turns: vec![Turn {
             id: LineageId::from("turn-1"),
@@ -370,6 +375,7 @@ fn session_editing(workspace_root: &str, artifact_path: &str, commit_sha: &str) 
         ended_at: None,
         workspace_root: workspace_root.to_string(),
         parent_session_id: None,
+        fork_origin: None,
         private: false,
         turns: vec![Turn {
             id: LineageId::from("turn-1"),

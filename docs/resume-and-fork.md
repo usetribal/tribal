@@ -32,15 +32,21 @@ Commands are also available from the command palette (`Lineage: Resume Conversat
 
 ## CLI
 
-Fork from the terminal copies transcript material for manual use:
+`git lineage fork <session-id>` renders the stored session into a vendor-native
+transcript, records the fork edge, and prints the command that opens it:
 
 ```bash
-# Fork workflow is primarily exposed through the extension and agent CLIs.
-# Ensure the session was imported with vendor metadata:
-git lineage show <session-id> --json
+git lineage fork <session-id>
+git lineage fork <session-id> --dry-run   # show what would be written
 ```
 
-Look for `vendor_session_id` in session JSON. Without it, resume and fork are not available for that session.
+It resolves the session from lineage's own refs, so it works on a session you
+pulled from a teammate as well as one you imported yourself — no
+`vendor_session_id` and no local transcript file required. Full output and
+caveats: [CLI reference](cli/README.md#fork-a-session).
+
+The extension's fork action is still the older path described below and does
+require `vendor_session_id`.
 
 ## Prerequisites
 

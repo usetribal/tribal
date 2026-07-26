@@ -8,6 +8,7 @@ export interface SessionSummary {
     git_branch?: string;
     parent_session_id?: string;
     is_sidechain?: boolean;
+    is_fork?: boolean;
     vendor_session_id?: string;
     prompted_by_email?: string;
     prompted_by_name?: string;
@@ -37,6 +38,15 @@ export interface Turn {
     artifacts?: Artifact[];
 }
 
+export interface ForkOrigin {
+    source_session_id: string;
+    forked_session_handle: string;
+    forked_at: string;
+    lineage_version: string;
+    source_tenant?: string;
+    source_repo?: string;
+}
+
 export interface Conversation {
     id: string;
     agent: string;
@@ -44,6 +54,7 @@ export interface Conversation {
     ended_at?: string;
     workspace_root?: string;
     parent_session_id?: string;
+    fork_origin?: ForkOrigin;
     commit_shas?: string[];
     turns: Turn[];
     private?: boolean;

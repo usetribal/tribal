@@ -51,7 +51,12 @@ export function vendorSessionId(conv: Conversation): string | undefined {
     );
 }
 
+/** A harness-spawned branch (sidechain/subagent). A fork has a parent too, but
+ *  it is a deliberate continuation by a person, not a branch the agent made. */
 export function isBranchSession(conv: Conversation): boolean {
+    if (conv.fork_origin) {
+        return false;
+    }
     if (conv.parent_session_id) {
         return true;
     }

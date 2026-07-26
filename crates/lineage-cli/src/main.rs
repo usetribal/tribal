@@ -1,7 +1,8 @@
 use std::path::PathBuf;
 
 use lineage_cli::{
-    commands, context_cmd, digest, doctor_cmd, hooks_cmd, init_cmd, retrieval_cmd, skill_cmd,
+    commands, context_cmd, digest, doctor_cmd, fork_cmd, hooks_cmd, init_cmd, retrieval_cmd,
+    skill_cmd,
 };
 use lineage_retrieval::{DEFAULT_AROUND_RADIUS, DEFAULT_TRAVERSAL_LIMIT};
 use std::process::ExitCode;
@@ -91,6 +92,14 @@ enum Commands {
         json: bool,
         #[arg(long)]
         hydrate_images: bool,
+    },
+    /// Continue someone else's session in your own agent
+    Fork {
+        /// Session to continue (`git lineage list` shows what is here)
+        session_id: String,
+        /// Show what would be written without writing it
+        #[arg(long)]
+        dry_run: bool,
     },
     /// Show lineage for a file line
     Blame {
@@ -409,6 +418,10 @@ fn main() -> ExitCode {
             json,
             hydrate_images,
         } => commands::show(&repo_path, &session_id, json, hydrate_images),
+        Commands::Fork {
+            session_id,
+            dry_run,
+        } => fork_cmd::fork(&repo_path, &session_id, dry_run),
         Commands::Blame { target, json } => commands::blame(&repo_path, &target, json),
         Commands::InstallHook { force } => hooks_cmd::install_hook(&repo_path, force),
         Commands::UninstallHook => hooks_cmd::uninstall_hook(&repo_path),

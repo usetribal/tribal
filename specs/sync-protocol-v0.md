@@ -88,9 +88,11 @@ them.
    per key. Every merge function is order-independent: Alice-then-Bob and
    Bob-then-Alice converge to identical state.
 4. **Forks are new identities.** A fork is a new conversation ULID with
-   `parent_session_id` pointing at its origin. The server treats
-   `parent_session_id` as an opaque immutable field; the parent need not exist
-   on the server (it may be private or not yet synced).
+   `parent_session_id` pointing at its origin and `fork_origin` describing the
+   act (`conversation-schema-v0`). The server treats both as opaque immutable
+   fields; the parent need not exist on the server (it may be private or not yet
+   synced). `fork_origin` is what separates a deliberate fork from a
+   harness-spawned branch, which sets `parent_session_id` alone.
 
 Line objects are the one mutable exception: `remap` legitimately rewrites
 `commit_sha` after a rebase. Policy: latest write wins whole-object (derived,
