@@ -8,12 +8,13 @@ use lineage_core::{
     LastImportState, LineageId, LineageRepoConfig,
 };
 use lineage_git::{
-    assemble_batch, best_commit_for_conversation, blame_with_lineage, delete_session,
+    assemble_batch, best_commit_for_conversation, blame_with_lineage, chunk_batch, delete_session,
     ensure_gitattributes, hydrate_media_artifacts, lfs_fetch, lfs_push, lfs_status,
     link_session_to_commit, list_session_ids, map_commit_to_sessions,
     materialize_session_at_commit, open_repo, persist_import, purge_orphans, read_conversation,
     read_conversation_stored, read_repo_config, remap_orphaned_commits, stamp_prompted_by,
-    sync_push, write_last_import, write_repo_config, PROMPTED_BY_EMAIL, PROMPTED_BY_NAME,
+    sync_push_with_progress, write_last_import, write_repo_config, PROMPTED_BY_EMAIL,
+    PROMPTED_BY_NAME, SYNC_CONVERSATIONS_PER_CHUNK,
 };
 use lineage_policy::{
     apply_policy, is_private_session, policy_from_repo_config, prepare_for_export, PolicyConfig,
@@ -624,15 +625,20 @@ pub fn sync(
     }
 
     let batch = assemble_batch(inner, remote, conversations)?;
+    let chunk_count = chunk_batch(&batch, SYNC_CONVERSATIONS_PER_CHUNK).len();
     println!(
-        "syncing {} conversation(s), {} line object(s), {} commit link(s), {} blob(s) to {server}",
+        "syncing {} conversation(s), {} line object(s), {} commit link(s), {} blob(s) to {server} in {chunk_count} chunk(s)",
         batch.conversations.len(),
         batch.line_objects.len(),
         batch.session_commit_links.len(),
         batch.blobs.len()
     );
 
-    let outcome = sync_push(inner, &server, &token, &batch)?;
+    let outcome = sync_push_with_progress(inner, &server, &token, &batch, |done, total| {
+        if total > 1 {
+            println!("  chunk {done}/{total}");
+        }
+    })?;
     let report = &outcome.report;
     println!(
         "synced to repo {} ({} accepted, {} noop, {} rejected, {} pending, {} blob(s) uploaded)",
@@ -661,6 +667,7 @@ pub fn sync(
                 "line_objects": batch.line_objects.len(),
                 "session_commit_links": batch.session_commit_links.len(),
                 "blobs": batch.blobs.len(),
+                "chunks": report.chunks,
             },
             "blobs_uploaded": report.blobs_uploaded,
             "response": serde_json::to_value(&outcome.response).unwrap_or_default(),
