@@ -5,7 +5,7 @@ use git2::{Oid, Repository};
 use lineage_core::derive_line_object_id;
 use lineage_core::{
     workspace_root_for, Artifact, ArtifactKind, Confidence, Conversation, LineObject, LineageError,
-    RepoPaths, ResolveStrategy,
+    PathOrigin, RepoPaths, ResolveStrategy,
 };
 
 use crate::repo::repo_paths_for_conversation;
@@ -40,7 +40,10 @@ pub fn materialize_line_objects_with_paths(
             if !artifact_is_materializable(artifact) {
                 continue;
             }
-            let file_path = paths.normalize(&artifact.path);
+            // The commit's own file set is the containment oracle: it is what
+            // decides whether a leading prefix was a deleted worktree, and it
+            // is already loaded for the filter below.
+            let (file_path, origin) = paths.resolve_against(&artifact.path, &changed);
             if file_path.is_empty() {
                 continue;
             }
@@ -50,6 +53,7 @@ pub fn materialize_line_objects_with_paths(
 
             let ranges = resolve_artifact_ranges(repo, commit_sha, artifact, &file_path)?;
             for (range, confidence) in ranges {
+                let confidence = degrade_for_origin(confidence, origin);
                 let id = derive_line_object_id(
                     &conversation.id,
                     &turn.id,
@@ -97,6 +101,18 @@ fn merge_confidence(resolved: Confidence, link: Confidence) -> Confidence {
         return Confidence::Manual;
     }
     resolved
+}
+
+/// A path recovered by inferring a deleted worktree cannot support an exact
+/// claim: git never asserted that worktree existed, so the file the range
+/// belongs to rests on the prefix having been stripped correctly. The range
+/// itself may still be exact within that file, which is why this weakens the
+/// confidence rather than discarding the object.
+fn degrade_for_origin(resolved: Confidence, origin: PathOrigin) -> Confidence {
+    match origin {
+        PathOrigin::Recorded => resolved,
+        PathOrigin::InferredWorktree => Confidence::Heuristic,
+    }
 }
 
 fn resolve_artifact_ranges(

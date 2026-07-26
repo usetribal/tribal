@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 
 use git2::Repository;
@@ -113,6 +113,11 @@ pub struct LineageIndex {
     /// `AGENTS.md`, and the file's authorship silently returns no sessions.
     /// Defaults to repo-unaware for callers that never open a repository.
     repo_paths: RepoPaths,
+    /// The repository's tracked files at HEAD, the containment oracle for
+    /// recovering paths recorded through a worktree git no longer knows about.
+    /// Empty when no repository is in scope, which disables that recovery
+    /// without affecting anything else.
+    tracked_files: HashSet<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -123,17 +128,36 @@ pub struct IndexSchemaInfo {
 }
 
 /// The repository an index at `<git dir>/lineage/index.db` belongs to, as a
-/// path-normalization context. A path that is not shaped that way, or a git dir
-/// that will not open, yields a repo-unaware context — indexing still works, it
-/// just cannot recognise worktree-recorded paths.
-fn repo_paths_for_index(index_path: &Path) -> RepoPaths {
+/// path-normalization context plus its tracked files. A path that is not shaped
+/// that way, or a git dir that will not open, yields a repo-unaware context —
+/// indexing still works, it just cannot recognise worktree-recorded paths.
+fn repo_context_for_index(index_path: &Path) -> (RepoPaths, HashSet<String>) {
     let Some(git_dir) = index_path.parent().and_then(Path::parent) else {
-        return RepoPaths::default();
+        return (RepoPaths::default(), HashSet::new());
     };
     let Ok(repo) = Repository::open(git_dir) else {
-        return RepoPaths::default();
+        return (RepoPaths::default(), HashSet::new());
     };
-    repo_paths(&repo)
+    (repo_paths(&repo), tracked_files_at_head(&repo))
+}
+
+/// Every path in the repository's HEAD tree. Read once when the index is
+/// opened: it feeds a per-artifact containment check, so re-walking the tree
+/// per lookup would dominate indexing.
+fn tracked_files_at_head(repo: &Repository) -> HashSet<String> {
+    let Ok(tree) = repo.head().and_then(|head| head.peel_to_tree()) else {
+        return HashSet::new();
+    };
+    let mut files = HashSet::new();
+    let _ = tree.walk(git2::TreeWalkMode::PreOrder, |dir, entry| {
+        if entry.kind() == Some(git2::ObjectType::Blob) {
+            if let Some(name) = entry.name() {
+                files.insert(format!("{dir}{name}"));
+            }
+        }
+        git2::TreeWalkResult::Ok
+    });
+    files
 }
 
 /// Read-only schema introspection for diagnostics. `open` applies DDL, so an
@@ -193,9 +217,11 @@ impl LineageIndex {
         // keeps `session_files` keyed the same way the provenance graph keys
         // line objects — the divergence is otherwise silent, and every one of
         // the ~18 open sites would have to remember.
+        let (repo_paths, tracked_files) = repo_context_for_index(path);
         let index = Self {
             conn,
-            repo_paths: repo_paths_for_index(path),
+            repo_paths,
+            tracked_files,
         };
         index.init_schema()?;
         Ok(index)
@@ -416,12 +442,18 @@ impl LineageIndex {
         let paths = self
             .repo_paths
             .with_workspace_root(Path::new(&conversation.workspace_root));
+        // Callers look these rows up by a path that exists, so the repository's
+        // tracked files are the containment oracle that recovers a
+        // deleted-worktree prefix. Unlike materialization there is no commit in
+        // scope here — a session is indexed on its own — so this is HEAD's file
+        // set rather than one commit's.
+        let tracked = &self.tracked_files;
         let written: std::collections::HashSet<String> = files_written(conversation)
             .iter()
-            .map(|p| paths.normalize(p))
+            .map(|p| paths.resolve_against(p, tracked).0)
             .collect();
         for path in files_touched(conversation) {
-            let normalized = paths.normalize(&path);
+            let normalized = paths.resolve_against(&path, tracked).0;
             if normalized.is_empty() {
                 continue;
             }

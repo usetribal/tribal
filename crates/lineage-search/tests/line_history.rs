@@ -9,11 +9,24 @@ use lineage_git::{open_repo, persist_conversation, write_line_object, write_note
 use lineage_search::LineageIndex;
 
 fn git(dir: &Path, args: &[&str]) -> String {
-    let out = Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .output()
-        .unwrap();
+    git_at(dir, args, None)
+}
+
+/// `git` with an optional fixed commit timestamp.
+///
+/// Git's commit time has one-second resolution, so two commits made in the same
+/// second tie on `committed_at` and any ordering assertion over them is a coin
+/// flip. Tests that assert commit order pass an explicit time rather than
+/// racing the clock.
+fn git_at(dir: &Path, args: &[&str], date: Option<&str>) -> String {
+    let mut command = Command::new("git");
+    command.args(args).current_dir(dir);
+    if let Some(date) = date {
+        command
+            .env("GIT_AUTHOR_DATE", date)
+            .env("GIT_COMMITTER_DATE", date);
+    }
+    let out = command.output().unwrap();
     assert!(out.status.success(), "git {args:?}: {out:?}");
     String::from_utf8(out.stdout).unwrap().trim().to_string()
 }
@@ -27,9 +40,15 @@ fn init_repo() -> tempfile::TempDir {
 }
 
 fn commit_file(dir: &Path, path: &str, contents: &str, msg: &str) -> String {
+    commit_file_at(dir, path, contents, msg, None)
+}
+
+/// [`commit_file`] with a fixed commit time, for tests that assert the order
+/// two commits come back in.
+fn commit_file_at(dir: &Path, path: &str, contents: &str, msg: &str, date: Option<&str>) -> String {
     fs::write(dir.path_join(path), contents).unwrap();
     git(dir, &["add", "."]);
-    git(dir, &["commit", "-m", msg]);
+    git_at(dir, &["commit", "-m", msg], date);
     git(dir, &["rev-parse", "HEAD"])
 }
 
@@ -284,8 +303,22 @@ fn aggregation_by_committed_at_orders_newest_first() {
     let dir = init_repo();
     let repo = open_repo(dir.path()).unwrap();
 
-    let c1 = commit_file(dir.path(), "f.txt", "a\nb\n", "c1");
-    let c2 = commit_file(dir.path(), "f.txt", "a\nb EDIT\n", "c2");
+    // An hour apart, so "newest first" is a property of the data rather than of
+    // how fast the test ran.
+    let c1 = commit_file_at(
+        dir.path(),
+        "f.txt",
+        "a\nb\n",
+        "c1",
+        Some("2026-01-01T10:00:00+00:00"),
+    );
+    let c2 = commit_file_at(
+        dir.path(),
+        "f.txt",
+        "a\nb EDIT\n",
+        "c2",
+        Some("2026-01-01T11:00:00+00:00"),
+    );
 
     let (conv1, t1) = conv_with_turn(dir.path(), "f.txt", [1, 1]);
     let (conv2, t2) = conv_with_turn(dir.path(), "f.txt", [2, 2]);
