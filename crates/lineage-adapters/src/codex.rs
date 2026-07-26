@@ -4,7 +4,10 @@ use std::io::BufRead;
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
-use lineage_agent::{AgentSource, SessionReader, SessionRef};
+use lineage_agent::{
+    transcript_writing_unsupported, AgentSource, RenderedTranscript, SessionReader, SessionRef,
+    TranscriptWriter,
+};
 use lineage_core::{
     derive_session_id, AgentKind, Artifact, Conversation, LineageError, LineageId, Role, ToolCall,
     Turn, CONVERSATION_SCHEMA,
@@ -534,6 +537,19 @@ fn parse_timestamp(s: &str) -> Option<DateTime<Utc>> {
 
 fn home_dir() -> Option<PathBuf> {
     std::env::var_os("HOME").map(PathBuf::from)
+}
+
+impl TranscriptWriter for CodexAdapter {
+    /// `codex fork` very likely accepts a hand-written rollout file, but that
+    /// has not been executed against a real Codex install, and its unified
+    /// backend may validate ids server-side. Declining until it is proven beats
+    /// writing a file that silently fails to resume.
+    fn render_transcript(
+        &self,
+        _conversation: &Conversation,
+    ) -> Result<RenderedTranscript, LineageError> {
+        Err(transcript_writing_unsupported(AgentKind::Codex))
+    }
 }
 
 #[cfg(test)]

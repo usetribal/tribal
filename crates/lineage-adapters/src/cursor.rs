@@ -2,7 +2,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
-use lineage_agent::{AgentSource, SessionReader, SessionRef};
+use lineage_agent::{
+    transcript_writing_unsupported, AgentSource, RenderedTranscript, SessionReader, SessionRef,
+    TranscriptWriter,
+};
 use lineage_core::{
     derive_session_id, AgentKind, Conversation, LineageError, LineageId, Role, Turn,
     CONVERSATION_SCHEMA,
@@ -236,6 +239,18 @@ impl SessionReader for CursorAdapter {
         }
 
         Ok(conversation)
+    }
+}
+
+impl TranscriptWriter for CursorAdapter {
+    /// Cursor's CLI and IDE session stores are separate, and this adapter reads
+    /// the IDE one — writing there would produce a file `cursor-agent --resume`
+    /// never looks at. Declining is honest; a written file would not be.
+    fn render_transcript(
+        &self,
+        _conversation: &Conversation,
+    ) -> Result<RenderedTranscript, LineageError> {
+        Err(transcript_writing_unsupported(AgentKind::Cursor))
     }
 }
 
