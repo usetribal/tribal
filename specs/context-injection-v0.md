@@ -289,6 +289,15 @@ and merely costs re-retrieval.
 - **Negative caching:** empty retrievals are stored under the same key. Most
   files have no provenance; answering "nothing" instantly is what keeps the
   trigger path invisible.
+- **Never cache an empty truncated retrieval.** A retrieval that exhausted its
+  `budget_ms` before finding anything is a timeout, not an answer. No key part
+  changes when a file is unmodified and the corpus is unchanged, and entries
+  carry no TTL, so caching that emptiness makes it permanent: every later fire
+  returns it without retrying, and one slow cold retrieval silences that file
+  until the corpus generation moves. Truncation *with* evidence is a usable
+  answer (the retriever returns what it has by design) and MUST be cached like
+  any other. This distinction only bites on the corpus's richest files, which
+  are the ones whose retrieval is slowest and whose provenance matters most.
 - **Team mode (deferred):** when retrieval runs server-side,
   `corpus_generation` is not locally observable — cache entries then rely on
   the stored `strength` and freshness heuristics instead of provable

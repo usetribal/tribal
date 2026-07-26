@@ -196,6 +196,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The retrieval cache no longer stores a budget-exhausted empty retrieval, which was silencing the corpus's richest files permanently. The cache key is content-addressed and carries no TTL, so nothing about it changes while a file and the corpus are unchanged: one cold retrieval that overran the hook's 200ms budget wrote an empty result that every later fire then returned in ~20ms without ever retrying. The effect was self-concealing — the file looked like it had no provenance, and the `over_budget` events that recorded the truth were indistinguishable from a genuinely slow repo. Measured on the dev corpus against `lineage-search/src/index.rs` (the single most-injected file): before, one `high`-strength injection followed by permanent silence; after, a 0.24s cold retrieval that caches and then answers in 0.02–0.05s, five fires out of five. Truncation *with* evidence is still cached — the retriever returns what it has by design, and that is a usable answer — as is an empty retrieval that completed, which is a real "honestly nothing" (`is_cacheable`, spec: context-injection-v0 § Cache)
+
 - Fixed `git lineage doctor --json | head` (and any piped invocation) panicking with a broken-pipe error: SIGPIPE default behavior is restored at startup on unix
 
 - Import no longer panics when resolving line numbers for edits whose matched text ends in a multibyte character (e.g. an em dash in transcript content): `line_number_at` floors the byte offset to a char boundary before slicing

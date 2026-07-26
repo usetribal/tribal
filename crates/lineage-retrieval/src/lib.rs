@@ -20,7 +20,7 @@ mod session;
 mod types;
 mod verbs;
 
-pub use cache::{CacheKey, RetrievalCache};
+pub use cache::{is_cacheable, CacheKey, RetrievalCache};
 pub use dense::{embed_and_store_session, DenseRetriever, DENSE_RETRIEVER_VERSION};
 pub use dispatch::{route, Plan, RouteDecision};
 pub use fts::{FtsRetriever, FTS_RETRIEVER_VERSION};
