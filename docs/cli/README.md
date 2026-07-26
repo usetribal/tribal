@@ -220,6 +220,16 @@ See [Maintenance](../maintenance.md) and [Privacy](../privacy.md).
 `git lineage fork <session-id>` picks up a teammate's agent session and hands you
 a native, resumable one carrying their context.
 
+Find one with `git lineage list`, which shows id, date, turn count, agent, model,
+and who ran it, newest first:
+
+```text
+01HQZX8K9V2M3N4P5Q6R7S8T9U  2026-07-26     8 turns  claude  claude-sonnet-4  Alice Chen
+01HQZW1A2B3C4D5E6F7G8H9J0K  2026-07-25    41 turns  claude  claude-opus-4    Bob Reyes  (fork)
+```
+
+Then fork it:
+
 ```bash
 git lineage fork 01HQZX8K9V2M3N4P5Q6R7S8T9U
 ```
@@ -256,7 +266,11 @@ Notes:
   ([conversation schema](../../specs/conversation-schema-v0.md)). Lines you write
   after the fork are attributed to you; the source session is an ancestor, never
   a co-author.
-- Claude Code only for now. Codex and Cursor sessions decline by name.
+- Claude Code only for now. Codex and Cursor sessions decline by name — see
+  [Resume and fork](../resume-and-fork.md) for why each is not supported yet.
+- A session with nothing replayable (all system turns, or content redacted away
+  at import) is refused here rather than written out as an empty transcript the
+  harness would later reject as "session not found".
 
 ## Session metadata
 

@@ -323,6 +323,37 @@ fn an_unknown_session_id_says_what_to_do_next() {
     assert!(stderr.contains("git lineage list"), "{stderr}");
 }
 
+/// A session can render to nothing legitimately — all system notes, or content
+/// redacted away at import. Writing the empty file anyway defers the failure to
+/// the harness, where it surfaces as "session not found" and reads as lineage
+/// having written a broken transcript.
+#[test]
+fn a_session_with_nothing_replayable_refuses_before_writing() {
+    let dir = init_repo();
+    let home = tempfile::tempdir().unwrap();
+    commands::init_config(dir.path()).unwrap();
+
+    let repo = open_repo(dir.path()).unwrap();
+    let mut conv = Conversation::new(AgentKind::Claude, dir.path().display().to_string());
+    conv.turns.push(Turn {
+        id: LineageId::new(),
+        role: Role::System,
+        content: "lineage: imported from a hook".into(),
+        tool_calls: vec![],
+        model: None,
+        timestamp: None,
+        artifacts: vec![],
+    });
+    persist_conversation(repo.inner(), &conv).unwrap();
+
+    let output = run_fork(dir.path(), home.path(), conv.id.as_str(), &[]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(stderr.contains("nothing to continue"), "{stderr}");
+    assert!(stderr.contains("git lineage show"), "{stderr}");
+    assert!(claude_transcripts(home.path()).is_empty());
+}
+
 /// Only Claude can be continued in its harness today. The refusal has to name
 /// the agent, or a user cannot tell whether to try a different session or a
 /// different tool.

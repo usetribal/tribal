@@ -116,6 +116,10 @@ export class LineageClient {
         return this.run(["search", query]);
     }
 
+    async fork(id: string): Promise<string> {
+        return this.run(["fork", id]);
+    }
+
     async installHook(): Promise<string> {
         return this.run(["install-hook"]);
     }
@@ -127,6 +131,19 @@ export class LineageClient {
         }
         return this.run(args);
     }
+}
+
+// `execFile` rejects with an Error whose `message` is its own summary ("Command
+// failed: ...") and whose `stderr` holds what the CLI actually said. Lineage's
+// errors are written to be read by the person who hit them, so prefer stderr.
+type ExecFailure = { stderr?: string };
+
+export function cliMessage(error: unknown): string {
+    const stderr = (error as ExecFailure)?.stderr;
+    if (typeof stderr === "string" && stderr.trim().length > 0) {
+        return stderr.trim();
+    }
+    return error instanceof Error ? error.message : String(error);
 }
 
 export function getWorkspaceRoot(): string | undefined {

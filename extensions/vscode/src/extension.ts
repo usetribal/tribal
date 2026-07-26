@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { forkAgentSession, resumeAgentSession } from "./agentActions";
-import { getWorkspaceRoot, LineageClient } from "./lineageClient";
+import { cliMessage, getWorkspaceRoot, LineageClient } from "./lineageClient";
 import { LineageDecorator } from "./lineageDecorator";
 import { LineageHoverProvider } from "./lineageHoverProvider";
 import { SessionPanel } from "./sessionPanel";
@@ -178,10 +178,13 @@ export function activate(context: vscode.ExtensionContext): void {
                     return;
                 }
                 try {
-                    const conversation = await client!.showSession(id, false);
-                    await forkAgentSession(conversation, client!.workspaceRoot);
+                    await forkAgentSession(client!, id);
+                    await sessionsProvider?.load();
                 } catch (e) {
-                    vscode.window.showErrorMessage(`Fork session failed: ${e}`);
+                    // The CLI's stderr is the specific message — unknown id and
+                    // what to do about it, or the agent that cannot be forked by
+                    // name. Wrapping it in execFile's own prose buries that.
+                    vscode.window.showErrorMessage(`Fork session failed: ${cliMessage(e)}`);
                 }
             })
         ),
