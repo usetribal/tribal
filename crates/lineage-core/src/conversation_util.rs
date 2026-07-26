@@ -1,3 +1,7 @@
+use std::collections::BTreeSet;
+
+use chrono::{DateTime, Utc};
+
 use crate::ids::LineageId;
 use crate::salience::turn_is_salient;
 use crate::{ArtifactKind, Conversation, Role, Turn};
@@ -318,6 +322,40 @@ fn truncate_line(s: &str, max: usize) -> String {
     }
 }
 
+/// Monotonic merge of a conversation's `ended_at` across two copies of the same
+/// session.
+///
+/// Absence means "no end recorded", not "ended at the beginning of time", so a
+/// copy that knows an end time is never regressed to unknown by one that does
+/// not. Order-independent, which is what lets a push and a pull of the same
+/// session converge to identical state whichever runs first
+/// (`docs/sync-semantics.md`, property 3).
+pub fn merge_ended_at(
+    local: Option<DateTime<Utc>>,
+    incoming: Option<DateTime<Utc>>,
+) -> Option<DateTime<Utc>> {
+    match (local, incoming) {
+        (Some(a), Some(b)) => Some(a.max(b)),
+        (Some(a), None) => Some(a),
+        (None, incoming) => incoming,
+    }
+}
+
+/// Set union of `commit_shas`, appending in place.
+///
+/// Order the local copy already had is preserved, so merging does not reshuffle
+/// a list a user may have just read. Like [`merge_ended_at`] this is
+/// order-independent as a set operation, which is the property the write rules
+/// depend on.
+pub fn merge_commit_shas(local: &mut Vec<String>, incoming: &[String]) {
+    let mut seen: BTreeSet<String> = local.iter().cloned().collect();
+    for sha in incoming {
+        if seen.insert(sha.clone()) {
+            local.push(sha.clone());
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -584,6 +622,57 @@ mod tests {
         assert!(
             text.chars().count() < 2000,
             "a 100k-char edit must not produce a 100k-char turn text"
+        );
+    }
+
+    fn at(secs: i64) -> Option<DateTime<Utc>> {
+        DateTime::from_timestamp(secs, 0)
+    }
+
+    #[test]
+    fn ended_at_takes_the_later_of_two_known_times() {
+        assert_eq!(merge_ended_at(at(100), at(200)), at(200));
+        assert_eq!(merge_ended_at(at(200), at(100)), at(200));
+    }
+
+    /// The rule that stops a copy which knows less from erasing what another
+    /// knows: unknown loses to known, in both argument orders.
+    #[test]
+    fn ended_at_never_regresses_a_known_time_to_unknown() {
+        assert_eq!(merge_ended_at(at(100), None), at(100));
+        assert_eq!(merge_ended_at(None, at(100)), at(100));
+        assert_eq!(merge_ended_at(None, None), None);
+    }
+
+    /// Order-independence is the property the write rules rest on: whichever
+    /// direction a merge runs, both sides land on the same value.
+    #[test]
+    fn merges_are_order_independent() {
+        assert_eq!(
+            merge_ended_at(at(100), at(200)),
+            merge_ended_at(at(200), at(100))
+        );
+
+        let mut forward = vec!["a".to_string(), "b".to_string()];
+        merge_commit_shas(&mut forward, &["b".to_string(), "c".to_string()]);
+        let mut backward = vec!["b".to_string(), "c".to_string()];
+        merge_commit_shas(&mut backward, &["a".to_string(), "b".to_string()]);
+
+        let sorted = |mut v: Vec<String>| {
+            v.sort();
+            v
+        };
+        assert_eq!(sorted(forward), sorted(backward));
+    }
+
+    #[test]
+    fn commit_shas_union_dedupes_and_keeps_local_order() {
+        let mut local = vec!["c".to_string(), "a".to_string()];
+        merge_commit_shas(&mut local, &["a".to_string(), "b".to_string()]);
+        assert_eq!(
+            local,
+            vec!["c", "a", "b"],
+            "existing order survives, new appends"
         );
     }
 }

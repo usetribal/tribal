@@ -75,15 +75,16 @@ places, so writing an IDE-shaped transcript would not produce something
 ## Resume
 
 Resume hands a `vendor_session_id` back to the agent that produced it, so it only
-works for a session recorded on this machine.
+works for a session recorded on this machine. A teammate's session has no vendor
+id here — fork it instead.
 
 ```bash
-claude --resume <vendor-session-id>
-codex resume <vendor-session-id>
+git lineage resume <session-id>
 ```
 
-`git lineage show <session-id>` prints the stored `vendor_session_id`. The VS
-Code extension offers this as an action rather than making you copy it.
+It prints the command that reopens the session, and the directory to run it from
+when the harness resolves a session relative to one. Nothing is written and no
+new session is recorded — this is the original session continued.
 
 ## VS Code and Cursor extension
 
@@ -92,7 +93,9 @@ Install the [VS Code extension](vscode.md) in VS Code or Cursor.
 ### From the session tree
 
 - **View** — opens the session timeline webview.
-- **Resume** — runs `claude --resume` or `codex resume` in the integrated terminal.
+- **Resume** — runs `git lineage resume` and opens its output. The command is
+  shown, never run for you, so which shell the session lands in stays your
+  decision and the directory it must run from is on screen.
 - **Fork** — runs `git lineage fork` and opens its output, so you can read whose
   session it was and what it was about before you run the command it prints. The
   command is shown, never run for you: it opens a colleague's work in a live

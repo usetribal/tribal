@@ -192,6 +192,17 @@
           "default": false,
           "type": "boolean"
         },
+        "pull_origin": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PullOrigin"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Set only on a session this machine pulled rather than imported. Read by\nthe push path to skip re-uploading it; a *fork* of a pulled session\ncarries `fork_origin` and no `pull_origin`, so it still pushes."
+        },
         "schema_version": {
           "type": "string"
         },
@@ -308,6 +319,36 @@
         "conversation_id",
         "turn_id",
         "confidence"
+      ],
+      "type": "object"
+    },
+    "PullOrigin": {
+      "description": "Where a session came from when it was not imported on this machine.\n\nA typed field rather than a metadata key for the same reason as\n[`ForkOrigin`]: `metadata` merges first-write-wins per key\n(`specs/sync-protocol-v0.md`), which silently drops a provenance edge that\ncannot be recomputed. This one also has to be read on the *push* path —\na pulled session is excluded from the next batch, because the server it came\nfrom is already its source of truth — and a filter that decides what to\nupload should not key off a string every caller has to remember.",
+      "properties": {
+        "lineage_version": {
+          "description": "Version of lineage that wrote the marker, matching `ForkOrigin`.",
+          "type": "string"
+        },
+        "pulled_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "server": {
+          "description": "Server the session was pulled from, so a repo synced against two servers\ncan tell which one owns a given session.",
+          "type": "string"
+        },
+        "tenant": {
+          "description": "Tenant that held the session, when the server named one.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "server",
+        "pulled_at",
+        "lineage_version"
       ],
       "type": "object"
     },

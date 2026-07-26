@@ -3,6 +3,7 @@ mod source;
 
 pub use pipeline::{ImportPipeline, ImportResult, SessionError};
 pub use source::{
-    transcript_writing_unsupported, AgentSource, RenderedTranscript, SessionReader, SessionRef,
+    no_vendor_session_id, resuming_unsupported, transcript_writing_unsupported, AgentSource,
+    RenderedTranscript, ResumeInvocation, SessionReader, SessionRef, SessionResumer,
     TranscriptWriter,
 };

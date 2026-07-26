@@ -174,6 +174,28 @@ pub struct ForkOrigin {
     pub source_repo: Option<String>,
 }
 
+/// Where a session came from when it was not imported on this machine.
+///
+/// A typed field rather than a metadata key for the same reason as
+/// [`ForkOrigin`]: `metadata` merges first-write-wins per key
+/// (`specs/sync-protocol-v0.md`), which silently drops a provenance edge that
+/// cannot be recomputed. This one also has to be read on the *push* path —
+/// a pulled session is excluded from the next batch, because the server it came
+/// from is already its source of truth — and a filter that decides what to
+/// upload should not key off a string every caller has to remember.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct PullOrigin {
+    /// Server the session was pulled from, so a repo synced against two servers
+    /// can tell which one owns a given session.
+    pub server: String,
+    /// Tenant that held the session, when the server named one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tenant: Option<String>,
+    pub pulled_at: DateTime<Utc>,
+    /// Version of lineage that wrote the marker, matching `ForkOrigin`.
+    pub lineage_version: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct Conversation {
     pub schema_version: String,
@@ -189,6 +211,11 @@ pub struct Conversation {
     /// with no `fork_origin` is a harness-spawned branch (sidechain/subagent).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fork_origin: Option<ForkOrigin>,
+    /// Set only on a session this machine pulled rather than imported. Read by
+    /// the push path to skip re-uploading it; a *fork* of a pulled session
+    /// carries `fork_origin` and no `pull_origin`, so it still pushes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pull_origin: Option<PullOrigin>,
     #[serde(default)]
     pub private: bool,
     pub turns: Vec<Turn>,
@@ -209,6 +236,7 @@ impl Conversation {
             workspace_root: workspace_root.into(),
             parent_session_id: None,
             fork_origin: None,
+            pull_origin: None,
             private: false,
             turns: Vec::new(),
             commit_shas: Vec::new(),

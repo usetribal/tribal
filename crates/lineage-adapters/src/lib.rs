@@ -27,7 +27,10 @@ pub use codex::CodexAdapter;
 #[cfg(feature = "cursor")]
 pub use cursor::CursorAdapter;
 
-use lineage_agent::{AgentSource, RenderedTranscript, SessionReader, TranscriptWriter};
+use lineage_agent::{
+    AgentSource, RenderedTranscript, ResumeInvocation, SessionReader, SessionResumer,
+    TranscriptWriter,
+};
 use lineage_core::AgentKind;
 
 pub trait ErasedAdapter: Send + Sync {
@@ -44,13 +47,21 @@ pub trait ErasedAdapter: Send + Sync {
         &self,
         conversation: &lineage_core::Conversation,
     ) -> lineage_core::Result<RenderedTranscript>;
+    /// Errors for Cursor, and for any session carrying no vendor id. Kept on the
+    /// erased trait for the same reason as `render_transcript`: a caller holding
+    /// `Box<dyn ErasedAdapter>` gets the explicit refusal instead of having to
+    /// know which concrete adapter can reopen a session.
+    fn resume_invocation(
+        &self,
+        conversation: &lineage_core::Conversation,
+    ) -> lineage_core::Result<ResumeInvocation>;
 }
 
 struct ErasedAdapterImpl<A>(A);
 
 impl<A> ErasedAdapter for ErasedAdapterImpl<A>
 where
-    A: AgentSource + SessionReader + TranscriptWriter + Send + Sync,
+    A: AgentSource + SessionReader + TranscriptWriter + SessionResumer + Send + Sync,
 {
     fn agent(&self) -> AgentKind {
         self.0.agent()
@@ -72,6 +83,13 @@ where
         conversation: &lineage_core::Conversation,
     ) -> lineage_core::Result<RenderedTranscript> {
         self.0.render_transcript(conversation)
+    }
+
+    fn resume_invocation(
+        &self,
+        conversation: &lineage_core::Conversation,
+    ) -> lineage_core::Result<ResumeInvocation> {
+        self.0.resume_invocation(conversation)
     }
 }
 
@@ -125,5 +143,67 @@ mod tests {
             );
             assert!(err.to_string().contains("unsupported"));
         }
+    }
+
+    /// Resuming and transcript writing are separate capabilities: Codex can
+    /// reopen a session it already holds but cannot be handed a written one. A
+    /// test that only checked "claude yes, everything else no" would pass on an
+    /// implementation that collapsed the two.
+    #[test]
+    fn resume_capability_is_independent_of_transcript_writing() {
+        let mut conversation = lineage_core::Conversation::new(AgentKind::Codex, "/tmp");
+        conversation.metadata.insert(
+            "codex_session_id".into(),
+            serde_json::Value::String("codex-abc".into()),
+        );
+
+        let adapters = all_adapters(std::path::Path::new("/tmp"));
+        let codex = adapters
+            .iter()
+            .find(|(kind, _)| *kind == AgentKind::Codex)
+            .map(|(_, adapter)| adapter)
+            .expect("codex adapter is compiled in");
+
+        assert!(codex.render_transcript(&conversation).is_err());
+        assert_eq!(
+            codex.resume_invocation(&conversation).unwrap().command,
+            "codex resume codex-abc"
+        );
+    }
+
+    #[test]
+    fn an_adapter_that_cannot_resume_declines_by_name() {
+        let conversation = lineage_core::Conversation::new(AgentKind::Cursor, "/tmp");
+        let adapters = all_adapters(std::path::Path::new("/tmp"));
+        let cursor = adapters
+            .iter()
+            .find(|(kind, _)| *kind == AgentKind::Cursor)
+            .map(|(_, adapter)| adapter)
+            .expect("cursor adapter is compiled in");
+
+        let err = cursor
+            .resume_invocation(&conversation)
+            .expect_err("cursor sessions cannot be reopened from an id");
+        assert!(err.to_string().contains("cursor"), "{err}");
+        assert!(err.to_string().contains("unsupported"), "{err}");
+    }
+
+    /// A session with no vendor id has to fail differently from an agent that
+    /// cannot resume at all: the user's next move is `git lineage fork`, not
+    /// "give up on this harness".
+    #[test]
+    fn a_session_without_a_vendor_id_points_at_fork_instead() {
+        let conversation = lineage_core::Conversation::new(AgentKind::Claude, "/tmp");
+        let adapters = all_adapters(std::path::Path::new("/tmp"));
+        let claude = adapters
+            .iter()
+            .find(|(kind, _)| *kind == AgentKind::Claude)
+            .map(|(_, adapter)| adapter)
+            .expect("claude adapter is compiled in");
+
+        let err = claude
+            .resume_invocation(&conversation)
+            .expect_err("nothing on this machine to reopen");
+        assert!(err.to_string().contains("git lineage fork"), "{err}");
     }
 }

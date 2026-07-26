@@ -67,6 +67,7 @@ pub fn assemble_batch(
     conversations: Vec<Conversation>,
 ) -> Result<SyncBatch, LineageError> {
     let binding = resolve_repo_binding(repo, remote)?;
+    let conversations = drop_pulled(conversations);
     let synced_ids: BTreeSet<String> = conversations.iter().map(|c| c.id.to_string()).collect();
 
     let mut batch = SyncBatch::new(binding);
@@ -75,6 +76,22 @@ pub fn assemble_batch(
     batch.session_commit_links = collect_session_commit_links(repo, &synced_ids)?;
     batch.conversations = conversations;
     Ok(batch)
+}
+
+/// Drops sessions this machine pulled from a server: that server already holds
+/// them, so re-pushing spends bandwidth on a no-op and attributes the upload to
+/// whoever pulled rather than whoever wrote it.
+///
+/// The test is each conversation's *own* `pull_origin` and nothing else. Do not
+/// make this transitive by walking `parent_session_id` or `fork_origin` up to a
+/// pulled ancestor: a fork of a pulled session is a new session that this
+/// machine's user owns and is the only copy of, so excluding it would mean
+/// their continuation of a teammate's work never reaches the server at all.
+fn drop_pulled(conversations: Vec<Conversation>) -> Vec<Conversation> {
+    conversations
+        .into_iter()
+        .filter(|conv| conv.pull_origin.is_none())
+        .collect()
 }
 
 /// One manifest entry per LFS object referenced by a synced conversation. The

@@ -8,5 +8,7 @@ pub mod fork_cmd;
 pub mod hooks_cmd;
 pub mod init_cmd;
 pub mod progress;
+pub mod pull_cmd;
+pub mod resume_cmd;
 pub mod retrieval_cmd;
 pub mod skill_cmd;

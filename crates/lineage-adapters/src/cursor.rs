@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
 use lineage_agent::{
-    transcript_writing_unsupported, AgentSource, RenderedTranscript, SessionReader, SessionRef,
-    TranscriptWriter,
+    resuming_unsupported, transcript_writing_unsupported, AgentSource, RenderedTranscript,
+    ResumeInvocation, SessionReader, SessionRef, SessionResumer, TranscriptWriter,
 };
 use lineage_core::{
     derive_session_id, AgentKind, Conversation, LineageError, LineageId, Role, Turn,
@@ -154,6 +154,7 @@ impl SessionReader for CursorAdapter {
             workspace_root: self.workspace_root.display().to_string(),
             parent_session_id: None,
             fork_origin: None,
+            pull_origin: None,
             private: false,
             turns: Vec::new(),
             commit_shas: Vec::new(),
@@ -252,6 +253,19 @@ impl TranscriptWriter for CursorAdapter {
         _conversation: &Conversation,
     ) -> Result<RenderedTranscript, LineageError> {
         Err(transcript_writing_unsupported(AgentKind::Cursor))
+    }
+}
+
+impl SessionResumer for CursorAdapter {
+    /// This adapter reads the IDE session store, and the id it records from
+    /// there is not the id `cursor-agent --resume` resolves — that reads the
+    /// separate CLI store. Handing the IDE id to the CLI would produce a
+    /// command that fails at a distance, which is worse than declining here.
+    fn resume_invocation(
+        &self,
+        _conversation: &Conversation,
+    ) -> Result<ResumeInvocation, LineageError> {
+        Err(resuming_unsupported(AgentKind::Cursor))
     }
 }
 

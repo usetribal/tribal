@@ -4,12 +4,15 @@ use std::path::{Path, PathBuf};
 use crate::citations::enrich_turn_with_citations;
 use crate::claude_transcript::render_claude_transcript;
 use crate::content::{enrich_turn_with_images, extract_claude_content};
-use crate::metadata::{finalize_session_metadata, insert_str, normalize_model};
+use crate::metadata::{finalize_session_metadata, insert_str, normalize_model, vendor_session_id};
 use crate::path_util::{
     claude_project_dir, claude_project_key, paths_match_workspace, workspace_is_under_cwd,
 };
 use chrono::{DateTime, Utc};
-use lineage_agent::{AgentSource, RenderedTranscript, SessionReader, SessionRef, TranscriptWriter};
+use lineage_agent::{
+    no_vendor_session_id, AgentSource, RenderedTranscript, ResumeInvocation, SessionReader,
+    SessionRef, SessionResumer, TranscriptWriter,
+};
 use lineage_core::{
     derive_session_id, AgentKind, Conversation, LineageError, LineageId, Role, Turn,
     CONVERSATION_SCHEMA,
@@ -23,6 +26,10 @@ const SKIP_TYPES: &[&str] = &[
     "summary",
     "system",
 ];
+
+/// The metadata key this adapter records Claude's own session id under. Named so
+/// the import that writes it and the resume that reads it cannot drift apart.
+const SESSION_ID_KEY: &str = "claude_session_id";
 
 pub struct ClaudeAdapter {
     workspace_root: PathBuf,
@@ -148,6 +155,7 @@ impl SessionReader for ClaudeAdapter {
             workspace_root: self.workspace_root.display().to_string(),
             parent_session_id: None,
             fork_origin: None,
+            pull_origin: None,
             private: false,
             turns: Vec::new(),
             commit_shas: Vec::new(),
@@ -296,7 +304,7 @@ impl SessionReader for ClaudeAdapter {
             }
         }
 
-        insert_str(&mut conversation.metadata, "claude_session_id", session_id);
+        insert_str(&mut conversation.metadata, SESSION_ID_KEY, session_id);
         insert_str(
             &mut conversation.metadata,
             "claude_code_version",
@@ -322,6 +330,22 @@ impl TranscriptWriter for ClaudeAdapter {
             &home,
             &self.workspace_root,
         ))
+    }
+}
+
+impl SessionResumer for ClaudeAdapter {
+    fn resume_invocation(
+        &self,
+        conversation: &Conversation,
+    ) -> Result<ResumeInvocation, LineageError> {
+        let session_id = vendor_session_id(conversation, SESSION_ID_KEY)
+            .ok_or_else(|| no_vendor_session_id(AgentKind::Claude))?;
+        Ok(ResumeInvocation {
+            command: format!("claude --resume {session_id}"),
+            // Claude derives the project key from the launch directory, so the
+            // same id resolves to nothing from anywhere else.
+            cwd: Some(self.workspace_root.clone()),
+        })
     }
 }
 
