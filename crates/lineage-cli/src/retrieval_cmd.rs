@@ -152,6 +152,54 @@ fn log_route(repo: &lineage_git::LineageRepo, text: &str, decision: &RouteDecisi
     );
 }
 
+/// A traversal verb run goes to the event log under `context_traversal`,
+/// best-effort like every other event write. Without this the four verbs are
+/// the only agent-facing lineage operations that leave no trace: `context log`
+/// and doctor's activity section can show that context was *injected* but not
+/// that the agent went on to follow it, which is the one thing the handle
+/// round-trip makes observable.
+///
+/// `relation` is the abstract verb name from `lineage-retrieval::VERBS`, not the
+/// CLI spelling, so an MCP-issued traversal logs identically to a shelled one.
+fn log_traversal(repo: &lineage_git::LineageRepo, relation: &str, handle: &str, results: usize) {
+    EventLog::for_git_dir(&repo.git_dir()).append(
+        Utc::now(),
+        "context_traversal",
+        Outcome::Ok,
+        serde_json::json!({
+            "relation": relation,
+            "handle": handle,
+            "session_ids": traversal_session_ids(relation, handle),
+            "results": results,
+        }),
+    );
+}
+
+/// The session(s) a traversal addressed, so a consumer can tie it back to an
+/// injection without re-deriving handle syntax.
+///
+/// The shapes differ per verb and none of them is a `session#turn` handle:
+/// `search-within` takes a comma-joined session list, `sessions-for-commit` a
+/// commit sha (no session), and the turn-addressed verbs take a turn id, which
+/// is `{conversation_id}-{turn_index}` — so the session is the part before the
+/// last dash, not a `#` split.
+fn traversal_session_ids(relation: &str, handle: &str) -> Vec<String> {
+    match relation {
+        "search-within" => handle
+            .split(',')
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+            .collect(),
+        "sessions-for-commit" => Vec::new(),
+        _ => match handle.rsplit_once('-') {
+            Some((session_id, turn_index)) if turn_index.chars().all(|c| c.is_ascii_digit()) => {
+                vec![session_id.to_string()]
+            }
+            _ => vec![handle.to_string()],
+        },
+    }
+}
+
 /// The `--timing` route line, e.g.
 /// `route: temporal (anchor README.md, signals: path-token+line-objects-hit)`.
 fn print_route(decision: &RouteDecision) {
@@ -298,6 +346,12 @@ pub fn search_within(
     let repo = open_repo(repo_path)?;
     let index = LineageIndex::open(repo.git_dir().join("lineage").join("index.db"))?;
     let evidence = search_within_sessions(repo.inner(), &index, session_ids, text, limit)?;
+    log_traversal(
+        &repo,
+        "search-within",
+        &session_ids.join(","),
+        evidence.get().len(),
+    );
     print_turn_evidence(
         &format!("search-within {} session(s): {text:?}", session_ids.len()),
         evidence.get(),
@@ -311,6 +365,7 @@ pub fn around(repo_path: &Path, turn_id: &str, radius: u32, limit: usize) -> Res
     let repo = open_repo(repo_path)?;
     let index = LineageIndex::open(repo.git_dir().join("lineage").join("index.db"))?;
     let evidence = turn_neighbourhood(repo.inner(), &index, turn_id, radius, limit)?;
+    log_traversal(&repo, "around", turn_id, evidence.get().len());
     print_turn_evidence(&format!("around {turn_id} (±{radius})"), evidence.get());
     Ok(())
 }
@@ -321,6 +376,9 @@ pub fn produced_by(repo_path: &Path, turn_id: &str, limit: usize) -> Result<()> 
     let repo = open_repo(repo_path)?;
     let index = LineageIndex::open(repo.git_dir().join("lineage").join("index.db"))?;
     let produced = line_objects_of_turn(&index, turn_id, limit)?;
+    // Logged before the empty-result return: an honest-nothing traversal is
+    // still a traversal the agent chose to make.
+    log_traversal(&repo, "produced-by", turn_id, produced.len());
 
     println!("produced-by {turn_id}");
     if produced.is_empty() {
@@ -353,6 +411,12 @@ pub fn sessions_for_commit_cmd(repo_path: &Path, commit_sha: &str, limit: usize)
         .map(|obj| obj.id().to_string())
         .unwrap_or_else(|_| commit_sha.to_string());
     let sessions = sessions_for_commit(repo.inner(), &index, &full_sha, limit)?;
+    log_traversal(
+        &repo,
+        "sessions-for-commit",
+        &full_sha,
+        sessions.get().len(),
+    );
 
     println!("sessions-for-commit {}", short(&full_sha));
     if sessions.get().is_empty() {

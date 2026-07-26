@@ -10,7 +10,7 @@ use lineage_retrieval::{
 use lineage_search::LineageIndex;
 use sha2::{Digest, Sha256};
 
-use crate::digest::{render_digest, select, Trigger};
+use crate::digest::{render_digest, select, turn_handle, Trigger};
 use crate::events::{EventLog, Outcome};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -166,6 +166,11 @@ fn run_claude_hook(repo_path: &Path, input: &str, now_unix: i64) -> Result<Optio
             "file_path": relative_path,
             "harness": HOOK_HARNESS,
             "session_ids": selected.iter().map(|e| e.session_id.as_str()).collect::<Vec<_>>(),
+            // The rendered handles, not just their session ids: a handle is what
+            // a traversal verb is given, so logging it is what lets an agent's
+            // follow-up be tied back to the entry that offered it. Session ids
+            // alone cannot distinguish which turn of a session was injected.
+            "handles": selected.iter().map(|e| turn_handle(e)).collect::<Vec<_>>(),
             "strength": retrieval.strength,
         }),
     );

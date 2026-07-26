@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread;
 
-use lineage_cli::{commands, hooks_cmd, skill_cmd};
+use lineage_cli::{commands, hooks_cmd, retrieval_cmd, skill_cmd};
 use lineage_git::open_repo;
 
 fn init_repo() -> tempfile::TempDir {
@@ -202,6 +202,53 @@ fn sync_records_the_full_server_response_verbatim() {
     assert!(results
         .iter()
         .any(|r| r["status"] == "rejected" && r["reason"] == "invalid"));
+}
+
+/// Traversal is the one agent-facing lineage operation whose whole point is
+/// that it can be tied back to an injection, so the verbs must log even when
+/// they find nothing — an honest-nothing traversal is still one the agent chose
+/// to make.
+#[test]
+fn traversal_verbs_record_the_relation_and_what_it_resolved_to() {
+    let dir = init_repo();
+    install_cursor_fixture(dir.path());
+    commands::init_config(dir.path()).unwrap();
+    commands::import(dir.path(), &["cursor".into()], None, true, false).unwrap();
+    commands::rebuild_index(dir.path(), false).unwrap();
+
+    let repo = open_repo(dir.path()).unwrap();
+    let session_id = lineage_git::list_session_ids(repo.inner()).unwrap()[0].to_string();
+    let turn_id = format!("{session_id}-0");
+
+    retrieval_cmd::search_within(dir.path(), std::slice::from_ref(&session_id), "hello", 5)
+        .unwrap();
+    retrieval_cmd::around(dir.path(), &turn_id, 2, 5).unwrap();
+    retrieval_cmd::produced_by(dir.path(), &turn_id, 5).unwrap();
+
+    let events = read_events(dir.path());
+    let traversals = entries_for(&events, "context_traversal");
+    assert_eq!(traversals.len(), 3, "each verb run appends one entry");
+    for entry in &traversals {
+        assert_schema_valid(entry);
+    }
+
+    let relations: Vec<&str> = traversals
+        .iter()
+        .map(|e| e["detail"]["relation"].as_str().unwrap())
+        .collect();
+    assert_eq!(relations, vec!["search-within", "around", "produced-by"]);
+
+    // The turn-addressed verbs resolve `{session}-{index}` back to the session,
+    // which is the join a consumer needs to reach the injection that offered it.
+    let around = traversals
+        .iter()
+        .find(|e| e["detail"]["relation"] == "around")
+        .unwrap();
+    assert_eq!(around["detail"]["handle"], turn_id.as_str());
+    assert_eq!(
+        around["detail"]["session_ids"],
+        serde_json::json!([session_id])
+    );
 }
 
 #[test]
