@@ -15,12 +15,17 @@ export function vendorSessionId(conv: Conversation): string | undefined {
     );
 }
 
+// Whether to *offer* resume, not whether resume will work — the CLI decides
+// that, and declines by name when it does not. This only avoids showing an
+// action that is certain to fail: without a vendor id there is no session on
+// this machine to reopen, whatever the agent. `agent` is the one vendor fact
+// allowed above the adapter layer (ARCHITECTURE.md invariant 4); Cursor's
+// recorded id belongs to its IDE store, which its resume CLI does not read.
 export function canResumeSession(conv: Conversation): boolean {
-    const agent = conv.agent.toLowerCase();
-    const vendorId = vendorSessionId(conv);
-    if (!vendorId) {
+    if (!vendorSessionId(conv)) {
         return false;
     }
+    const agent = conv.agent.toLowerCase();
     return agent === "claude" || agent === "codex";
 }
 
@@ -35,36 +40,18 @@ export function canForkSession(conv: Conversation): boolean {
     return conv.agent.toLowerCase() === "claude";
 }
 
-function runInWorkspaceTerminal(workspaceRoot: string, title: string, command: string): void {
-    const terminal = vscode.window.createTerminal({
-        name: title,
-        cwd: workspaceRoot,
-    });
-    terminal.show(true);
-    terminal.sendText(command, true);
-}
-
-export async function resumeAgentSession(conv: Conversation, workspaceRoot: string): Promise<void> {
-    const agent = conv.agent.toLowerCase();
-    const vendorId = vendorSessionId(conv);
-    if (!vendorId) {
-        throw new Error(`No ${agent} session id available to resume`);
-    }
-
-    let command: string | undefined;
-    switch (agent) {
-        case "claude":
-            command = `claude --resume ${shellQuote(vendorId)}`;
-            break;
-        case "codex":
-            command = `codex resume ${shellQuote(vendorId)}`;
-            break;
-        default:
-            throw new Error(`Resume is not supported for ${agent} sessions yet`);
-    }
-
-    runInWorkspaceTerminal(workspaceRoot, "Lineage: Resume", command);
-    vscode.window.setStatusBarMessage(`Lineage: resuming ${agent} session`, 3000);
+// Resume is `git lineage resume`, entire — the same arrangement as fork below,
+// and for the same reason. The extension knows no harness verb, no flag, and no
+// id convention (ARCHITECTURE.md invariant 4); it runs the command and shows
+// what the command said.
+//
+// It no longer sends the command to a terminal for the user. Resume reopens a
+// live session, and which shell that lands in is the user's decision. Showing
+// the command also puts the directory it must be run from on screen, which a
+// terminal spawned at the workspace root quietly assumed.
+export async function resumeAgentSession(client: LineageClient, sessionId: string): Promise<void> {
+    const output = await client.resume(sessionId);
+    await showCliOutput(output);
 }
 
 // Forking is `git lineage fork`, entire. The extension holds no fork logic: it
@@ -82,16 +69,13 @@ export async function resumeAgentSession(conv: Conversation, workspaceRoot: stri
 // than have happen.
 export async function forkAgentSession(client: LineageClient, sessionId: string): Promise<void> {
     const output = await client.fork(sessionId);
+    await showCliOutput(output);
+}
+
+async function showCliOutput(output: string): Promise<void> {
     const doc = await vscode.workspace.openTextDocument({
         content: output,
         language: "plaintext",
     });
     await vscode.window.showTextDocument(doc, { preview: false });
-}
-
-function shellQuote(value: string): string {
-    if (/^[a-zA-Z0-9._-]+$/.test(value)) {
-        return value;
-    }
-    return `'${value.replace(/'/g, `'\\''`)}'`;
 }

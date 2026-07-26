@@ -13,8 +13,8 @@ pub use config::{
 };
 pub use conversation_util::{
     conversation_modified_code, enriched_indexable_body, files_touched, files_written,
-    generate_architecture_summary, session_chunks, turn_indexable_text, SessionChunk,
-    DEFAULT_CHUNK_MAX_CHARS,
+    generate_architecture_summary, merge_commit_shas, merge_ended_at, session_chunks,
+    turn_indexable_text, SessionChunk, DEFAULT_CHUNK_MAX_CHARS,
 };
 pub use error::{LineageError, Result};
 pub use ids::{derive_line_object_id, derive_session_id, LineageId};
@@ -29,6 +29,6 @@ pub use sync::{
 };
 pub use types::{
     AgentKind, Artifact, ArtifactKind, ArtifactResolve, Confidence, Conversation, ForkOrigin,
-    GitNote, LineObject, LineageManifest, ResolveStrategy, Role, SessionIndex, ToolCall, Turn,
-    CONVERSATION_SCHEMA, GIT_NOTES_SCHEMA, LINE_OBJECT_SCHEMA,
+    GitNote, LineObject, LineageManifest, PullOrigin, ResolveStrategy, Role, SessionIndex,
+    ToolCall, Turn, CONVERSATION_SCHEMA, GIT_NOTES_SCHEMA, LINE_OBJECT_SCHEMA,
 };

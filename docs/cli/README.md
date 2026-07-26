@@ -171,6 +171,7 @@ injections), so read it from `.git/lineage/events.jsonl` directly.
 |---------|-------------|
 | `git lineage login --server URL` | Sign in to a Lineage server (browser device flow) |
 | `git lineage sync [--server URL] [--token TOKEN] [--remote origin]` | Push redacted sessions to a Lineage server |
+| `git lineage pull [--server URL] [--token TOKEN] [--remote origin] [--dry-run]` | Pull teammates' sessions down from a Lineage server (see [Pull teammates' sessions](#pull-teammates-sessions)) |
 
 `login` prints a verification URL and code, waits for the browser approval, and
 stores an opaque session handle in `~/.config/lineage/credentials.json` (0600;
@@ -214,6 +215,68 @@ See [Git hooks](../git-hooks.md).
 See [Maintenance](../maintenance.md) and [Privacy](../privacy.md).
 
 ---
+
+## Pull teammates' sessions
+
+`git lineage pull` brings sessions your teammates have synced down into this
+repository's lineage refs, so `list`, `show`, `search`, and `fork` see them the
+same as sessions you imported yourself.
+
+```bash
+git lineage pull
+```
+
+```text
+https://api.uselineage.io/api has 3 conversation(s) this repository is missing or behind on (2 new, 1 grown).
+Wrote 3 session(s):
+    01HQZX8K9V2M3N4P5Q6R7S8T9U
+    01HQZW1A2B3C4D5E6F7G8H9J0K
+    01HQZV7J8U1L2M3N4P5Q6R7S8T
+
+Pull never deletes: sessions the server did not mention are untouched,
+and turns you already had were kept as they were.
+
+`git lineage list` shows them; `git lineage fork <id>` continues one.
+```
+
+`--dry-run` reports what would arrive and writes nothing. `--server`, `--token`,
+and `--remote` resolve exactly as they do for `sync`.
+
+Two round-trips, not one. `pull` first sends a digest of what this repository
+already holds — one `{conversationId, turnCount, endedAt}` entry per stored
+session — and the server answers with the ids that differ; a second call fetches
+those conversations with their turns. The cursor is that content digest rather
+than a sequence number or an `updated_at` watermark, so there is no gapless
+counter to get wrong under concurrency and no clock to trust.
+
+Merge rules, mirroring the push write rules in
+[sync-protocol-v0](../../specs/sync-protocol-v0.md) so the two compose:
+
+- **Pull never deletes.** A session the server does not mention is left exactly
+  as it is. You may hold sessions you have never pushed, and reconciling by
+  deletion would destroy unsynced local work.
+- **Turns are immutable**, so a turn you already have is kept as it is and a
+  second identical pull writes nothing at all.
+- **Container fields merge monotonically**: `commit_shas` is a set union,
+  `ended_at` takes the later time, the turn set grows and never shrinks, and
+  `metadata` is first-write-wins per key. Nothing your local copy knows is lost
+  by pulling — including a local copy that is *ahead* of the server's.
+- **`pull_origin` is first-write-wins.** A session already marked keeps the
+  marker it had; re-pulling does not restamp it.
+
+Notes:
+
+- Pulled sessions carry `pull_origin` (server, when, lineage version) so the
+  push path can skip re-uploading them — the server they came from is already
+  their source of truth. A **fork of** a pulled session is yours and does push.
+- A commit sha naming history this checkout has not fetched is dropped rather
+  than failing the pull. Run `git fetch` and pull again; the union merge adds it
+  then.
+- Turns arrive as text. Tool calls and edit artifacts are not on the pull wire
+  yet, so a pulled session has no line objects of its own — `fork` renders tool
+  activity as prose regardless, so it still reads as history.
+- Private sessions are never emitted by the server, so nothing that arrives here
+  needs re-filtering.
 
 ## Fork a session
 
@@ -271,6 +334,40 @@ Notes:
 - A session with nothing replayable (all system turns, or content redacted away
   at import) is refused here rather than written out as an empty transcript the
   harness would later reject as "session not found".
+
+## Resume a session
+
+`git lineage resume <session-id>` reopens one of *your own* sessions in the agent
+that produced it. Where fork writes a new session out of stored turns, resume
+writes nothing at all — it names a session your harness still holds:
+
+```bash
+git lineage resume 01HQZX8K9V2M3N4P5Q6R7S8T9U
+```
+
+```text
+claude session 01HQZX8K9V2M3N4P5Q6R7S8T9U
+
+To reopen it, run this from /home/bob/src/app:
+
+    claude --resume 019f9d91-3f94-48f4-8cbf-663330ac0cee
+
+This is the original session, not a copy: continuing it adds to its history.
+To continue someone else's work as your own instead, use `git lineage fork`.
+```
+
+Notes:
+
+- The command is printed, not run — same reasoning as fork.
+- **Use `fork` for a session that is not on this machine.** A teammate's session
+  carries no vendor id here, so there is nothing to reopen; resume says so and
+  points at fork.
+- Claude Code and Codex resume; Cursor declines by name, because the id lineage
+  records comes from its IDE store and `cursor-agent --resume` reads a separate
+  CLI store. See [Resume and fork](../resume-and-fork.md).
+- Whether a directory matters is the harness's business: Claude derives a project
+  key from the launch directory, so its output names one; Codex resolves by id
+  from anywhere, so its output does not.
 
 ## Session metadata
 

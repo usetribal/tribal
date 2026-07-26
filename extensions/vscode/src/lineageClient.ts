@@ -120,6 +120,10 @@ export class LineageClient {
         return this.run(["fork", id]);
     }
 
+    async resume(id: string): Promise<string> {
+        return this.run(["resume", id]);
+    }
+
     async installHook(): Promise<string> {
         return this.run(["install-hook"]);
     }

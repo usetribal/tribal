@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use lineage_cli::{
-    commands, context_cmd, digest, doctor_cmd, fork_cmd, hooks_cmd, init_cmd, retrieval_cmd,
-    skill_cmd,
+    commands, context_cmd, digest, doctor_cmd, fork_cmd, hooks_cmd, init_cmd, pull_cmd, resume_cmd,
+    retrieval_cmd, skill_cmd,
 };
 use lineage_retrieval::{DEFAULT_AROUND_RADIUS, DEFAULT_TRAVERSAL_LIMIT};
 use std::process::ExitCode;
@@ -117,6 +117,18 @@ enum Commands {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Reopen one of your own sessions in the agent that produced it
+    ///
+    /// Prints the command that reopens a session your harness still holds. This
+    /// is the original session continued, not a copy — nothing is written and no
+    /// new session is recorded.
+    ///
+    /// Use `fork` instead for a session that is not on this machine, such as a
+    /// teammate's: there is nothing here to reopen, so it has to be written out.
+    Resume {
+        /// Session to reopen (`git lineage list` shows what is here)
+        session_id: String,
+    },
     /// Show lineage for a file line
     Blame {
         /// Path with optional :line suffix (e.g. src/main.rs:42)
@@ -165,6 +177,24 @@ enum Commands {
         /// Git remote whose URL identifies the repo to the server
         #[arg(long, default_value = "origin")]
         remote: String,
+    },
+    /// Pull teammates' sessions down from a Lineage server
+    ///
+    /// Never deletes: sessions the server does not mention are left alone, and
+    /// turns you already have are kept as they are.
+    Pull {
+        /// Server base URL; defaults to the server stored by `login`
+        #[arg(long)]
+        server: Option<String>,
+        /// Bearer token; falls back to LINEAGE_TOKEN, then the stored login
+        #[arg(long)]
+        token: Option<String>,
+        /// Git remote whose URL identifies the repo to the server
+        #[arg(long, default_value = "origin")]
+        remote: String,
+        /// Report what would be pulled without writing anything
+        #[arg(long)]
+        dry_run: bool,
     },
     /// Search indexed sessions
     Search { query: String },
@@ -438,6 +468,7 @@ fn main() -> ExitCode {
             session_id,
             dry_run,
         } => fork_cmd::fork(&repo_path, &session_id, dry_run),
+        Commands::Resume { session_id } => resume_cmd::resume(&repo_path, &session_id),
         Commands::Blame { target, json } => commands::blame(&repo_path, &target, json),
         Commands::InstallHook { force } => hooks_cmd::install_hook(&repo_path, force),
         Commands::UninstallHook => hooks_cmd::uninstall_hook(&repo_path),
@@ -551,6 +582,18 @@ fn main() -> ExitCode {
             token,
             remote,
         } => commands::sync(&repo_path, server.as_deref(), token.as_deref(), &remote),
+        Commands::Pull {
+            server,
+            token,
+            remote,
+            dry_run,
+        } => pull_cmd::pull(
+            &repo_path,
+            server.as_deref(),
+            token.as_deref(),
+            &remote,
+            dry_run,
+        ),
         Commands::Search { query } => commands::search(&repo_path, &query),
         Commands::Rebuild { target, embed } => match target {
             None => commands::rebuild(&repo_path, embed),

@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
 use lineage_agent::{
-    transcript_writing_unsupported, AgentSource, RenderedTranscript, SessionReader, SessionRef,
-    TranscriptWriter,
+    no_vendor_session_id, transcript_writing_unsupported, AgentSource, RenderedTranscript,
+    ResumeInvocation, SessionReader, SessionRef, SessionResumer, TranscriptWriter,
 };
 use lineage_core::{
     derive_session_id, AgentKind, Artifact, Conversation, LineageError, LineageId, Role, ToolCall,
@@ -17,8 +17,12 @@ use walkdir::WalkDir;
 
 use crate::citations::enrich_turn_with_citations;
 use crate::content::{artifacts_from_tool_input, enrich_turn_with_images, extract_text_content};
-use crate::metadata::{finalize_session_metadata, insert_str, normalize_model};
+use crate::metadata::{finalize_session_metadata, insert_str, normalize_model, vendor_session_id};
 use crate::path_util::paths_match_workspace;
+
+/// The metadata key this adapter records Codex's own session id under. Named so
+/// the import that writes it and the resume that reads it cannot drift apart.
+const SESSION_ID_KEY: &str = "codex_session_id";
 
 pub struct CodexAdapter {
     workspace_root: PathBuf,
@@ -126,6 +130,7 @@ impl SessionReader for CodexAdapter {
                 .unwrap_or_else(|| self.workspace_root.display().to_string()),
             parent_session_id: None,
             fork_origin: None,
+            pull_origin: None,
             private: false,
             turns: parsed.turns,
             commit_shas: Vec::new(),
@@ -135,7 +140,7 @@ impl SessionReader for CodexAdapter {
                     Value::String(session.source_path.display().to_string()),
                 ),
                 (
-                    "codex_session_id".into(),
+                    SESSION_ID_KEY.into(),
                     Value::String(meta.session_id.unwrap_or_default()),
                 ),
             ])
@@ -550,6 +555,25 @@ impl TranscriptWriter for CodexAdapter {
         _conversation: &Conversation,
     ) -> Result<RenderedTranscript, LineageError> {
         Err(transcript_writing_unsupported(AgentKind::Codex))
+    }
+}
+
+/// Codex can reopen a session it already holds even though it cannot be handed a
+/// written one — which is why resuming and transcript writing are separate
+/// capabilities rather than one "can be continued" flag.
+impl SessionResumer for CodexAdapter {
+    fn resume_invocation(
+        &self,
+        conversation: &Conversation,
+    ) -> Result<ResumeInvocation, LineageError> {
+        let session_id = vendor_session_id(conversation, SESSION_ID_KEY)
+            .ok_or_else(|| no_vendor_session_id(AgentKind::Codex))?;
+        Ok(ResumeInvocation {
+            command: format!("codex resume {session_id}"),
+            // Codex keys its rollout files by id under a single state directory,
+            // so the id resolves from wherever the user happens to be.
+            cwd: None,
+        })
     }
 }
 

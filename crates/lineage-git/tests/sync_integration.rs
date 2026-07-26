@@ -1,6 +1,9 @@
 use std::process::Command;
 
-use lineage_core::{AgentKind, Artifact, ArtifactKind, Conversation, LineageId, Role, Turn};
+use chrono::Utc;
+use lineage_core::{
+    AgentKind, Artifact, ArtifactKind, Conversation, LineageId, PullOrigin, Role, Turn,
+};
 use lineage_git::{assemble_batch, open_repo, persist_conversation, LineageRepo};
 
 fn init_test_repo() -> tempfile::TempDir {
@@ -144,4 +147,95 @@ fn excludes_line_objects_of_unsynced_sessions() {
         .session_commit_links
         .iter()
         .any(|l| l.conversation_id == private.id),);
+}
+
+fn mark_pulled(conv: &mut Conversation) {
+    conv.pull_origin = Some(PullOrigin {
+        server: "https://lineage.example".into(),
+        tenant: Some("acme".into()),
+        pulled_at: Utc::now(),
+        lineage_version: "0.0.0-test".into(),
+    });
+}
+
+#[test]
+fn excludes_pulled_sessions_and_keeps_locally_imported_ones() {
+    let tmp = init_test_repo();
+    let repo = open_repo(tmp.path()).unwrap();
+    let sha = head_sha(&repo);
+
+    let mut pulled = seed_conversation(&repo, &sha, false);
+    mark_pulled(&mut pulled);
+    let local = seed_conversation(&repo, &sha, false);
+
+    let batch =
+        assemble_batch(repo.inner(), "origin", vec![pulled.clone(), local.clone()]).unwrap();
+
+    assert!(
+        !batch.conversations.iter().any(|c| c.id == pulled.id),
+        "a session pulled from a server must not be pushed back to it"
+    );
+    assert!(
+        batch.conversations.iter().any(|c| c.id == local.id),
+        "a locally imported session still pushes"
+    );
+    assert!(
+        batch
+            .line_objects
+            .iter()
+            .all(|lo| lo.conversation_id == local.id),
+        "dependents of the pulled session are dropped with it"
+    );
+}
+
+/// Regression: Bob pulls Alice's session, then forks it. The fork is Bob's own
+/// new session and the server has never seen it, so it must push even though its
+/// parent was pulled.
+#[test]
+fn includes_a_fork_of_a_pulled_session() {
+    let tmp = init_test_repo();
+    let repo = open_repo(tmp.path()).unwrap();
+    let sha = head_sha(&repo);
+
+    let mut pulled = seed_conversation(&repo, &sha, false);
+    mark_pulled(&mut pulled);
+
+    let mut fork = Conversation::fork_from(&pulled, "bob-handle".into());
+    fork.commit_shas.push(sha.to_string());
+    persist_conversation(repo.inner(), &fork).unwrap();
+
+    assert!(fork.pull_origin.is_none(), "a fork is not itself pulled");
+
+    let batch = assemble_batch(repo.inner(), "origin", vec![pulled.clone(), fork.clone()]).unwrap();
+
+    let pushed = batch
+        .conversations
+        .iter()
+        .find(|c| c.id == fork.id)
+        .expect("the fork of a pulled session is the forker's own work and must push");
+    assert_eq!(
+        pushed.fork_origin.as_ref().map(|o| &o.source_session_id),
+        Some(&pulled.id),
+        "the fork edge back to the pulled parent survives assembly"
+    );
+    assert!(!batch.conversations.iter().any(|c| c.id == pulled.id));
+}
+
+#[test]
+fn an_all_pulled_batch_assembles_empty_rather_than_failing() {
+    let tmp = init_test_repo();
+    let repo = open_repo(tmp.path()).unwrap();
+    let sha = head_sha(&repo);
+
+    let mut first = seed_conversation(&repo, &sha, false);
+    let mut second = seed_conversation(&repo, &sha, false);
+    mark_pulled(&mut first);
+    mark_pulled(&mut second);
+
+    let batch = assemble_batch(repo.inner(), "origin", vec![first, second]).unwrap();
+
+    assert!(batch.conversations.is_empty());
+    assert!(batch.line_objects.is_empty());
+    assert!(batch.session_commit_links.is_empty());
+    assert!(batch.blobs.is_empty());
 }
