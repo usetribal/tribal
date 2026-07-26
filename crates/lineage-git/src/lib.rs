@@ -71,8 +71,9 @@ pub use refs::{
 pub use remap::{remap_orphaned_commits, RemapReport};
 pub use repo::{find_repo, open_repo, repo_paths, repo_paths_for_conversation, LineageRepo};
 pub use sync::{
-    assemble_batch, normalize_remote_url, resolve_repo_binding, sync_push, SyncOutcome, SyncReport,
-    SERVER_REPO_ID_KEY,
+    assemble_batch, chunk_batch, normalize_remote_url, resolve_repo_binding, sync_push,
+    sync_push_with_progress, SyncOutcome, SyncReport, SERVER_REPO_ID_KEY,
+    SYNC_CONVERSATIONS_PER_CHUNK,
 };
 pub use write::{
     link_session_to_commit, materialize_session_at_commit, persist_conversation, persist_import,

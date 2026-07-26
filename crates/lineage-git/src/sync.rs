@@ -16,7 +16,7 @@ use std::time::Duration;
 use git2::Repository;
 use lineage_core::{
     BlobManifestEntry, Conversation, GitNote, LineObject, LineageError, LineageId, RepoBinding,
-    SessionCommitLink, SyncBatch, SyncResponse,
+    SessionCommitLink, SyncBatch, SyncResponse, SYNC_RESPONSE_SCHEMA,
 };
 use lineage_store::{normalize_oid, LfsStore};
 
@@ -27,6 +27,11 @@ use crate::refs::{read_line_object, LINEAGE_NOTES_REF};
 const SYNC_TIMEOUT: Duration = Duration::from_secs(120);
 const LINE_OBJECT_REF_PREFIX: &str = "refs/lineage/lines/";
 
+/// Conversations per `POST /v0/sync`. One HTTP request / DB transaction per
+/// chunk so a mid-run timeout leaves earlier chunks committed (sync never
+/// deletes; retrying resends the whole set idempotently).
+pub const SYNC_CONVERSATIONS_PER_CHUNK: usize = 10;
+
 /// Local git-config key caching the server-issued repo id, so subsequent syncs
 /// can send it back as `repo.server_repo_id`. Not committed — avoids a fork
 /// inheriting the parent's binding (sync-protocol-v0 "Repo binding").
@@ -36,6 +41,7 @@ pub const SERVER_REPO_ID_KEY: &str = "lineage.serverRepoId";
 pub struct SyncReport {
     pub repo_id: String,
     pub blobs_uploaded: usize,
+    pub chunks: usize,
     pub accepted: usize,
     pub noop: usize,
     pub rejected: usize,
@@ -225,30 +231,99 @@ fn root_commit_sha(repo: &Repository) -> Result<String, LineageError> {
     Ok(commit.id().to_string())
 }
 
+/// Splits an assembled batch into conversation-scoped chunks. Each chunk carries
+/// that subset's line objects and commit links; blob manifests stay on the first
+/// chunk only (bytes are uploaded once before any POST).
+pub fn chunk_batch(batch: &SyncBatch, max_conversations: usize) -> Vec<SyncBatch> {
+    let max = max_conversations.max(1);
+    if batch.conversations.is_empty() {
+        return vec![batch.clone()];
+    }
+
+    let mut chunks: Vec<SyncBatch> = batch
+        .conversations
+        .chunks(max)
+        .map(|convs| {
+            let ids: BTreeSet<String> = convs.iter().map(|c| c.id.to_string()).collect();
+            let mut chunk = SyncBatch::new(batch.repo.clone());
+            chunk.conversations = convs.to_vec();
+            chunk.line_objects = batch
+                .line_objects
+                .iter()
+                .filter(|line| ids.contains(&line.conversation_id.to_string()))
+                .cloned()
+                .collect();
+            chunk.session_commit_links = batch
+                .session_commit_links
+                .iter()
+                .filter(|link| ids.contains(&link.conversation_id.to_string()))
+                .cloned()
+                .collect();
+            chunk
+        })
+        .collect();
+
+    if let Some(first) = chunks.first_mut() {
+        first.blobs = batch.blobs.clone();
+    }
+    chunks
+}
+
 /// Pushes an assembled batch: uploads referenced blobs first (idempotent), POSTs
-/// the batch, caches the returned `repo_id`, and tallies per-object results.
+/// conversation-sized chunks, caches the returned `repo_id`, and tallies results.
 pub fn sync_push(
     repo: &Repository,
     server_url: &str,
     token: &str,
     batch: &SyncBatch,
 ) -> Result<SyncOutcome, LineageError> {
+    sync_push_with_progress(repo, server_url, token, batch, |_, _| {})
+}
+
+/// Like [`sync_push`], calling `on_chunk(done, total)` after each successful POST
+/// (`done` is 1-based).
+pub fn sync_push_with_progress(
+    repo: &Repository,
+    server_url: &str,
+    token: &str,
+    batch: &SyncBatch,
+    mut on_chunk: impl FnMut(usize, usize),
+) -> Result<SyncOutcome, LineageError> {
     let base = server_url.trim_end_matches('/');
     let lfs = LfsStore::new(repo.path());
+    let chunks = chunk_batch(batch, SYNC_CONVERSATIONS_PER_CHUNK);
 
-    let mut report = SyncReport::default();
+    let mut report = SyncReport {
+        chunks: chunks.len(),
+        ..SyncReport::default()
+    };
     for entry in &batch.blobs {
         let data = lfs.get(&entry.sha256)?;
         put_blob(base, token, &entry.sha256, &data)?;
         report.blobs_uploaded += 1;
     }
 
-    let response = post_batch(base, token, batch)?;
-    tally(&response, &mut report);
-    report.repo_id = response.repo_id.clone();
+    let mut merged_results = Vec::new();
+    let mut repo_id = String::new();
+    for (index, chunk) in chunks.iter().enumerate() {
+        let response = post_batch(base, token, chunk)?;
+        tally(&response, &mut report);
+        repo_id = response.repo_id.clone();
+        merged_results.extend(response.results);
+        on_chunk(index + 1, chunks.len());
+    }
+    report.repo_id = repo_id.clone();
 
-    write_git_config(repo, SERVER_REPO_ID_KEY, &response.repo_id)?;
-    Ok(SyncOutcome { report, response })
+    write_git_config(repo, SERVER_REPO_ID_KEY, &repo_id)?;
+    Ok(SyncOutcome {
+        report,
+        response: SyncResponse {
+            schema_version: SYNC_RESPONSE_SCHEMA.into(),
+            repo_id,
+            results: merged_results,
+            metadata: Default::default(),
+        },
+    })
 }
 
 fn tally(response: &SyncResponse, report: &mut SyncReport) {
@@ -316,6 +391,7 @@ fn write_git_config(repo: &Repository, key: &str, value: &str) -> Result<(), Lin
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lineage_core::{AgentKind, Conversation, LineObject, SessionCommitLink};
 
     #[test]
     fn normalize_remote_url_strips_scheme_login_and_suffix() {
@@ -331,5 +407,62 @@ mod tests {
             normalize_remote_url("git@github.com:Acme/Widgets.git"),
             "github.com/acme/widgets"
         );
+    }
+
+    #[test]
+    fn chunk_batch_splits_by_conversation_and_keeps_dependents() {
+        use lineage_core::{Confidence, LineageId};
+
+        let binding = RepoBinding {
+            normalized_remote_url: "github.com/acme/widgets".into(),
+            root_commit_sha: "a".repeat(40),
+            server_repo_id: None,
+        };
+        let mut batch = SyncBatch::new(binding);
+        let c0 = Conversation::new(AgentKind::Claude, "/tmp/a");
+        let c1 = Conversation::new(AgentKind::Claude, "/tmp/b");
+        let c2 = Conversation::new(AgentKind::Claude, "/tmp/c");
+        let id0 = c0.id.clone();
+        let id1 = c1.id.clone();
+        batch.conversations = vec![c0, c1, c2];
+        batch.line_objects = vec![
+            LineObject::new(
+                "f.rs",
+                [1, 2],
+                "c".repeat(40),
+                id0.clone(),
+                LineageId::from("t0"),
+                Confidence::Exact,
+            ),
+            LineObject::new(
+                "g.rs",
+                [3, 4],
+                "d".repeat(40),
+                id1.clone(),
+                LineageId::from("t1"),
+                Confidence::Exact,
+            ),
+        ];
+        batch.session_commit_links = vec![SessionCommitLink {
+            conversation_id: id0.clone(),
+            commit_sha: "e".repeat(40),
+            patch_id: None,
+        }];
+        batch.blobs = vec![BlobManifestEntry {
+            sha256: "f".repeat(64),
+            byte_size: 1,
+            content_type: None,
+        }];
+
+        let chunks = chunk_batch(&batch, 2);
+        assert_eq!(chunks.len(), 2);
+        assert_eq!(chunks[0].conversations.len(), 2);
+        assert_eq!(chunks[1].conversations.len(), 1);
+        assert_eq!(chunks[0].line_objects.len(), 2);
+        assert_eq!(chunks[1].line_objects.len(), 0);
+        assert_eq!(chunks[0].session_commit_links.len(), 1);
+        assert_eq!(chunks[1].session_commit_links.len(), 0);
+        assert_eq!(chunks[0].blobs.len(), 1);
+        assert!(chunks[1].blobs.is_empty());
     }
 }

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `git lineage sync` posts conversation-sized chunks (10 conversations per `POST /v0/sync`) instead of one monolith request. Blobs still upload once up front; a mid-run timeout leaves earlier chunks committed. Progress prints `chunk i/n` when more than one chunk is needed.
+
 ### Added
 
 - `git lineage fork <session-id> [--dry-run]` — pick up a teammate's agent session and continue it in your own harness. Resolves the session from lineage's own refs, **never** from `metadata["source"]`: that field is an absolute path on the importing machine, and gating on it is exactly what made the extension's fork action un-shareable (it disabled itself on any machine that had not done the import, even though the mechanism underneath would have worked). Renders the conversation through the adapter's transcript writer, records the fork edge, and **prints the command to run rather than spawning a terminal** — so a human can read it before acting and an agent that invoked the CLI can act on it directly. The command string, its flags, and the directory it must run from are adapter-supplied; the CLI names no vendor path or flag (`ARCHITECTURE.md` invariant 4). Output leads with whose session it was, when, what they asked for, what it changed, and which commits it reached, because deciding whether to continue someone's work needs the work to be recognisable first. `--dry-run` shows the target path and the command without writing or recording anything. Claude Code only; Codex and Cursor decline by name
