@@ -1,4 +1,4 @@
-.PHONY: help setup fmt clippy test coverage doc check msrv vscode vscode-lint vscode-fmt md-lint typos pre-commit install-hooks
+.PHONY: help setup fmt clippy test coverage doc autofix check msrv vscode vscode-lint vscode-fmt md-lint typos pre-commit install-hooks
 
 # Optional setup flags (e.g. make setup REPO=/path/to/app IMPORT=1 WITH_MCP=1 FORCE_HOOKS=1)
 REPO ?=
@@ -36,6 +36,7 @@ help:
 	@echo "  make vscode-lint  - ESLint + Prettier check"
 	@echo "  make md-lint      - markdownlint"
 	@echo "  make typos        - spell check"
+	@echo "  make autofix      - every mechanical fix (see scripts/autofix.sh); run before check"
 	@echo "  make check        - full local gate (see scripts/check.sh)"
 	@echo "  make pre-commit   - run pre-commit framework on all files (optional)"
 	@echo "  make install-hooks - install .githooks/pre-commit (format + lint on commit)"
@@ -75,6 +76,9 @@ md-lint:
 
 typos:
 	typos
+
+autofix:
+	./scripts/autofix.sh
 
 check:
 	./scripts/check.sh

@@ -7,10 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- `git lineage sync` posts conversation-sized chunks (10 conversations per `POST /v0/sync`) instead of one monolith request. Blobs still upload once up front; a mid-run timeout leaves earlier chunks committed. Progress prints `chunk i/n` when more than one chunk is needed.
-
 ### Added
 
 - `git lineage fork <session-id> [--dry-run]` — pick up a teammate's agent session and continue it in your own harness. Resolves the session from lineage's own refs, **never** from `metadata["source"]`: that field is an absolute path on the importing machine, and gating on it is exactly what made the extension's fork action un-shareable (it disabled itself on any machine that had not done the import, even though the mechanism underneath would have worked). Renders the conversation through the adapter's transcript writer, records the fork edge, and **prints the command to run rather than spawning a terminal** — so a human can read it before acting and an agent that invoked the CLI can act on it directly. The command string, its flags, and the directory it must run from are adapter-supplied; the CLI names no vendor path or flag (`ARCHITECTURE.md` invariant 4). Output leads with whose session it was, when, what they asked for, what it changed, and which commits it reached, because deciding whether to continue someone's work needs the work to be recognisable first. `--dry-run` shows the target path and the command without writing or recording anything. Claude Code only; Codex and Cursor decline by name
@@ -160,6 +156,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `git lineage sync` posts conversation-sized chunks (10 conversations per `POST /v0/sync`) instead of one monolith request. Blobs still upload once up front; a mid-run timeout leaves earlier chunks committed. Progress prints `chunk i/n` when more than one chunk is needed.
 - **The VS Code extension's fork action is now `git lineage fork` and nothing else.** It previously required `metadata["source"]` — an absolute transcript path on the machine that did the import — so on any other machine the action was disabled even though the mechanism underneath would have worked. It now enables for any Claude session lineage has stored, calls the CLI through `lineageClient`, and shows the CLI's output in a document rather than a truncating notification: whose session it was, what it was about, and only then the command to run. It holds **no** fork logic of its own — no harness state directory, no transcript format, no id convention, and no vendor flags (`ARCHITECTURE.md` invariant 4). The command is shown, never executed for you: it opens a colleague's work in a live agent, which is a thing to choose. The CLI's stderr is surfaced verbatim on failure, so an unknown id or an unsupported agent says which
 - **`git lineage list` is now scannable.** Rows carry the date and who ran the session alongside id/agent/turns/model, forks are marked `(fork)`, and the list is ordered newest first (ref order was neither chronological nor stable across machines). Every field was already collected for `--json` and simply discarded at print time; on a corpus of ~120 sessions the old four-column row gave a reader nothing to choose between. `--json` gains only the ordering
 - `git lineage fork --help` now explains what a fork is — that you get their context and not their tools, that the fork is a new session belonging to you with theirs as an ancestor, and that the original is never modified — rather than listing two flags. `--dry-run` reports the transcript size as a magnitude (`1.5 MB`) rather than a byte count
