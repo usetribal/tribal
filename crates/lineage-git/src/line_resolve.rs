@@ -4,9 +4,11 @@ use std::path::Path;
 use git2::{Oid, Repository};
 use lineage_core::derive_line_object_id;
 use lineage_core::{
-    normalize_repo_path, workspace_root_for, Artifact, ArtifactKind, Confidence, Conversation,
-    LineObject, LineageError, ResolveStrategy,
+    workspace_root_for, Artifact, ArtifactKind, Confidence, Conversation, LineObject, LineageError,
+    RepoPaths, ResolveStrategy,
 };
+
+use crate::repo::repo_paths_for_conversation;
 
 pub fn materialize_line_objects(
     repo: &Repository,
@@ -14,8 +16,23 @@ pub fn materialize_line_objects(
     commit_sha: &str,
     link_confidence: Confidence,
 ) -> Result<Vec<LineObject>, LineageError> {
+    let paths = repo_paths_for_conversation(repo, &conversation.workspace_root);
+    materialize_line_objects_with_paths(repo, conversation, commit_sha, link_confidence, &paths)
+}
+
+/// Like [`materialize_line_objects`] but reuses an already-resolved path
+/// context. A rebuild materializes per (commit, session), and re-reading git's
+/// worktree registry each time costs more than the whole comparison it feeds.
+pub fn materialize_line_objects_with_paths(
+    repo: &Repository,
+    conversation: &Conversation,
+    commit_sha: &str,
+    link_confidence: Confidence,
+    repo_paths: &RepoPaths,
+) -> Result<Vec<LineObject>, LineageError> {
     let changed = files_changed_in_commit(repo, commit_sha)?;
     let workspace = workspace_root_for(&conversation.workspace_root, repo.workdir());
+    let paths = repo_paths.with_workspace_root(&workspace);
     let mut objects = Vec::new();
 
     for turn in &conversation.turns {
@@ -23,7 +40,7 @@ pub fn materialize_line_objects(
             if !artifact_is_materializable(artifact) {
                 continue;
             }
-            let file_path = normalize_repo_path(&artifact.path, Some(&workspace));
+            let file_path = paths.normalize(&artifact.path);
             if file_path.is_empty() {
                 continue;
             }

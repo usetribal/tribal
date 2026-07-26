@@ -58,7 +58,9 @@ pub use lfs_refs::{
     write_lfs_pointer_ref, LFS_DATA_REF_PREFIX, LFS_POINTER_REF_PREFIX,
 };
 pub use lfs_worktree::{ensure_gitattributes, LINEAGE_MEDIA_DIR};
-pub use line_resolve::{materialize_line_objects, resolve_old_string};
+pub use line_resolve::{
+    materialize_line_objects, materialize_line_objects_with_paths, resolve_old_string,
+};
 pub use notes::{list_notes, map_commit_to_sessions, read_note_for_commit, write_note_for_commit};
 pub use rebuild::{rebuild_links, rebuild_links_with_progress, RebuildReport};
 pub use refs::{
@@ -67,7 +69,7 @@ pub use refs::{
     write_manifest, LINEAGE_INDEX_REF, LINEAGE_NOTES_REF,
 };
 pub use remap::{remap_orphaned_commits, RemapReport};
-pub use repo::{find_repo, open_repo, LineageRepo};
+pub use repo::{find_repo, open_repo, repo_paths, repo_paths_for_conversation, LineageRepo};
 pub use sync::{
     assemble_batch, normalize_remote_url, resolve_repo_binding, sync_push, SyncOutcome, SyncReport,
     SERVER_REPO_ID_KEY,

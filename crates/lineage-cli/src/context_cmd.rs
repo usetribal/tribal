@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 
 use chrono::{DateTime, Utc};
-use lineage_core::{normalize_repo_path, RepoBinding};
+use lineage_core::{normalize_repo_path_unscoped, RepoBinding};
 use lineage_git::{open_repo, resolve_repo_binding};
 use lineage_retrieval::{
     CacheKey, ContextQuery, LocalRetriever, RetrievalCache, Retriever, LOCAL_RETRIEVER_VERSION,
@@ -106,7 +106,7 @@ fn run_claude_hook(repo_path: &Path, input: &str, now_unix: i64) -> Result<Optio
         ),
     )?;
     let file_blob_sha = format!("{:x}", Sha256::digest(&content));
-    let relative_path = normalize_repo_path(file_path, Some(&workdir));
+    let relative_path = normalize_repo_path_unscoped(file_path, Some(&workdir));
 
     let git_dir = repo.git_dir();
     let index = LineageIndex::open(git_dir.join("lineage").join("index.db"))?;
@@ -342,7 +342,7 @@ fn parse_chain_target(target: &str) -> Result<(String, u32)> {
         .rsplit_once(':')
         .ok_or("target must be <file>:<line>")?;
     let line: u32 = line_str.parse().map_err(|_| "line must be a number")?;
-    Ok((normalize_repo_path(path, None), line))
+    Ok((normalize_repo_path_unscoped(path, None), line))
 }
 
 /// Claude Code `SessionStart` endpoint: teach the traversal vocabulary once per
