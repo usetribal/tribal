@@ -20,10 +20,10 @@ cargo fmt --all
 
 echo "==> typos"
 if command -v typos >/dev/null 2>&1; then
-  # Exits non-zero when corrections remain ambiguous; those are for a human.
-  typos --write-changes || echo "typos left corrections it could not make unambiguously"
+    # Exits non-zero when corrections remain ambiguous; those are for a human.
+    typos --write-changes || echo "typos left corrections it could not make unambiguously"
 else
-  echo "typos not installed; skip (install: cargo install typos-cli)"
+    echo "typos not installed; skip (install: cargo install typos-cli)"
 fi
 
 echo "==> markdownlint --fix"
@@ -31,13 +31,12 @@ npx --yes markdownlint-cli2 --fix || echo "markdownlint left unfixable issues; r
 
 echo "==> vscode extension"
 (
-  cd extensions/vscode
-  npm install --silent
-  # Through the package's own script: it pins eslint 8 and sets
-  # ESLINT_USE_FLAT_CONFIG=false, which a bare `npx eslint` loses — npx would
-  # resolve the platform root's eslint 9 and fail loading the TS rules.
-  npm run lint:fix
-  npm run format
+    cd extensions/vscode
+    npm install --silent
+    # Through the package's own script: it pins eslint 8 and sets
+    # ESLINT_USE_FLAT_CONFIG=false, which a bare `npx eslint` loses
+    npm run lint:fix
+    npm run format
 )
 
 echo "Autofix complete. Run 'make check' to see what is left."
