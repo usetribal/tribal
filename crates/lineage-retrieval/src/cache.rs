@@ -21,6 +21,20 @@ pub struct CacheKey<'a> {
     pub retriever_version: &'a str,
 }
 
+/// Whether a retrieval is worth caching.
+///
+/// An empty retrieval that *completed* is a real answer ("honestly nothing")
+/// and caches like any other — answering nothing instantly is what keeps the
+/// hook invisible. An empty retrieval that ran out of budget is not an answer,
+/// it is a timeout, and caching it is a trap: the key is content-addressed and
+/// stable, so the entry never expires on its own and every later fire returns
+/// the cached emptiness without retrying — one slow cold retrieval silences
+/// that file until the corpus generation changes. Truncation *with* evidence
+/// is still usable (the retriever returns what it has by design) and caches.
+pub fn is_cacheable(retrieval: &Retrieval) -> bool {
+    !retrieval.truncated || !retrieval.evidence.is_empty()
+}
+
 /// Derived-data sidecar: deleting the file is always safe and merely costs
 /// re-retrieval. Negative answers (empty retrievals) are stored like any
 /// other — answering "nothing" instantly is what keeps the hook invisible.
@@ -255,6 +269,32 @@ mod tests {
             .unwrap();
         assert_eq!(rows, 1);
         assert_eq!(cache.get(&key("aa", 2, "v1")).unwrap(), Some(retrieval));
+    }
+
+    /// The trap this guards: the cache key has no TTL and every part of it is
+    /// stable for an unchanged file, so a cached timeout is permanent. A file
+    /// whose cold retrieval overran once would answer nothing forever.
+    #[test]
+    fn a_timeout_that_found_nothing_is_not_an_answer_worth_caching() {
+        let empty_complete = Retrieval::from_evidence(Vec::new());
+        assert!(
+            is_cacheable(&empty_complete),
+            "an empty retrieval that finished is a real answer"
+        );
+
+        let mut empty_truncated = Retrieval::from_evidence(Vec::new());
+        empty_truncated.truncated = true;
+        assert!(
+            !is_cacheable(&empty_truncated),
+            "a timeout with nothing found must be retried, never cached"
+        );
+
+        let mut partial = retrieval_with_one_hit();
+        partial.truncated = true;
+        assert!(
+            is_cacheable(&partial),
+            "truncation with evidence is still a usable answer"
+        );
     }
 
     #[test]

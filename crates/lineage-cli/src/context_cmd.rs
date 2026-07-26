@@ -5,7 +5,8 @@ use chrono::{DateTime, Utc};
 use lineage_core::{normalize_repo_path_unscoped, RepoBinding};
 use lineage_git::{open_repo, resolve_repo_binding};
 use lineage_retrieval::{
-    CacheKey, ContextQuery, LocalRetriever, RetrievalCache, Retriever, LOCAL_RETRIEVER_VERSION,
+    is_cacheable, CacheKey, ContextQuery, LocalRetriever, RetrievalCache, Retriever,
+    LOCAL_RETRIEVER_VERSION,
 };
 use lineage_search::LineageIndex;
 use sha2::{Digest, Sha256};
@@ -130,7 +131,9 @@ fn run_claude_hook(repo_path: &Path, input: &str, now_unix: i64) -> Result<Optio
             };
             let retriever = LocalRetriever::new(repo.inner(), &index);
             let retrieval = retriever.retrieve(&query)?;
-            cache.put(&key, &retrieval, now_unix)?;
+            if is_cacheable(&retrieval) {
+                cache.put(&key, &retrieval, now_unix)?;
+            }
             retrieval
         }
     };
