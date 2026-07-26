@@ -282,8 +282,7 @@ fn materializes_worktree_prefixed_artifact_paths() {
     // the *main* workdir — `.claude/worktrees/feature/src/auth.rs` for what is
     // really `src/auth.rs`. That path is already relative, so plain
     // normalization left it untouched, it matched no file in the commit diff,
-    // and every edit the session made was dropped. Measured at 388 recoverable
-    // artifacts in the lineage-platform corpus.
+    // and every edit the session made was dropped.
     let (dir, repo) = init_repo();
     let commit_sha = repo
         .head()
@@ -427,9 +426,7 @@ fn add_then_delete_worktree(dir: &Path, relative: &str) {
 #[test]
 fn recovers_paths_prefixed_by_a_deleted_worktree() {
     // A worktree is usually removed once its branch merges, so git can no
-    // longer vouch for the prefix. Measured at 469 artifacts / 155 files in the
-    // lineage-platform corpus — the bulk of the loss, and invisible to the
-    // registry-backed path.
+    // longer vouch for the prefix.
     let (dir, repo) = init_repo();
     let commit_sha = repo
         .head()
