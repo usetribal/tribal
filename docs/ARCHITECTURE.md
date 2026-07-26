@@ -60,6 +60,33 @@ Formatting, truncating, ordering, and laying out are rendering concerns.
 When a surface looks thin, the fix is upstream: a missing edge, or a selection rule that
 should be explicit. It is never a substitution made at render time.
 
+### 4. Harness-specific knowledge lives only in `lineage-adapters`
+
+Transcript file formats, state directories (`~/.claude/projects/`, `~/.codex/sessions/`),
+settings-file locations, CLI flags, project-key encodings, and vendor id conventions
+belong to the adapter for that harness and nowhere else. Everything above the adapter
+layer speaks `Conversation` and handles the adapter itself returned.
+
+The cost of breaking this is paid at the *next* harness, not at the change that breaks
+it. A `.claude` path written into a CLI command works perfectly until a second harness
+needs the same command, at which point there is no seam to extend — only a working
+implementation to copy and re-specialise. Each such copy multiplies: adding a harness
+stops being "write an adapter" and becomes "find every place the last harness was
+special-cased". The layering exists so `AgentKind` is the only thing above the adapters
+that names a vendor.
+
+This invariant is stated aspirationally: the current code does not fully satisfy it.
+Four known leaks sit in `lineage-cli` — `context_cmd.rs` (Claude settings file),
+`init_cmd.rs` (`.claude/skills/` and settings paths), `skill_cmd.rs` (per-harness skill
+paths), and `doctor_cmd.rs` (`.claude/settings.json` in a diagnostic). They are filed as
+debt, and they are the evidence for the rule rather than an exception to it. The rule's
+job is to stop the pile growing.
+
+When a change appears to need harness knowledge above the adapter layer, the fix is a new
+adapter capability that returns what the caller needs, not a vendor branch in the caller.
+That is what the transcript writer is: continuing a session needs a vendor-native file in
+a vendor-specific place, so the adapter produces both and the caller learns neither.
+
 ## Crate dependency graph
 
 ```text
@@ -154,6 +181,7 @@ should be explicit. It is never a substitution made at render time.
 | Extension | How |
 |-----------|-----|
 | New agent adapter | Implement `AgentSource` + `SessionReader` in `lineage-adapters` |
+| Continuing a session in its harness | Implement `TranscriptWriter` in `lineage-adapters` — renders a `Conversation` to a vendor-native transcript and returns the handle needed to open it. Optional: an adapter without one declines explicitly |
 | New storage backend | Implement `ObjectStore` in `lineage-store` |
 | Custom policy rules | Extend `PolicyConfig` with `RedactionRule` and `ExcludePattern` |
 | Schema evolution | New `*-v1` schema in `specs/` with migration tooling |

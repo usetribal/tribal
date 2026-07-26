@@ -2,13 +2,14 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::citations::enrich_turn_with_citations;
+use crate::claude_transcript::render_claude_transcript;
 use crate::content::{enrich_turn_with_images, extract_claude_content};
 use crate::metadata::{finalize_session_metadata, insert_str, normalize_model};
 use crate::path_util::{
     claude_project_dir, claude_project_key, paths_match_workspace, workspace_is_under_cwd,
 };
 use chrono::{DateTime, Utc};
-use lineage_agent::{AgentSource, SessionReader, SessionRef};
+use lineage_agent::{AgentSource, RenderedTranscript, SessionReader, SessionRef, TranscriptWriter};
 use lineage_core::{
     derive_session_id, AgentKind, Conversation, LineageError, LineageId, Role, Turn,
     CONVERSATION_SCHEMA,
@@ -304,6 +305,22 @@ impl SessionReader for ClaudeAdapter {
         finalize_session_metadata(&mut conversation);
 
         Ok(conversation)
+    }
+}
+
+impl TranscriptWriter for ClaudeAdapter {
+    fn render_transcript(
+        &self,
+        conversation: &Conversation,
+    ) -> Result<RenderedTranscript, LineageError> {
+        let home = home_dir().ok_or_else(|| {
+            LineageError::Other("cannot locate the Claude state directory: HOME is unset".into())
+        })?;
+        Ok(render_claude_transcript(
+            conversation,
+            &home,
+            &self.workspace_root,
+        ))
     }
 }
 
