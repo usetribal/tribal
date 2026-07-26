@@ -200,6 +200,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed `git lineage doctor --json | head` (and any piped invocation) panicking with a broken-pipe error: SIGPIPE default behavior is restored at startup on unix
 
+- Claude sessions are now discovered in repositories whose path contains `.` or `_`. Claude Code encodes the launch directory by substituting each of `/`, `.` and `_` with `-`, but `claude_project_key` replaced only `/` — so for a repo at `/srv/my_app` or any path with a dot, lineage looked for a project directory that never existed and `git lineage import` reported `discovered 0` with no error to explain it. `git lineage fork` had the mirror-image defect, writing its transcript to a path the harness would not resolve, which surfaces as Claude reporting the session is not found. The substitution rule was established by running Claude Code in probe directories and reading back the names it created, not inferred: it is per character and never collapses runs, so a path segment already containing `-` keeps every dash. Nothing needs re-importing beyond running `git lineage import` again in an affected repo. The round-trip test previously restated the substitution inline and so agreed with the same bug; it now calls the shared derivation, and tempdir paths contain dots, so a future divergence fails it
+
 - Import no longer panics when resolving line numbers for edits whose matched text ends in a multibyte character (e.g. an em dash in transcript content): `line_number_at` floors the byte offset to a char boundary before slicing
 - `git lineage delete` now overwrites git notes instead of merging, so session and line-object IDs are actually removed from commit notes
 

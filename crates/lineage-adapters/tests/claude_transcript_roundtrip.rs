@@ -9,7 +9,7 @@ use std::path::Path;
 
 use chrono::{TimeZone, Utc};
 use lineage_adapters::claude_transcript::render_claude_transcript;
-use lineage_adapters::ClaudeAdapter;
+use lineage_adapters::{claude_project_dir, ClaudeAdapter};
 use lineage_agent::{SessionReader, SessionRef};
 use lineage_core::{AgentKind, Conversation, LineageId, Role, ToolCall, Turn};
 
@@ -131,13 +131,13 @@ fn rendered_transcript_lands_where_the_harness_looks_for_it() {
     // reader's own discovery derives that directory the same way. Asserted
     // against the shared derivation rather than `discover()`, which reads the
     // real `$HOME` and cannot be pointed at a tempdir without mutating env.
-    let expected_dir = home.path().join(".claude").join("projects").join(
-        fs::canonicalize(workspace.path())
-            .unwrap()
-            .display()
-            .to_string()
-            .replace('/', "-"),
-    );
+    //
+    // Calls `claude_project_key` rather than restating the substitution: an
+    // earlier version inlined `.replace('/', "-")` here and so agreed with a
+    // writer that had the same rule wrong, hiding the fact that Claude also
+    // substitutes `.` and `_`. Tempdir paths contain dots, so this assertion
+    // now fails if the two ever diverge again.
+    let expected_dir = claude_project_dir(home.path(), workspace.path());
 
     assert_eq!(rendered.path.parent().unwrap(), expected_dir);
     assert_eq!(
