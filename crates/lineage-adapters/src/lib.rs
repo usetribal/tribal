@@ -6,6 +6,11 @@ mod shell_writes;
 
 pub use citations::{enrich_turn_with_citations, extract_citations_from_text};
 
+/// Exported so a caller can assert against the same derivation the writer and
+/// reader share, instead of restating the substitution rule and agreeing with a
+/// bug. The rest of `path_util` stays private.
+pub use path_util::claude_project_dir;
+
 #[cfg(feature = "claude")]
 pub mod claude;
 #[cfg(feature = "claude")]
