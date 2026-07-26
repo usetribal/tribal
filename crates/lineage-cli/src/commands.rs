@@ -340,15 +340,52 @@ pub fn list(repo_path: &Path, commit: Option<&str>, json: bool) -> Result<()> {
         }
     }
 
+    // Newest first. `list_session_ids` returns ref order, which is neither
+    // chronological nor stable across machines, so a user scanning for "the
+    // session I ran this morning" had to read every row.
+    summaries.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+
     if json {
         println!("{}", serde_json::to_string_pretty(&summaries)?);
     } else {
-        for s in summaries {
-            let model = s.model.as_deref().unwrap_or("—");
-            println!("{}  {}  {} turns  {}", s.id, s.agent, s.turns, model);
+        for s in &summaries {
+            println!("{}", list_row(s));
         }
     }
     Ok(())
+}
+
+/// One row a person can choose from. Id, agent, and turn count identify a
+/// session but say nothing about whether it is the one you want; the date and
+/// the author are what make a list of 100 sessions navigable. Every field is
+/// already on the summary — this only stops discarding it at print time.
+fn list_row(s: &SessionSummary) -> String {
+    let model = s.model.as_deref().unwrap_or("—");
+    let mut row = format!(
+        "{}  {}  {:>4} turns  {}  {}",
+        s.id,
+        list_day(&s.started_at),
+        s.turns,
+        s.agent,
+        model
+    );
+    if let Some(who) = s
+        .prompted_by_name
+        .as_deref()
+        .or(s.prompted_by_email.as_deref())
+    {
+        row.push_str(&format!("  {who}"));
+    }
+    if s.is_fork {
+        row.push_str("  (fork)");
+    }
+    row
+}
+
+/// `started_at` is stored RFC 3339. Show the date only: the time of day almost
+/// never distinguishes two sessions, and the full stamp crowds out the author.
+fn list_day(started_at: &str) -> &str {
+    started_at.split('T').next().unwrap_or(started_at)
 }
 
 pub fn show(repo_path: &Path, session_id: &str, json: bool, hydrate_images: bool) -> Result<()> {
@@ -982,4 +1019,57 @@ pub fn rebuild(repo_path: &Path, embed: bool) -> Result<()> {
         }),
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn summary() -> SessionSummary {
+        SessionSummary {
+            id: "01ABC".into(),
+            agent: "claude".into(),
+            turns: 12,
+            started_at: "2026-07-26T09:31:04+00:00".into(),
+            model: Some("claude-opus-5".into()),
+            models_used: vec![],
+            git_branch: None,
+            parent_session_id: None,
+            is_sidechain: false,
+            is_fork: false,
+            vendor_session_id: None,
+            prompted_by_email: None,
+            prompted_by_name: None,
+        }
+    }
+
+    #[test]
+    fn a_row_names_the_day_and_the_author_so_a_long_list_can_be_scanned() {
+        let mut s = summary();
+        s.prompted_by_name = Some("Alice".into());
+        let row = list_row(&s);
+        assert!(row.contains("2026-07-26"), "{row}");
+        assert!(row.contains("Alice"), "{row}");
+        assert!(
+            !row.contains("09:31"),
+            "the time of day only crowds it: {row}"
+        );
+    }
+
+    #[test]
+    fn a_row_falls_back_to_the_email_then_omits_the_author_entirely() {
+        let mut s = summary();
+        s.prompted_by_email = Some("alice@example.dev".into());
+        assert!(list_row(&s).contains("alice@example.dev"));
+        assert!(!list_row(&summary()).contains('@'));
+    }
+
+    /// A fork is the one session kind a reader must not mistake for an ordinary
+    /// one: continuing it continues someone else's work.
+    #[test]
+    fn a_fork_says_so_in_the_list() {
+        let mut s = summary();
+        s.is_fork = true;
+        assert!(list_row(&s).contains("(fork)"));
+    }
 }

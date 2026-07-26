@@ -46,7 +46,7 @@ Install the generated `.vsix` via **Extensions: Install from VSIX**.
 | Lineage: Refresh Sessions | | Reload session tree |
 | Lineage: View Conversation | | Open timeline for a session |
 | Lineage: Resume Conversation | | Resume Claude/Codex in terminal |
-| Lineage: Fork Conversation | | Fork via `.lineage/forks/` |
+| Lineage: Fork Conversation | | Run `git lineage fork` and show its output |
 | Lineage: Show Lineage for Line | `Cmd+Shift+L` / `Ctrl+Shift+L` | Blame line and open session |
 | Lineage: View Commit | | Show linked `git show` |
 | Lineage: Search Sessions | | Full-text search |

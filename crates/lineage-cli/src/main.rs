@@ -94,6 +94,22 @@ enum Commands {
         hydrate_images: bool,
     },
     /// Continue someone else's session in your own agent
+    ///
+    /// Writes a stored session out as a transcript your own agent can open, so
+    /// you land in a live session carrying their context instead of re-deriving
+    /// it. The session is read from lineage's refs, so a teammate's session
+    /// works the same as one you imported yourself.
+    ///
+    /// The fork is a new session that belongs to you: the original is never
+    /// modified, none of its turns are copied onto yours, and lines you write
+    /// from here are yours, with theirs recorded as the ancestor.
+    ///
+    /// You get their context, not their tools. Tool activity is replayed as
+    /// prose, so nothing hands you file handles or checkpoints that no longer
+    /// exist.
+    ///
+    /// Claude Code sessions only for now. The command prints what to run rather
+    /// than launching the agent for you.
     Fork {
         /// Session to continue (`git lineage list` shows what is here)
         session_id: String,

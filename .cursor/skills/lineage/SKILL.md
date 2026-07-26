@@ -80,10 +80,25 @@ Manual refresh: `git lineage import --agent all --incremental` (alias: `ingest`)
 
 ## Resume and fork sessions
 
-- **VS Code / Cursor extension:** resume/fork from session tree or hover (Claude Code and Codex when `vendor_session_id` is present)
-- **CLI:** fork copies transcript to `.lineage/forks/`; resume runs `claude --resume` or `codex resume` in a terminal
+**Fork** continues a stored session in your own agent — including a teammate's,
+since it resolves from lineage's refs rather than a local transcript file:
 
-Cursor has no stable resume CLI; view-only for Cursor sessions.
+```bash
+git lineage fork <session-id>            # writes the transcript, prints what to run
+git lineage fork <session-id> --dry-run  # show what would be written
+```
+
+It mints a new session that belongs to you, leaves the original untouched, and
+records the source as an ancestor. Tool activity is replayed as prose, so you get
+their context but no replayable tool handles. Claude Code sessions only.
+
+**Resume** reopens a session already on this machine by its `vendor_session_id`:
+`claude --resume <id>` or `codex resume <id>`.
+
+The VS Code / Cursor extension offers both from the session tree and from hover.
+
+Cursor sessions are view-and-inject only: `cursor-agent` keeps a different session
+store from the Cursor IDE transcripts lineage imports.
 
 ## Maintenance commands
 

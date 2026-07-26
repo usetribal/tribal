@@ -46,13 +46,27 @@ pub fn fork(repo_path: &Path, session_id: &str, dry_run: bool) -> Result<()> {
     // for codex/cursor arrives here by name rather than as a silent no-op.
     let rendered = render_for(repo.workdir(), &source)?;
 
+    // An empty transcript writes a file the harness will refuse to open, and the
+    // refusal arrives later as "session not found" — pointing at the harness for
+    // something lineage knew here. Sessions can render to nothing legitimately:
+    // one whose turns are all system notes, or one imported with its content
+    // redacted away.
+    if rendered.contents.trim().is_empty() {
+        return Err(format!(
+            "session {} has no turns that can be replayed, so there is nothing to continue. \
+             `git lineage show {}` shows what was stored",
+            source.id, source.id
+        )
+        .into());
+    }
+
     print_provenance(&source);
 
     if dry_run {
         println!(
-            "Would write {} ({} bytes).",
+            "Would write {} ({}).",
             rendered.path.display(),
-            rendered.contents.len()
+            human_size(rendered.contents.len())
         );
         println!("Nothing was written and no fork was recorded (--dry-run).");
         println!();
@@ -197,6 +211,21 @@ fn print_next_step(rendered: &RenderedTranscript) {
     );
 }
 
+/// A raw byte count is a number the reader has to convert before it means
+/// anything. The only question it answers here is "is this transcript small or
+/// enormous", which one significant figure settles.
+fn human_size(bytes: usize) -> String {
+    const KIB: usize = 1024;
+    const MIB: usize = KIB * 1024;
+    if bytes >= MIB {
+        return format!("{:.1} MB", bytes as f64 / MIB as f64);
+    }
+    if bytes >= KIB {
+        return format!("{} KB", bytes / KIB);
+    }
+    format!("{bytes} bytes")
+}
+
 /// Cuts on a char boundary and marks the cut, so a truncated topic is visibly
 /// truncated rather than silently misleading.
 fn truncate(text: &str, max_chars: usize) -> String {
@@ -262,6 +291,13 @@ mod tests {
             serde_json::Value::String("Alice".into()),
         );
         assert!(describe_author(&conv).starts_with("Alice's claude session"));
+    }
+
+    #[test]
+    fn a_transcript_size_reads_as_a_magnitude_not_a_byte_count() {
+        assert_eq!(human_size(512), "512 bytes");
+        assert_eq!(human_size(2048), "2 KB");
+        assert_eq!(human_size(1_541_947), "1.5 MB");
     }
 
     #[test]
