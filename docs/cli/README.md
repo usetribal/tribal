@@ -80,7 +80,7 @@ See [Import](../import.md).
 | `git lineage list [--commit SHA] [--json]` | List sessions or sessions at commit |
 | `git lineage show <id> [--json] [--hydrate-images]` | Show conversation |
 | `git lineage blame <path>[:line] [--json]` | Lineage for a file line |
-| `git lineage fork [<session-id>] [--query <text>] [--pick N] [--dry-run] [--json]` | Continue someone else's session — search or pick when id omitted (see [Fork a session](#fork-a-session)) |
+| `git lineage fork [<session-id>] [--query <text>] [--pick N] [--json]` | Continue someone else's session — search or pick when id omitted (see [Fork a session](#fork-a-session)) |
 | `git lineage fork <session-id> --brief` | Print a context block for starting a subagent on that session; writes nothing (see [Brief a subagent](#brief-a-subagent-on-a-session)) |
 | `git lineage search <query>` | Full-text search (auto-rebuilds stale index) |
 | `git lineage rebuild [--embed]` | Rebuild all derived state (links, line objects, index) from stored sessions; `--embed` also runs the dense-embedding backfill |
@@ -327,8 +327,7 @@ To continue it, run this from /home/bob/src/app:
 ```
 
 The command is printed, not run — so a human can read it before acting on it and
-an agent that invoked the CLI can act on it directly. `--dry-run` shows the path
-and the command without writing the transcript or recording the fork.
+an agent that invoked the CLI can act on it directly.
 
 Notes:
 
@@ -398,9 +397,6 @@ Notes:
   whose agent this build cannot write a transcript for. Reading a session and
   continuing it are different capabilities, so `--brief` does not inherit
   fork's requirement of a renderable transcript.
-- `--brief` and `--dry-run` cannot be combined: `--brief` already writes
-  nothing, so there is no write to preview, and the combination is refused
-  rather than silently resolved one way.
 
 ## Resume a session
 

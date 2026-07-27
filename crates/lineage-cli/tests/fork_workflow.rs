@@ -283,34 +283,6 @@ fn line_objects_from_a_forked_session_bind_to_the_forker() {
 }
 
 #[test]
-fn dry_run_writes_nothing_and_records_nothing() {
-    let dir = init_repo();
-    let home = tempfile::tempdir().unwrap();
-    commands::init_config(dir.path()).unwrap();
-    let source = seed_alice_session(dir.path(), AgentKind::Claude);
-    let before = list_session_ids(open_repo(dir.path()).unwrap().inner())
-        .unwrap()
-        .len();
-
-    let output = run_fork(dir.path(), home.path(), source.id.as_str(), &["--dry-run"]);
-    let stdout = stdout_of(&output);
-
-    assert!(claude_transcripts(home.path()).is_empty());
-    assert_eq!(
-        list_session_ids(open_repo(dir.path()).unwrap().inner())
-            .unwrap()
-            .len(),
-        before,
-        "--dry-run must not persist a fork edge"
-    );
-    // A dry run still has to show the path and the command, or it cannot answer
-    // the question it exists for.
-    assert!(stdout.contains(".claude/projects/"), "{stdout}");
-    assert!(stdout.contains("claude --resume "), "{stdout}");
-    assert!(stdout.contains("--dry-run"), "{stdout}");
-}
-
-#[test]
 fn an_unknown_session_id_says_what_to_do_next() {
     let dir = init_repo();
     let home = tempfile::tempdir().unwrap();

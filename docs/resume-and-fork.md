@@ -29,7 +29,6 @@ your agent can open, records the fork edge, and prints the command that opens it
 git lineage fork <session-id>              # lineage id, prefix, or Claude UUID
 git lineage fork --query "RLS audit"         # search, then pick (--pick N if several)
 git lineage fork                           # interactive picker on a TTY
-git lineage fork <session-id> --dry-run      # show what would be written
 git lineage fork <session-id> --json         # structured preflight for agents
 ```
 
