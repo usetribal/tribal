@@ -1077,7 +1077,7 @@ mod tests {
     fn summary() -> SessionSummary {
         SessionSummary {
             id: "01ABC".into(),
-            title: "Lineage platform RLS audit".into(),
+            title: "Lineage RLS audit".into(),
             agent: "claude".into(),
             turns: 12,
             started_at: "2026-07-26T09:31:04+00:00".into(),
@@ -1100,7 +1100,7 @@ mod tests {
         let row = list_row(&s);
         assert!(row.contains("2026-07-26"), "{row}");
         assert!(row.contains("Alice"), "{row}");
-        assert!(row.contains("Lineage platform RLS audit"), "{row}");
+        assert!(row.contains("Lineage RLS audit"), "{row}");
         assert!(
             !row.contains("09:31"),
             "the time of day only crowds it: {row}"

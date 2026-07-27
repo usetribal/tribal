@@ -5,15 +5,11 @@
 //! place that bridges the two naming schemes.
 
 use git2::Repository;
-use lineage_core::{display_title, Conversation, LineageId, LineageError};
+use lineage_core::{display_title, Conversation, LineageError, LineageId};
 
 use crate::refs::{list_session_ids, read_conversation};
 
-const VENDOR_ID_KEYS: &[&str] = &[
-    "claude_session_id",
-    "cursor_session_id",
-    "codex_session_id",
-];
+const VENDOR_ID_KEYS: &[&str] = &["claude_session_id", "cursor_session_id", "codex_session_id"];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SessionCandidate {
@@ -34,7 +30,10 @@ impl std::fmt::Display for ResolveError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ResolveError::NotFound(message) => write!(f, "{message}"),
-            ResolveError::Ambiguous { message, candidates } => {
+            ResolveError::Ambiguous {
+                message,
+                candidates,
+            } => {
                 write!(f, "{message}")?;
                 for (index, candidate) in candidates.iter().enumerate() {
                     write!(
@@ -210,18 +209,23 @@ mod tests {
     #[test]
     fn resolves_full_lineage_id() {
         let dir = init_repo();
-        let id = seed_session(&dir, "550e8400-e29b-41d4-a716-446655440000", "Auth middleware");
-        let repo = open_repo(dir.path()).unwrap();
-        assert_eq!(
-            resolve_session(repo.inner(), id.as_str()).unwrap(),
-            id
+        let id = seed_session(
+            &dir,
+            "550e8400-e29b-41d4-a716-446655440000",
+            "Auth middleware",
         );
+        let repo = open_repo(dir.path()).unwrap();
+        assert_eq!(resolve_session(repo.inner(), id.as_str()).unwrap(), id);
     }
 
     #[test]
     fn resolves_lineage_id_prefix() {
         let dir = init_repo();
-        let id = seed_session(&dir, "550e8400-e29b-41d4-a716-446655440000", "Auth middleware");
+        let id = seed_session(
+            &dir,
+            "550e8400-e29b-41d4-a716-446655440000",
+            "Auth middleware",
+        );
         let repo = open_repo(dir.path()).unwrap();
         let prefix = &id.as_str()[..8];
         assert_eq!(resolve_session(repo.inner(), prefix).unwrap(), id);
@@ -231,7 +235,7 @@ mod tests {
     fn resolves_claude_vendor_uuid() {
         let dir = init_repo();
         let vendor = "019fa49d-f719-43f8-8d60-e2c9d4cdab31";
-        let id = seed_session(&dir, vendor, "Lineage platform RLS audit");
+        let id = seed_session(&dir, vendor, "Lineage RLS audit");
         let repo = open_repo(dir.path()).unwrap();
         assert_eq!(resolve_session(repo.inner(), vendor).unwrap(), id);
     }
@@ -240,7 +244,7 @@ mod tests {
     fn resolves_claude_vendor_uuid_prefix() {
         let dir = init_repo();
         let vendor = "019fa49d-f719-43f8-8d60-e2c9d4cdab31";
-        let id = seed_session(&dir, vendor, "Lineage platform RLS audit");
+        let id = seed_session(&dir, vendor, "Lineage RLS audit");
         let repo = open_repo(dir.path()).unwrap();
         assert_eq!(resolve_session(repo.inner(), "019fa49d-f719").unwrap(), id);
     }
@@ -251,12 +255,12 @@ mod tests {
         seed_session(
             &dir,
             "019fa49d-f719-43f8-8d60-e2c9d4cdab31",
-            "Lineage platform RLS audit",
+            "Lineage RLS audit",
         );
         seed_session(
             &dir,
             "019fa49d-f719-aaaa-bbbb-cccc-ddddeeeeffff",
-            "Oss/platform reconciliation",
+            "OSS and server reconciliation",
         );
         let repo = open_repo(dir.path()).unwrap();
         let err = resolve_session(repo.inner(), "019fa49d-f719").unwrap_err();

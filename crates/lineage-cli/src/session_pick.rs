@@ -72,10 +72,7 @@ pub fn pick_fork_session(repo_path: &Path, options: &ForkPickOptions) -> Result<
         if summaries.is_empty() {
             return Err("no sessions in this repository — import or pull one first".into());
         }
-        let labels: Vec<String> = summaries
-            .iter()
-            .map(commands::list_row)
-            .collect();
+        let labels: Vec<String> = summaries.iter().map(commands::list_row).collect();
         println!("Choose a session to fork:");
         let selected = Select::new("", labels)
             .with_render_config(inquire_render_config())

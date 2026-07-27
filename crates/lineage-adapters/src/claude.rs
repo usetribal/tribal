@@ -421,7 +421,7 @@ mod tests {
             &transcript,
             r#"{"type":"summary","summary":"First title","sessionId":"abc"}
 {"type":"user","sessionId":"abc","cwd":".","message":{"role":"user","content":[{"type":"text","text":"hello"}]},"timestamp":"2026-06-06T10:01:00Z"}
-{"type":"summary","summary":"Lineage platform RLS audit","sessionId":"abc"}
+{"type":"summary","summary":"Lineage RLS audit","sessionId":"abc"}
 "#,
         )
         .unwrap();
@@ -437,7 +437,7 @@ mod tests {
             conv.metadata
                 .get(SESSION_SUMMARY_KEY)
                 .and_then(|v| v.as_str()),
-            Some("Lineage platform RLS audit")
+            Some("Lineage RLS audit")
         );
         assert_eq!(conv.turns.len(), 1);
     }

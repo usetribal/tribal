@@ -71,9 +71,7 @@ pub use refs::{
 };
 pub use remap::{remap_orphaned_commits, RemapReport};
 pub use repo::{find_repo, open_repo, repo_paths, repo_paths_for_conversation, LineageRepo};
-pub use session_resolve::{
-    load_sessions, resolve_session, ResolveError, SessionCandidate,
-};
+pub use session_resolve::{load_sessions, resolve_session, ResolveError, SessionCandidate};
 pub use sync::{
     assemble_batch, chunk_batch, normalize_remote_url, resolve_repo_binding, sync_push,
     sync_push_with_progress, SyncOutcome, SyncReport, SERVER_REPO_ID_KEY,
