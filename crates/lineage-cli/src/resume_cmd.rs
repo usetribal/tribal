@@ -18,17 +18,18 @@ use std::path::Path;
 
 use lineage_adapters::all_adapters;
 use lineage_agent::ResumeInvocation;
-use lineage_core::{Conversation, LineageId};
-use lineage_git::{open_repo, read_conversation};
+use lineage_core::Conversation;
+use lineage_git::{open_repo, read_conversation, resolve_session};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-pub fn resume(repo_path: &Path, session_id: &str) -> Result<()> {
+pub fn resume(repo_path: &Path, session_hint: &str) -> Result<()> {
     let repo = open_repo(repo_path)?;
+    let id = resolve_session(repo.inner(), session_hint).map_err(|error| error.to_string())?;
     let source =
-        read_conversation(repo.inner(), &LineageId::from(session_id))?.ok_or_else(|| {
+        read_conversation(repo.inner(), &id)?.ok_or_else(|| {
             format!(
-                "no session {session_id} in this repository's lineage refs. \
+                "no session {session_hint} in this repository's lineage refs. \
              `git lineage list` shows what is here"
             )
         })?;
