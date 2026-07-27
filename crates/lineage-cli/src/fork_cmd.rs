@@ -22,6 +22,8 @@ use lineage_agent::RenderedTranscript;
 use lineage_core::{files_written, Conversation, LineageId, Role};
 use lineage_git::{open_repo, persist_conversation, read_conversation};
 
+use crate::brief;
+use crate::digest::traversal_vocabulary;
 use crate::events::{EventLog, Outcome};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -32,7 +34,7 @@ const TOPIC_MAX_CHARS: usize = 160;
 /// Files listed before the tail is summarised as a count.
 const FILES_SHOWN: usize = 5;
 
-pub fn fork(repo_path: &Path, session_id: &str, dry_run: bool) -> Result<()> {
+pub fn fork(repo_path: &Path, session_id: &str, dry_run: bool, as_brief: bool) -> Result<()> {
     let repo = open_repo(repo_path)?;
     let source = read_conversation(repo.inner(), &LineageId::from(session_id))?.ok_or_else(|| {
         format!(
@@ -41,6 +43,15 @@ pub fn fork(repo_path: &Path, session_id: &str, dry_run: bool) -> Result<()> {
              fetch their lineage refs first (`git lineage lfs fetch`, then `git fetch origin 'refs/lineage/*:refs/lineage/*'`)"
         )
     })?;
+
+    // `--brief` returns before any adapter is consulted. It is not a preview of
+    // the write and must not inherit fork's constraints: a session with no
+    // renderable transcript — a pulled one, or one from an agent this build
+    // cannot write — can still be briefed, because reading a session and
+    // continuing it are different capabilities.
+    if as_brief {
+        return print_brief(&repo, &source, dry_run);
+    }
 
     // Rendering is the adapter's job whether or not it can do it, so the refusal
     // for codex/cursor arrives here by name rather than as a silent no-op.
@@ -96,6 +107,47 @@ pub fn fork(repo_path: &Path, session_id: &str, dry_run: bool) -> Result<()> {
     println!("Recorded fork {} (continues {})", fork.id, source.id);
     println!();
     print_next_step(&rendered);
+    Ok(())
+}
+
+/// Prints the block and nothing else. Nothing is written and no fork edge is
+/// recorded — this is an initial context load for a subagent the *calling agent*
+/// spawns, not a fork, so there is no new session for the graph to record.
+fn print_brief(
+    repo: &lineage_git::LineageRepo,
+    source: &Conversation,
+    dry_run: bool,
+) -> Result<()> {
+    // `--dry-run` answers "what would be written"; `--brief` writes nothing by
+    // design, so the pair has no coherent meaning and combining them is a
+    // mistake worth naming rather than silently resolving in either direction.
+    if dry_run {
+        return Err(
+            "--brief and --dry-run cannot be combined: --brief already writes nothing, \
+             so there is no write for --dry-run to preview. Drop --dry-run"
+                .into(),
+        );
+    }
+
+    let selection = brief::select(source, brief::MAX_TURNS, brief::MAX_BYTES);
+    let block = brief::render_brief(
+        source,
+        &selection,
+        &describe_author(source),
+        &traversal_vocabulary(),
+    );
+    print!("{block}");
+
+    EventLog::for_git_dir(&repo.git_dir()).append(
+        Utc::now(),
+        "fork_brief",
+        Outcome::Ok,
+        serde_json::json!({
+            "source_session_id": source.id.as_str(),
+            "turns_total": source.turns.len(),
+            "turns_briefed": selection.kept.len(),
+        }),
+    );
     Ok(())
 }
 

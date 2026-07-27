@@ -1,6 +1,7 @@
 use std::io::{self, BufRead, Write};
 use std::path::Path;
 
+use lineage_cli::brief;
 use lineage_core::LineageId;
 use lineage_git::{
     blame_with_lineage, list_session_ids, materialize_session_at_commit, open_repo,
@@ -9,7 +10,7 @@ use lineage_git::{
 use lineage_policy::{apply_policy, policy_from_repo_config, prepare_for_export};
 use lineage_retrieval::{
     line_objects_of_turn, search_within_sessions, sessions_for_commit, turn_neighbourhood,
-    DEFAULT_AROUND_RADIUS, DEFAULT_TRAVERSAL_LIMIT,
+    CONTINUE_SESSION, DEFAULT_AROUND_RADIUS, DEFAULT_TRAVERSAL_LIMIT,
 };
 use lineage_search::LineageIndex;
 use serde::{Deserialize, Serialize};
@@ -162,7 +163,15 @@ pub async fn handle_request(
                 tool_schema("lineage_sessions_for_commit", "Find the sessions behind a commit", json!({
                     "commit_sha": { "type": "string" },
                     "limit": { "type": "integer" }
-                }), &["commit_sha"])
+                }), &["commit_sha"]),
+                // Continuing a session rather than reading one
+                // (lineage_retrieval::CONTINUE_SESSION). Not a traversal verb —
+                // it takes a bare session id, not a `session#turn` handle — but
+                // registered for the same reason: the registry test asserts it
+                // reaches this surface whenever it reaches the CLI's.
+                tool_schema(CONTINUE_SESSION.mcp, "Continue a session rather than only read it: a self-contained context block for starting a subagent on it", json!({
+                    "session_id": { "type": "string" }
+                }), &["session_id"])
             ]
         })),
         "tools/call" => handle_tool_call(repo_path, params).await,
@@ -185,6 +194,63 @@ fn traversal_limit(args: &Value) -> usize {
         .and_then(|v| v.as_u64())
         .map(|l| l as usize)
         .unwrap_or(DEFAULT_TRAVERSAL_LIMIT)
+}
+
+/// The brief half of `fork`, and only that half.
+///
+/// The CLI's `fork` writes a transcript into the harness's state directory and
+/// records a fork edge; this surface deliberately does neither. There is nobody
+/// at a terminal to read the printed resume command an MCP tool call returns,
+/// and writing a colleague's session into the caller's harness as a side effect
+/// of a tool call is a thing to choose, not a thing to have happen. So MCP gets
+/// `fork --brief`'s output: a self-contained block, no writes, no fork edge.
+///
+/// A private session — or a fork of one — is refused rather than briefed, the
+/// same gate every traversal primitive runs.
+fn fork_brief(
+    repo: &lineage_git::LineageRepo,
+    policy: &lineage_policy::PolicyConfig,
+    session_id: &str,
+) -> Result<String, String> {
+    let id = LineageId::from(session_id);
+    let source = read_conversation(repo.inner(), &id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| format!("session not found: {session_id}"))?;
+
+    let mut gated = policy.clone();
+    gated.strip_private = true;
+    let redacted = apply_policy(&gated, source).conversation;
+    if redacted.private {
+        return Err(format!("session {session_id} is private"));
+    }
+
+    // The same block the CLI's `--brief` prints, from the same renderer: a
+    // second implementation here would drift from it silently, and the block's
+    // whole value is that it reproduces from the session.
+    let selection = brief::select(&redacted, brief::MAX_TURNS, brief::MAX_BYTES);
+    Ok(brief::render_brief(
+        &redacted,
+        &selection,
+        &describe_author(&redacted),
+        // The subagent this block starts gets the read-only vocabulary: it was
+        // spawned to explore one session somebody already chose, and has no way
+        // to tell it is already inside a fork.
+        &lineage_cli::digest::traversal_vocabulary(),
+    ))
+}
+
+fn describe_author(source: &lineage_core::Conversation) -> String {
+    let who = source
+        .metadata
+        .get(lineage_git::PROMPTED_BY_NAME)
+        .or_else(|| source.metadata.get(lineage_git::PROMPTED_BY_EMAIL))
+        .and_then(|v| v.as_str())
+        .unwrap_or("Someone");
+    format!(
+        "{who}'s {} session, {}",
+        source.agent.as_str(),
+        source.started_at.format("%-d %B %Y")
+    )
 }
 
 fn tool_schema(name: &str, description: &str, properties: Value, required: &[&str]) -> Value {
@@ -415,6 +481,10 @@ async fn handle_tool_call(repo_path: &Path, params: &Value) -> Result<Value, Str
                 })
                 .collect();
             serde_json::to_string_pretty(&rendered).unwrap()
+        }
+        name if name == CONTINUE_SESSION.mcp => {
+            let session_id = required_str(&args, "session_id")?;
+            fork_brief(&repo, &policy, session_id)?
         }
         other => return Err(format!("unknown tool: {other}")),
     };

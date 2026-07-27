@@ -6,10 +6,16 @@
 //! match arms by design, so this test — not a generator — is what stops the
 //! surfaces drifting apart. The MCP half of the equality lives in
 //! `lineage-mcp/tests/server.rs`.
+//!
+//! `CONTINUE_SESSION` is registered beside the verbs and covered here too, but
+//! it lands in a different place on this surface: `git lineage fork`, a
+//! top-level command, not a `context` subcommand. That difference is precisely
+//! why it is not in `VERBS` — everything in that list is reachable as
+//! `git lineage context <cli>`.
 
 use std::process::Command;
 
-use lineage_retrieval::VERBS;
+use lineage_retrieval::{CONTINUE_SESSION, VERBS};
 
 /// The subcommand names `git lineage context --help` advertises. Read from the
 /// built binary rather than from the source enum: what an agent can actually
@@ -47,6 +53,31 @@ fn every_registry_verb_is_a_context_subcommand() {
             verb.relation,
         );
     }
+}
+
+/// The CLI half of the continuation pairing. Read from the built binary for the
+/// same reason the verbs are: what an agent can invoke is what clap accepts.
+///
+/// `--brief` is asserted alongside the command because the capability the
+/// `SessionStart` vocabulary names is the pair — a vocabulary offering a flag
+/// the binary rejects is worse than one that never mentioned it.
+#[test]
+fn the_continuation_capability_is_a_top_level_command_with_brief() {
+    let out = Command::new(env!("CARGO_BIN_EXE_git-lineage"))
+        .args([CONTINUE_SESSION.cli, "--help"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "`{} --help` failed: {out:?}",
+        CONTINUE_SESSION.cli,
+    );
+    let help = String::from_utf8(out.stdout).unwrap();
+    assert!(
+        help.contains("--brief"),
+        "`{}` does not offer --brief: {help}",
+        CONTINUE_SESSION.cli,
+    );
 }
 
 /// The other direction. `context` also carries non-traversal plumbing (hook,

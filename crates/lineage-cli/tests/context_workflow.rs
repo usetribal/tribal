@@ -296,10 +296,55 @@ fn session_start_hook_emits_the_verb_vocabulary() {
             verb.relation
         );
     }
-    // It states a capability; it must never instruct the agent to use lineage,
-    // or the A/B harness measures the prompt instead of the tool.
-    assert!(!context.to_lowercase().contains("you should"));
-    assert!(!context.to_lowercase().contains("always"));
+
+    // Continuation reaches the agent through the hook, not the bundled skill: a
+    // skill loads only if it was installed and only if the harness looks for it,
+    // whereas this fires every session. The `--brief` half is named too, because
+    // the capability is the pair.
+    assert!(
+        context.contains("git lineage fork"),
+        "vocabulary omits continuation: {context}"
+    );
+    assert!(
+        context.contains("--brief"),
+        "vocabulary omits the brief half of continuation: {context}"
+    );
+
+    assert_no_instruction(context);
+}
+
+/// The hook states a capability and must never instruct the agent to use
+/// lineage: an agent *told* to use it would make the A/B harness measure the
+/// prompt instead of the tool (`specs/context-injection-v0.md`).
+///
+/// The phrases below are the instruction-shaped constructions this text could
+/// plausibly drift into — a directive to the reader ("you should", "make sure
+/// to", "use lineage to"), or a rule about *when* to act ("always", "whenever",
+/// "if you need"). Naming a mechanism is allowed; naming an occasion to reach
+/// for it is not. Deliberately a small hand-picked set rather than a grammar:
+/// it exists to fail on a careless edit to the vocabulary, not to prove the text
+/// is imperative-free.
+fn assert_no_instruction(context: &str) {
+    const INSTRUCTION_SHAPED: &[&str] = &[
+        "you should",
+        "you must",
+        "make sure",
+        "be sure to",
+        "use lineage to",
+        "always",
+        "whenever",
+        "if you need",
+        "when you need",
+        "remember to",
+    ];
+
+    let lowered = context.to_lowercase();
+    for phrase in INSTRUCTION_SHAPED {
+        assert!(
+            !lowered.contains(phrase),
+            "vocabulary instructs rather than states capability ({phrase:?}): {context}"
+        );
+    }
 }
 
 /// Fail-open: a payload we cannot parse still gets the vocabulary rather than

@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod brief;
 pub mod commands;
 pub mod context_cmd;
 pub mod digest;

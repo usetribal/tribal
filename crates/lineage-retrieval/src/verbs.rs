@@ -1,5 +1,6 @@
 //! The closed traversal vocabulary: every move a receiving agent can make over
-//! the provenance graph, named once.
+//! the provenance graph, named once — plus the one non-traversal capability
+//! ([`CONTINUE_SESSION`]) that is registered here for the same anti-drift reason.
 //!
 //! Canned plans are fixed compositions of primitives; an agent traversing is a
 //! dynamic composition of the same ones. Both speak this vocabulary, so no
@@ -69,6 +70,27 @@ pub const VERBS: &[Verb] = &[
     },
 ];
 
+/// Continuing a session rather than reading one. Registered here — beside the
+/// traversal verbs and reusing their struct — because the anti-drift guarantee
+/// is about *capability*, not about shape: a capability that reaches one surface
+/// and not the other is the failure both registry tests exist to forbid, and
+/// `fork` is as prone to it as `around` is.
+///
+/// Kept **out** of [`VERBS`] because it is none of the things that list's
+/// doc comment promises. A traversal verb takes a `session#turn` handle, is
+/// read-only, is bounded by `limit`, and returns evidence; `fork` takes a bare
+/// session id, writes a transcript, records a fork edge, and returns a command
+/// to run. Folding it in would make `VERBS` a list of "things an agent can do"
+/// — at which point `verb_footer()` renders `git lineage context fork`, which is
+/// not a command that exists, and every consumer has to branch on which kind of
+/// entry it is holding anyway.
+pub const CONTINUE_SESSION: Verb = Verb {
+    relation: "continue-session",
+    cli: "fork",
+    mcp: "lineage_fork_brief",
+    summary: "continue a session rather than only read it",
+};
+
 /// The verb whose relation this is, or `None` for a name outside the
 /// vocabulary. Surfaces look verbs up rather than re-spelling them.
 pub fn verb_for_relation(relation: &str) -> Option<&'static Verb> {
@@ -93,11 +115,22 @@ mod tests {
         assert!(verb_for_relation("no-such-relation").is_none());
     }
 
+    /// `VERBS` is what a `session#turn` handle can be fed to, and `verb_footer`
+    /// renders every entry as `git lineage context <cli>`. Continuation is
+    /// neither, so it must stay outside the list even though it shares the
+    /// struct and the anti-drift guarantee.
+    #[test]
+    fn continuation_is_registered_but_is_not_a_traversal_verb() {
+        assert!(verb_for_relation(CONTINUE_SESSION.relation).is_none());
+        assert!(!VERBS.iter().any(|v| v.cli == CONTINUE_SESSION.cli));
+        assert!(!VERBS.iter().any(|v| v.mcp == CONTINUE_SESSION.mcp));
+    }
+
     /// Surface spellings are what the CLI and MCP registry tests compare
     /// against, so a blank one would make those tests vacuous.
     #[test]
     fn every_verb_names_both_surfaces() {
-        for verb in VERBS {
+        for verb in VERBS.iter().chain(std::iter::once(&CONTINUE_SESSION)) {
             assert!(!verb.cli.is_empty(), "{} has no CLI name", verb.relation);
             assert!(
                 verb.mcp.starts_with("lineage_"),

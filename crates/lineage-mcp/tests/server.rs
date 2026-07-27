@@ -1,7 +1,7 @@
 use std::process::Command;
 
 use lineage_core::{AgentKind, Conversation, LineageId, Role, Turn};
-use lineage_git::{open_repo, persist_conversation};
+use lineage_git::{list_session_ids, open_repo, persist_conversation};
 use lineage_mcp::server::handle_request;
 use serde_json::json;
 
@@ -58,9 +58,10 @@ async fn mcp_initialize_and_tools_list() {
 }
 
 /// The MCP half of the anti-drift guarantee: the tool set carries exactly the
-/// verb registry. The CLI half lives in `lineage-cli/tests/verb_registry.rs`; a
-/// verb reaching one surface and not the other is what this pair forbids, and
-/// `tools/list` is also verb discovery for free on this path.
+/// verb registry, plus the registered non-traversal capability. The CLI half
+/// lives in `lineage-cli/tests/verb_registry.rs`; a capability reaching one
+/// surface and not the other is what this pair forbids, and `tools/list` is also
+/// verb discovery for free on this path.
 #[tokio::test]
 async fn tools_list_carries_the_whole_verb_registry() {
     let dir = init_repo();
@@ -74,10 +75,16 @@ async fn tools_list_carries_the_whole_verb_registry() {
         .map(|t| t["name"].as_str().unwrap().to_string())
         .collect();
 
-    for verb in lineage_retrieval::VERBS {
+    // Continuation is checked alongside the traversal verbs rather than in its
+    // own test: it is registered for exactly the same guarantee, and a separate
+    // test would be one somebody could delete without the pairing failing.
+    for verb in lineage_retrieval::VERBS
+        .iter()
+        .chain(std::iter::once(&lineage_retrieval::CONTINUE_SESSION))
+    {
         assert!(
             names.contains(&verb.mcp.to_string()),
-            "verb {} is in the registry but not an MCP tool (have: {names:?})",
+            "capability {} is in the registry but not an MCP tool (have: {names:?})",
             verb.relation,
         );
     }
@@ -98,7 +105,8 @@ async fn tools_list_carries_the_whole_verb_registry() {
     ];
     for name in &names {
         let known = NON_VERB_TOOLS.contains(&name.as_str())
-            || lineage_retrieval::VERBS.iter().any(|v| v.mcp == *name);
+            || lineage_retrieval::VERBS.iter().any(|v| v.mcp == *name)
+            || lineage_retrieval::CONTINUE_SESSION.mcp == *name;
         assert!(known, "tool {name} is neither plumbing nor a registry verb");
     }
 }
@@ -182,6 +190,67 @@ async fn traversal_verbs_answer_and_never_emit_private_sessions() {
     )
     .await;
     assert_eq!(produced.trim(), "[]");
+}
+
+/// The MCP continuation tool briefs and does not fork: no transcript is written
+/// and no fork edge is recorded. There is nobody at a terminal to act on a
+/// printed resume command here, and writing into the caller's harness state as a
+/// side effect of a tool call is a thing to choose.
+#[tokio::test]
+async fn fork_brief_returns_a_block_and_writes_nothing() {
+    let dir = init_repo();
+    let repo = open_repo(dir.path()).unwrap();
+    let conv = session_saying(dir.path(), &["make the cache write through"]);
+    persist_conversation(repo.inner(), &conv).unwrap();
+
+    let before = list_session_ids(repo.inner()).unwrap().len();
+    let block = call_tool(
+        dir.path(),
+        lineage_retrieval::CONTINUE_SESSION.mcp,
+        json!({ "session_id": conv.id.as_str() }),
+    )
+    .await;
+
+    assert!(block.contains(conv.id.as_str()));
+    assert!(block.contains("make the cache write through"));
+    assert!(
+        block.contains(lineage_cli::brief::TASK_SLOT_MARKER),
+        "the block ends with the empty task slot: {block}"
+    );
+
+    // No new session means no fork edge — the block is a context load, not a
+    // fork.
+    assert_eq!(list_session_ids(repo.inner()).unwrap().len(), before);
+
+    // The brief goes to a subagent exploring one session somebody already chose;
+    // offering `fork` there invites it to fork again from inside a fork.
+    assert!(
+        !block.contains("git lineage fork"),
+        "the brief withholds continuation: {block}"
+    );
+}
+
+/// The privacy gate the traversal verbs run applies here too — briefing a
+/// private session would launder it through a different tool.
+#[tokio::test]
+async fn fork_brief_refuses_a_private_session() {
+    let dir = init_repo();
+    let repo = open_repo(dir.path()).unwrap();
+    let mut private = session_saying(dir.path(), &["the private decision"]);
+    private.private = true;
+    persist_conversation(repo.inner(), &private).unwrap();
+
+    let err = handle_request(
+        dir.path(),
+        "tools/call",
+        &json!({
+            "name": lineage_retrieval::CONTINUE_SESSION.mcp,
+            "arguments": { "session_id": private.id.as_str() },
+        }),
+    )
+    .await
+    .unwrap_err();
+    assert!(err.contains("private"), "{err}");
 }
 
 /// The text payload of one `tools/call`, which is where every tool puts its
