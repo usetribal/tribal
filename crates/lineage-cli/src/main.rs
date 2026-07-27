@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use lineage_cli::{
     commands, context_cmd, digest, doctor_cmd, fork_cmd, hooks_cmd, init_cmd, pull_cmd, resume_cmd,
-    retrieval_cmd, skill_cmd,
+    retrieval_cmd, session_pick, skill_cmd,
 };
 use lineage_retrieval::{DEFAULT_AROUND_RADIUS, DEFAULT_TRAVERSAL_LIMIT};
 use std::process::ExitCode;
@@ -118,14 +118,24 @@ enum Commands {
     /// stored session, including one pulled from a teammate that this build
     /// cannot write a transcript for.
     Fork {
-        /// Session to continue (`git lineage list` shows what is here)
-        session_id: String,
+        /// Session to continue — lineage id, id prefix, or harness UUID
+        /// (`git lineage list` shows titles and ids)
+        session_id: Option<String>,
+        /// Search local sessions by topic when no id is given
+        #[arg(long)]
+        query: Option<String>,
+        /// Pick the Nth search result (1-based) when --query matches several
+        #[arg(long)]
+        pick: Option<usize>,
         /// Show what would be written without writing it
         #[arg(long)]
         dry_run: bool,
         /// Print a context block for a subagent instead of writing a transcript
         #[arg(long)]
         brief: bool,
+        /// Structured output for agents (candidates or resolved session)
+        #[arg(long)]
+        json: bool,
     },
     /// Reopen one of your own sessions in the agent that produced it
     ///
@@ -476,9 +486,24 @@ fn main() -> ExitCode {
         } => commands::show(&repo_path, &session_id, json, hydrate_images),
         Commands::Fork {
             session_id,
+            query,
+            pick,
             dry_run,
             brief,
-        } => fork_cmd::fork(&repo_path, &session_id, dry_run, brief),
+            json,
+        } => fork_cmd::fork(
+            &repo_path,
+            fork_cmd::ForkRequest {
+                pick: session_pick::ForkPickOptions {
+                    session_id,
+                    query,
+                    pick,
+                },
+                dry_run,
+                brief,
+                json,
+            },
+        ),
         Commands::Resume { session_id } => resume_cmd::resume(&repo_path, &session_id),
         Commands::Blame { target, json } => commands::blame(&repo_path, &target, json),
         Commands::InstallHook { force } => hooks_cmd::install_hook(&repo_path, force),

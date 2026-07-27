@@ -79,6 +79,8 @@ Set at first import from the repository git config (`user.email`, `user.name`). 
 |-----|-------------|
 | `prompted_by_email` | Git email of the developer who had the agent conversation |
 | `prompted_by_name` | Git name of the developer who had the agent conversation |
+| `session_summary` | Human-readable title from the harness (Claude Code `"type":"summary"` entry); preferred over `architecture_summary` for display |
+| `architecture_summary` | Heuristic summary generated at import when no vendor summary exists |
 
 ## Turn
 

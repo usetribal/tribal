@@ -13,11 +13,12 @@ export class SessionTreeItem extends vscode.TreeItem {
         super(
             isPlaceholder
                 ? session.started_at
-                : `${agentLabel(session.agent)} · ${session.turns} turns`,
+                : (session.title ?? `${agentLabel(session.agent)} · ${session.turns} turns`),
             vscode.TreeItemCollapsibleState.None
         );
         this.description = isPlaceholder ? undefined : sessionTreeDescription(session);
         this.tooltip = [
+            session.title,
             session.id,
             session.started_at,
             session.model ? `model: ${session.model}` : "",

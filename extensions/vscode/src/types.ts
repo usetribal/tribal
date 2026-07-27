@@ -1,5 +1,6 @@
 export interface SessionSummary {
     id: string;
+    title?: string;
     agent: string;
     turns: number;
     started_at: string;

@@ -15,7 +15,7 @@ use lineage_agent::{
 };
 use lineage_core::{
     derive_session_id, AgentKind, Conversation, LineageError, LineageId, Role, Turn,
-    CONVERSATION_SCHEMA,
+    CONVERSATION_SCHEMA, SESSION_SUMMARY_KEY,
 };
 use serde_json::Value;
 
@@ -179,6 +179,7 @@ impl SessionReader for ClaudeAdapter {
         let mut is_sidechain = false;
         let mut claude_code_version: Option<String> = None;
         let mut git_branch: Option<String> = None;
+        let mut session_summary: Option<String> = None;
 
         for line in content.lines() {
             if line.trim().is_empty() {
@@ -194,6 +195,15 @@ impl SessionReader for ClaudeAdapter {
             }
 
             let entry_type = v.get("type").and_then(|t| t.as_str()).unwrap_or("");
+            if entry_type == "summary" {
+                if let Some(text) = v.get("summary").and_then(|s| s.as_str()) {
+                    let trimmed = text.trim();
+                    if !trimmed.is_empty() {
+                        session_summary = Some(trimmed.to_string());
+                    }
+                }
+                continue;
+            }
             if SKIP_TYPES.contains(&entry_type) {
                 continue;
             }
@@ -307,6 +317,11 @@ impl SessionReader for ClaudeAdapter {
         insert_str(&mut conversation.metadata, SESSION_ID_KEY, session_id);
         insert_str(
             &mut conversation.metadata,
+            SESSION_SUMMARY_KEY,
+            session_summary,
+        );
+        insert_str(
+            &mut conversation.metadata,
             "claude_code_version",
             claude_code_version,
         );
@@ -362,7 +377,7 @@ fn home_dir() -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lineage_agent::{AgentSource, SessionReader};
+    use lineage_agent::{AgentSource, SessionReader, SessionRef};
     use lineage_core::ToolCall;
 
     #[test]
@@ -396,5 +411,34 @@ mod tests {
             Some("main")
         );
         assert!(conv.primary_model().is_some());
+    }
+
+    #[test]
+    fn captures_the_last_claude_summary_as_metadata() {
+        let dir = tempfile::tempdir().unwrap();
+        let transcript = dir.path().join("session.jsonl");
+        fs::write(
+            &transcript,
+            r#"{"type":"summary","summary":"First title","sessionId":"abc"}
+{"type":"user","sessionId":"abc","cwd":".","message":{"role":"user","content":[{"type":"text","text":"hello"}]},"timestamp":"2026-06-06T10:01:00Z"}
+{"type":"summary","summary":"Lineage platform RLS audit","sessionId":"abc"}
+"#,
+        )
+        .unwrap();
+        let adapter = ClaudeAdapter::new(dir.path());
+        let session = SessionRef {
+            id_hint: "abc".into(),
+            agent: AgentKind::Claude,
+            source_path: transcript,
+            started_at: Some(Utc::now()),
+        };
+        let conv = adapter.read(&session).unwrap();
+        assert_eq!(
+            conv.metadata
+                .get(SESSION_SUMMARY_KEY)
+                .and_then(|v| v.as_str()),
+            Some("Lineage platform RLS audit")
+        );
+        assert_eq!(conv.turns.len(), 1);
     }
 }

@@ -196,14 +196,32 @@ function renderTurn(turn: Turn, index: number): string {
   `;
 }
 
+function sessionHeading(conversation: Conversation): string {
+    const metadata = conversation.metadata ?? {};
+    const summary =
+        (typeof metadata.session_summary === "string" && metadata.session_summary.trim()) ||
+        (typeof metadata.architecture_summary === "string" &&
+            metadata.architecture_summary.split("\n")[0]?.trim()) ||
+        "";
+    if (summary) {
+        return summary;
+    }
+    return `${agentLabel(conversation.agent)} conversation`;
+}
+
 function renderSessionHtml(conversation: Conversation): string {
     const turns = conversation.turns.map(renderTurn).join("");
     const privateNote = conversation.private
         ? "<p class='private'>This session is marked private.</p>"
         : "";
-    const summaryBlock = conversation.architecture_summary
-        ? `<div class="summary"><h2>Architecture summary</h2><pre>${escapeHtml(conversation.architecture_summary)}</pre></div>`
-        : "";
+    const metadata = conversation.metadata ?? {};
+    const vendorSummary =
+        typeof metadata.session_summary === "string" ? metadata.session_summary : undefined;
+    const summaryBlock = vendorSummary
+        ? `<div class="summary"><h2>Session summary</h2><pre>${escapeHtml(vendorSummary)}</pre></div>`
+        : conversation.architecture_summary
+          ? `<div class="summary"><h2>Architecture summary</h2><pre>${escapeHtml(conversation.architecture_summary)}</pre></div>`
+          : "";
     const agent = agentLabel(conversation.agent);
     const ended = conversation.ended_at ? ` · ended ${escapeHtml(conversation.ended_at)}` : "";
     return `<!DOCTYPE html>
@@ -329,7 +347,7 @@ function renderSessionHtml(conversation: Conversation): string {
 </head>
 <body>
   <div class="header">
-    <h1>${escapeHtml(agent)} conversation</h1>
+    <h1>${escapeHtml(sessionHeading(conversation))}</h1>
     <div class="meta">
       <code>${escapeHtml(conversation.id)}</code>
       · started ${escapeHtml(conversation.started_at)}${ended}

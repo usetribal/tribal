@@ -6,6 +6,14 @@ use crate::ids::LineageId;
 use crate::salience::turn_is_salient;
 use crate::{ArtifactKind, Conversation, Role, Turn};
 
+/// Claude Code's own session title from a `"type":"summary"` transcript entry.
+pub const SESSION_SUMMARY_KEY: &str = "session_summary";
+/// Heuristic summary generated at import when no vendor summary exists.
+pub const ARCHITECTURE_SUMMARY_KEY: &str = "architecture_summary";
+
+const DEFAULT_OPENING_ASK_CHARS: usize = 160;
+const ID_PREFIX_CHARS: usize = 8;
+
 const CODE_EDIT_TOOLS: &[&str] = &[
     "edit",
     "edit_file",
@@ -279,6 +287,58 @@ fn split_to_max(text: &str, max_chars: usize) -> Vec<String> {
         .collect()
 }
 
+/// Human-readable label for a session in lists, pickers, and the web UI.
+///
+/// Precedence: vendor summary → architecture summary (first line) → opening ask
+/// → id prefix. Callers that need the raw id keep using `conv.id`.
+pub fn display_title(conv: &Conversation) -> String {
+    if let Some(title) = metadata_line(conv, SESSION_SUMMARY_KEY) {
+        return title;
+    }
+    if let Some(summary) = metadata_line(conv, ARCHITECTURE_SUMMARY_KEY) {
+        return summary
+            .lines()
+            .next()
+            .unwrap_or(summary.as_str())
+            .trim()
+            .to_string();
+    }
+    if let Some(ask) = opening_ask(conv, DEFAULT_OPENING_ASK_CHARS) {
+        return ask;
+    }
+    id_prefix(conv.id.as_str())
+}
+
+/// The first non-empty user turn, flattened and truncated — the session's own
+/// data, not an LLM summary.
+pub fn opening_ask(conv: &Conversation, max_chars: usize) -> Option<String> {
+    let first = conv
+        .turns
+        .iter()
+        .find(|turn| turn.role == Role::User && !turn.content.trim().is_empty())?;
+    Some(truncate_line(
+        &first.content.split_whitespace().collect::<Vec<_>>().join(" "),
+        max_chars,
+    ))
+}
+
+/// Short lineage id for secondary labels (`019fa49d…`).
+pub fn id_prefix(id: &str) -> String {
+    if id.chars().count() <= ID_PREFIX_CHARS {
+        return id.to_string();
+    }
+    format!("{}…", id.chars().take(ID_PREFIX_CHARS).collect::<String>())
+}
+
+fn metadata_line(conv: &Conversation, key: &str) -> Option<String> {
+    conv.metadata
+        .get(key)
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
 /// Heuristic architecture/decision summary from session content (no LLM).
 pub fn generate_architecture_summary(conv: &Conversation) -> String {
     let title = conv
@@ -405,6 +465,16 @@ mod tests {
         });
         assert!(turn_modified_code(&c.turns[0]));
         assert_eq!(files_touched(&c), vec!["src/lib.rs"]);
+    }
+
+    #[test]
+    fn display_title_prefers_vendor_summary() {
+        let mut c = Conversation::new(AgentKind::Claude, "/tmp");
+        c.metadata.insert(
+            SESSION_SUMMARY_KEY.into(),
+            serde_json::Value::String("Lineage platform RLS audit".into()),
+        );
+        assert_eq!(display_title(&c), "Lineage platform RLS audit");
     }
 
     #[test]

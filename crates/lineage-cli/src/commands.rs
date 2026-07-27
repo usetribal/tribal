@@ -4,17 +4,17 @@ use std::path::Path;
 use chrono::{DateTime, Utc};
 use lineage_adapters::all_adapters;
 use lineage_core::{
-    conversation_modified_code, generate_architecture_summary, AgentKind, CommitMappingMode,
-    LastImportState, LineageId, LineageRepoConfig,
+    conversation_modified_code, display_title, generate_architecture_summary, AgentKind,
+    CommitMappingMode, LastImportState, LineageId, LineageRepoConfig,
 };
 use lineage_git::{
     assemble_batch, best_commit_for_conversation, blame_with_lineage, chunk_batch, delete_session,
     ensure_gitattributes, hydrate_media_artifacts, lfs_fetch, lfs_push, lfs_status,
     link_session_to_commit, list_session_ids, map_commit_to_sessions,
     materialize_session_at_commit, open_repo, persist_import, purge_orphans, read_conversation,
-    read_conversation_stored, read_repo_config, remap_orphaned_commits, stamp_prompted_by,
-    sync_push_with_progress, write_last_import, write_repo_config, PROMPTED_BY_EMAIL,
-    PROMPTED_BY_NAME, SYNC_CONVERSATIONS_PER_CHUNK,
+    read_conversation_stored, read_repo_config, remap_orphaned_commits, resolve_session,
+    stamp_prompted_by, sync_push_with_progress, write_last_import, write_repo_config,
+    PROMPTED_BY_EMAIL, PROMPTED_BY_NAME, SYNC_CONVERSATIONS_PER_CHUNK,
 };
 use lineage_policy::{
     apply_policy, is_private_session, policy_from_repo_config, prepare_for_export, PolicyConfig,
@@ -249,8 +249,9 @@ fn vendor_session_id(conv: &lineage_core::Conversation) -> Option<String> {
 }
 
 #[derive(serde::Serialize)]
-struct SessionSummary {
+pub struct SessionSummary {
     id: String,
+    title: String,
     agent: String,
     turns: usize,
     started_at: String,
@@ -274,6 +275,16 @@ struct SessionSummary {
     prompted_by_email: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     prompted_by_name: Option<String>,
+}
+
+impl SessionSummary {
+    pub(crate) fn id(&self) -> &str {
+        &self.id
+    }
+
+    pub(crate) fn title(&self) -> &str {
+        &self.title
+    }
 }
 
 #[derive(serde::Serialize)]
@@ -303,43 +314,7 @@ pub fn list(repo_path: &Path, commit: Option<&str>, json: bool) -> Result<()> {
     }
 
     let ids = list_session_ids(inner)?;
-    let mut summaries = Vec::new();
-    for id in ids {
-        if let Some(conv) = read_conversation(inner, &id)? {
-            summaries.push(SessionSummary {
-                id: conv.id.to_string(),
-                agent: conv.agent.as_str().to_string(),
-                turns: conv.turns.len(),
-                started_at: conv.started_at.to_rfc3339(),
-                model: conv.primary_model(),
-                models_used: conv.models_used(),
-                git_branch: conv
-                    .metadata
-                    .get("git_branch")
-                    .and_then(|v| v.as_str())
-                    .map(String::from),
-                parent_session_id: conv.parent_session_id.as_ref().map(|id| id.to_string()),
-                is_sidechain: conv
-                    .metadata
-                    .get("is_sidechain")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false)
-                    || (conv.parent_session_id.is_some() && !conv.is_fork()),
-                is_fork: conv.is_fork(),
-                vendor_session_id: vendor_session_id(&conv),
-                prompted_by_email: conv
-                    .metadata
-                    .get(PROMPTED_BY_EMAIL)
-                    .and_then(|v| v.as_str())
-                    .map(String::from),
-                prompted_by_name: conv
-                    .metadata
-                    .get(PROMPTED_BY_NAME)
-                    .and_then(|v| v.as_str())
-                    .map(String::from),
-            });
-        }
-    }
+    let mut summaries = collect_summaries_from_ids(inner, ids)?;
 
     // Newest first. `list_session_ids` returns ref order, which is neither
     // chronological nor stable across machines, so a user scanning for "the
@@ -356,17 +331,73 @@ pub fn list(repo_path: &Path, commit: Option<&str>, json: bool) -> Result<()> {
     Ok(())
 }
 
-/// One row a person can choose from. Id, agent, and turn count identify a
-/// session but say nothing about whether it is the one you want; the date and
-/// the author are what make a list of 100 sessions navigable. Every field is
-/// already on the summary — this only stops discarding it at print time.
-fn list_row(s: &SessionSummary) -> String {
+pub fn collect_session_summaries(repo_path: &Path) -> Result<Vec<SessionSummary>> {
+    let repo = open_repo(repo_path)?;
+    let ids = list_session_ids(repo.inner())?;
+    let mut summaries = collect_summaries_from_ids(repo.inner(), ids)?;
+    summaries.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+    Ok(summaries)
+}
+
+fn collect_summaries_from_ids(
+    inner: &git2::Repository,
+    ids: Vec<LineageId>,
+) -> Result<Vec<SessionSummary>> {
+    let mut summaries = Vec::new();
+    for id in ids {
+        if let Some(conv) = read_conversation(inner, &id)? {
+            summaries.push(summary_from_conversation(&conv));
+        }
+    }
+    Ok(summaries)
+}
+
+fn summary_from_conversation(conv: &lineage_core::Conversation) -> SessionSummary {
+    SessionSummary {
+        id: conv.id.to_string(),
+        title: display_title(conv),
+        agent: conv.agent.as_str().to_string(),
+        turns: conv.turns.len(),
+        started_at: conv.started_at.to_rfc3339(),
+        model: conv.primary_model(),
+        models_used: conv.models_used(),
+        git_branch: conv
+            .metadata
+            .get("git_branch")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        parent_session_id: conv.parent_session_id.as_ref().map(|id| id.to_string()),
+        is_sidechain: conv
+            .metadata
+            .get("is_sidechain")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+            || (conv.parent_session_id.is_some() && !conv.is_fork()),
+        is_fork: conv.is_fork(),
+        vendor_session_id: vendor_session_id(conv),
+        prompted_by_email: conv
+            .metadata
+            .get(PROMPTED_BY_EMAIL)
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        prompted_by_name: conv
+            .metadata
+            .get(PROMPTED_BY_NAME)
+            .and_then(|v| v.as_str())
+            .map(String::from),
+    }
+}
+
+/// One row a person can choose from. The title is what makes a list of 100
+/// sessions navigable; the id stays visible for copy/paste and fork hints.
+pub(crate) fn list_row(s: &SessionSummary) -> String {
     let model = s.model.as_deref().unwrap_or("—");
     let mut row = format!(
-        "{}  {}  {:>4} turns  {}  {}",
+        "{}  {}  {:>4} turns  {}  {}  {}",
+        s.title,
         s.id,
-        list_day(&s.started_at),
         s.turns,
+        list_day(&s.started_at),
         s.agent,
         model
     );
@@ -389,11 +420,11 @@ fn list_day(started_at: &str) -> &str {
     started_at.split('T').next().unwrap_or(started_at)
 }
 
-pub fn show(repo_path: &Path, session_id: &str, json: bool, hydrate_images: bool) -> Result<()> {
+pub fn show(repo_path: &Path, session_hint: &str, json: bool, hydrate_images: bool) -> Result<()> {
     let repo = open_repo(repo_path)?;
-    let id = LineageId::from(session_id);
+    let id = resolve_session(repo.inner(), session_hint).map_err(|error| error.to_string())?;
     let mut conv = read_conversation(repo.inner(), &id)?
-        .ok_or_else(|| format!("session not found: {session_id}"))?;
+        .ok_or_else(|| format!("session not found: {session_hint}"))?;
 
     if hydrate_images {
         let _ = hydrate_media_artifacts(repo.inner(), &mut conv)?;
@@ -402,7 +433,8 @@ pub fn show(repo_path: &Path, session_id: &str, json: bool, hydrate_images: bool
     if json {
         println!("{}", conv.to_json()?);
     } else {
-        println!("Session: {}", conv.id);
+        println!("Session: {}", display_title(&conv));
+        println!("Id:      {}", conv.id);
         println!("Agent:   {}", conv.agent.as_str());
         println!("Started: {}", conv.started_at);
         println!("Turns:   {}", conv.turns.len());
@@ -421,8 +453,13 @@ pub fn show(repo_path: &Path, session_id: &str, json: bool, hydrate_images: bool
         }
         if let Some(summary) = conv
             .metadata
-            .get("architecture_summary")
+            .get("session_summary")
             .and_then(|v| v.as_str())
+            .or_else(|| {
+                conv.metadata
+                    .get("architecture_summary")
+                    .and_then(|v| v.as_str())
+            })
         {
             println!("\nSummary:\n{summary}");
         }
@@ -690,18 +727,23 @@ pub fn search(repo_path: &Path, query: &str) -> Result<()> {
             println!("no results for '{query}'");
             return Ok(());
         }
-        print_hits(&hits);
+        print_hits(repo.inner(), &hits);
         return Ok(());
     }
-    print_hits(&hits);
+    print_hits(repo.inner(), &hits);
     Ok(())
 }
 
-fn print_hits(hits: &[SearchHit]) {
+fn print_hits(inner: &git2::Repository, hits: &[SearchHit]) {
     for hit in hits {
+        let title = read_conversation(inner, &LineageId::from(hit.session_id.as_str()))
+            .ok()
+            .flatten()
+            .map(|conv| display_title(&conv))
+            .unwrap_or_else(|| hit.session_id.clone());
         println!(
-            "{}  score={:.2}  {}",
-            hit.session_id, hit.score, hit.snippet
+            "{}  {}  score={:.2}  {}",
+            title, hit.session_id, hit.score, hit.snippet
         );
     }
 }
@@ -1035,6 +1077,7 @@ mod tests {
     fn summary() -> SessionSummary {
         SessionSummary {
             id: "01ABC".into(),
+            title: "Lineage platform RLS audit".into(),
             agent: "claude".into(),
             turns: 12,
             started_at: "2026-07-26T09:31:04+00:00".into(),
@@ -1057,6 +1100,7 @@ mod tests {
         let row = list_row(&s);
         assert!(row.contains("2026-07-26"), "{row}");
         assert!(row.contains("Alice"), "{row}");
+        assert!(row.contains("Lineage platform RLS audit"), "{row}");
         assert!(
             !row.contains("09:31"),
             "the time of day only crowds it: {row}"

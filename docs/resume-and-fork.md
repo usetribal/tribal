@@ -26,13 +26,17 @@ Fork is the one that works on a session you did not record yourself.
 your agent can open, records the fork edge, and prints the command that opens it:
 
 ```bash
-git lineage fork <session-id>
-git lineage fork <session-id> --dry-run   # show what would be written
+git lineage fork <session-id>              # lineage id, prefix, or Claude UUID
+git lineage fork --query "RLS audit"         # search, then pick (--pick N if several)
+git lineage fork                           # interactive picker on a TTY
+git lineage fork <session-id> --dry-run      # show what would be written
+git lineage fork <session-id> --json         # structured preflight for agents
 ```
 
-`git lineage list` shows what is here — id, date, agent, model, and who ran it —
-so you can pick a session before you fork it. `git lineage fork --help` explains
-what a fork is and what it does and does not carry.
+`git lineage list` shows **titles first** (from Claude's session summary when
+imported, otherwise the opening ask), then id, date, agent, model, and author —
+so you can pick a session before you fork it. Session ids are interoperable:
+pass a Claude vendor UUID or a unique lineage id prefix wherever a full id works.
 
 The session is resolved from lineage's own refs, so it works on a session you
 pulled from a teammate exactly as it does on one you imported yourself: no

@@ -388,7 +388,7 @@ fn print_footer() {
     println!();
 }
 
-fn inquire_render_config() -> RenderConfig<'static> {
+pub(crate) fn inquire_render_config() -> RenderConfig<'static> {
     let mut cfg = RenderConfig::default();
     let accent = StyleSheet::new().with_fg(Color::LightCyan);
     cfg.prompt_prefix = Styled::new("│").with_fg(Color::DarkGrey);
