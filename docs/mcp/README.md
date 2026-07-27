@@ -53,6 +53,29 @@ surface can gain or lose one without the other. `tools/list` is verb discovery
 for free on this path, so MCP needs no equivalent of the CLI's `SessionStart`
 hook.
 
+### Continuing a session
+
+| Tool | Description |
+|------|-------------|
+| `lineage_fork_brief` | A self-contained context block for `session_id` — whose session it was, what they asked for, the turns that changed code, the traversal verbs, and an empty task slot — for starting a subagent on it |
+
+This is the brief half of `git lineage fork` and **only** that half: it writes
+no transcript and records no fork edge. The CLI's `fork` prints a command for a
+human to run and can write a transcript into the harness's state directory; over
+MCP there is nobody at a terminal to read a printed command, and writing a
+colleague's session into the caller's harness as a side effect of a tool call is
+a thing to choose rather than a thing to have happen. Private sessions — and
+forks of private ones — are refused, the same gate the traversal verbs run.
+
+The block embeds the *traversal* vocabulary and not the fork one: a subagent was
+spawned to explore one session somebody already chose, and has no way to tell it
+is already inside a fork.
+
+`lineage-retrieval::CONTINUE_SESSION` registers this capability beside the
+traversal verbs — deliberately not *inside* `VERBS`, since it takes a bare
+session id rather than a `session#turn` handle and is not read-only — and the
+same paired registry tests assert it cannot reach one surface without the other.
+
 Not yet exposed via MCP: import, delete, gc (see project roadmap).
 
 ## Cursor configuration

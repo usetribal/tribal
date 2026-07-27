@@ -123,11 +123,34 @@ fn truncate_to_bytes(text: &str, max_bytes: usize) -> String {
     format!("{}…", &text[..end])
 }
 
+/// Whether a rendered vocabulary offers to continue a session, or only to read
+/// one.
+///
+/// A brief is handed to a subagent that was spawned to explore one session
+/// somebody already chose. Offering `fork` there invites it to fork again, and a
+/// subagent has no way to tell it is already inside one — so the brief gets the
+/// read-only vocabulary and only a top-level session sees the full set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Continuation {
+    Offered,
+    Withheld,
+}
+
 /// The vocabulary in full, for the once-per-session `SessionStart` injection.
 /// A statement of capability, never an instruction to use it — an agent told to
 /// use lineage would make the A/B harness measure the prompt rather than the
 /// tool.
 pub fn verb_vocabulary() -> String {
+    render_vocabulary(Continuation::Offered)
+}
+
+/// The traversal half alone: what a session can be asked, with no offer to
+/// continue one. This is what travels inside a brief.
+pub fn traversal_vocabulary() -> String {
+    render_vocabulary(Continuation::Withheld)
+}
+
+fn render_vocabulary(continuation: Continuation) -> String {
     let mut text = String::from(
         "Lineage indexes past agent sessions in this repo and can be traversed. \
          Injected evidence carries a `session#turn` handle; these commands take one:\n",
@@ -139,8 +162,35 @@ pub fn verb_vocabulary() -> String {
         ));
     }
     text.push_str("  git lineage context query \"<question>\"  search every session by intent\n");
+    if continuation == Continuation::Offered {
+        text.push_str(FORK_CAPABILITY);
+    }
     text
 }
+
+/// How to continue a session rather than only read one, including the shape of
+/// the subagent invocation.
+///
+/// This states what the commands do and what their output is for. It does not
+/// say when to reach for them, and must not: an agent told to use lineage would
+/// make any measurement of injection a measurement of the prompt
+/// (`specs/context-injection-v0.md`). "Here is the mechanism" is capability;
+/// "use the mechanism" is instruction.
+///
+/// It lives in the hook rather than the bundled skill because a skill loads only
+/// if it is installed and only if the harness looks for it, whereas this fires
+/// every session. That is the same reasoning the spec gives for choosing a hook
+/// in the first place.
+const FORK_CAPABILITY: &str = "\
+Sessions can also be continued rather than only read:
+  git lineage fork <session>            write it out as a session your agent can open
+  git lineage fork <session> --brief    print a context block instead of writing anything
+`fork` prints the command to resume the session yourself. `--brief` writes nothing
+and prints a self-contained block — whose session it was, what they asked for, the
+turns that changed code, and the traversal commands above — for starting a subagent
+on that session while leaving this session's context untouched. The block ends with
+a marked slot for the task the subagent is being given.
+";
 
 /// Capped so the pointers stay a footer, not the payload.
 pub const MAX_AFFORDANCES: usize = 3;

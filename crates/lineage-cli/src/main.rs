@@ -110,12 +110,22 @@ enum Commands {
     ///
     /// Claude Code sessions only for now. The command prints what to run rather
     /// than launching the agent for you.
+    /// `--brief` does something different: it writes nothing and prints a
+    /// self-contained context block — whose session it was, the turns that
+    /// carry the intent and the code changes, and the traversal commands — for
+    /// starting a *subagent* on the session instead of continuing it here. The
+    /// block ends with a marked slot for the subagent's task. It works for any
+    /// stored session, including one pulled from a teammate that this build
+    /// cannot write a transcript for.
     Fork {
         /// Session to continue (`git lineage list` shows what is here)
         session_id: String,
         /// Show what would be written without writing it
         #[arg(long)]
         dry_run: bool,
+        /// Print a context block for a subagent instead of writing a transcript
+        #[arg(long)]
+        brief: bool,
     },
     /// Reopen one of your own sessions in the agent that produced it
     ///
@@ -467,7 +477,8 @@ fn main() -> ExitCode {
         Commands::Fork {
             session_id,
             dry_run,
-        } => fork_cmd::fork(&repo_path, &session_id, dry_run),
+            brief,
+        } => fork_cmd::fork(&repo_path, &session_id, dry_run, brief),
         Commands::Resume { session_id } => resume_cmd::resume(&repo_path, &session_id),
         Commands::Blame { target, json } => commands::blame(&repo_path, &target, json),
         Commands::InstallHook { force } => hooks_cmd::install_hook(&repo_path, force),

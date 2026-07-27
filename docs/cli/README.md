@@ -81,6 +81,7 @@ See [Import](../import.md).
 | `git lineage show <id> [--json] [--hydrate-images]` | Show conversation |
 | `git lineage blame <path>[:line] [--json]` | Lineage for a file line |
 | `git lineage fork <session-id> [--dry-run]` | Continue someone else's session in your own agent (see [Fork a session](#fork-a-session)) |
+| `git lineage fork <session-id> --brief` | Print a context block for starting a subagent on that session; writes nothing (see [Brief a subagent](#brief-a-subagent-on-a-session)) |
 | `git lineage search <query>` | Full-text search (auto-rebuilds stale index) |
 | `git lineage rebuild [--embed]` | Rebuild all derived state (links, line objects, index) from stored sessions; `--embed` also runs the dense-embedding backfill |
 | `git lineage rebuild index` | Rebuild only the search index (`rebuild-index` is a deprecated alias) |
@@ -114,7 +115,7 @@ See [LFS](../lfs.md).
 | Command | Description |
 |---------|-------------|
 | `git lineage context hook claude` | Agent-hook endpoint (Claude Code PostToolUse on stdin); emits injection JSON or nothing |
-| `git lineage context hook claude-session-start` | Agent-hook endpoint (Claude Code SessionStart); emits the traversal vocabulary once per session |
+| `git lineage context hook claude-session-start` | Agent-hook endpoint (Claude Code SessionStart); emits the traversal vocabulary and the continuation capability (`fork`, `fork --brief`) once per session |
 | `git lineage context log [--limit N]` | Show recorded context injections, newest last |
 | `git lineage context install [--user]` | Wire the context hook per-repo or user-level (all repos) |
 | `git lineage context uninstall [--user]` | Remove lineage context-hook wiring |
@@ -142,6 +143,19 @@ The same four are MCP tools (`lineage_search_within`, `lineage_turns_around`,
 assert neither surface can gain or lose a verb without the other. MCP agents
 discover them from `tools/list`; CLI sessions learn them from the `SessionStart`
 hook that `context install` wires.
+
+The `SessionStart` vocabulary also names `git lineage fork` and `fork --brief`,
+so a CLI session knows a session can be *continued* and not only read. That
+capability is registered alongside the verbs (`lineage-retrieval::CONTINUE_SESSION`)
+and reaches MCP as `lineage_fork_brief`, under the same paired tests — but it is
+not a traversal verb and so is not in `VERBS`: it takes a bare session id rather
+than a `session#turn` handle, and it is not read-only.
+
+It is taught by the hook rather than the bundled skill on purpose: a skill loads
+only if it was installed and only if the harness looks for it, whereas the hook
+fires every session. The vocabulary states what the commands do and never when
+to reach for them — an agent told to use lineage would make any measurement of
+injection a measurement of the prompt.
 
 `context hook` is wired into the agent harness, not run by hand: when the agent
 reads a file with provenance, a digest (attribution, line ranges, session
@@ -334,6 +348,59 @@ Notes:
 - A session with nothing replayable (all system turns, or content redacted away
   at import) is refused here rather than written out as an empty transcript the
   harness would later reject as "session not found".
+
+## Brief a subagent on a session
+
+`git lineage fork <session-id> --brief` writes nothing. It prints a
+self-contained context block for handing to a **subagent** — one the calling
+agent spawns with its own tool — so someone else's session can be investigated
+without loading it into the current window.
+
+Lineage cannot spawn the subagent; that is model-initiated. Its whole job here
+is to emit the text.
+
+```bash
+git lineage fork 01HQZX8K9V2M3N4P5Q6R7S8T9U --brief
+```
+
+The block has three parts:
+
+1. **The brief** — whose session it was, when, and the selected turns, each
+   headed by the `session#turn` handle the traversal commands take.
+2. **The traversal vocabulary** — the same commands the `SessionStart` hook
+   teaches. They are embedded because that hook fires for the session you are
+   in and *not* for a subagent it spawns: without them the subagent could read
+   this block and not move beyond it. `fork` is deliberately not among them — a
+   subagent cannot tell it is already inside one.
+3. **A marked task slot** — a trailing `--- TASK (append the subagent's task
+   below this line) ---` line. Lineage does not supply the task; the calling
+   agent appends it.
+
+Which turns appear is a fixed rule, not a judgement:
+
+- every user prompt with content — all of them, because the prompts are the
+  intent thread and one prompt makes a negotiation look like a single question,
+- every turn that changed code,
+- the last assistant turn, which is where the work stopped.
+
+Capped at 100 turns and 64 KiB. Over either cap, turns are dropped
+lowest-priority first — edit turns oldest-first, then user prompts oldest-first
+— and the last assistant turn is never dropped. **Anything dropped is stated in
+the output** (`12 of 40 edit turns shown`), because a partial account of
+someone's session that does not say it is partial is worse than none; the
+traversal commands are how the reader fills the gap.
+
+Notes:
+
+- Nothing is written and no fork edge is recorded. This is an initial context
+  load, not a fork.
+- It works for any stored session, including one pulled from a teammate and one
+  whose agent this build cannot write a transcript for. Reading a session and
+  continuing it are different capabilities, so `--brief` does not inherit
+  fork's requirement of a renderable transcript.
+- `--brief` and `--dry-run` cannot be combined: `--brief` already writes
+  nothing, so there is no write to preview, and the combination is refused
+  rather than silently resolved one way.
 
 ## Resume a session
 

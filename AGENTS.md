@@ -89,7 +89,7 @@ Run locally:
 LINEAGE_REPO=/path/to/repo lineage-mcp
 ```
 
-Tools: `lineage_list_sessions`, `lineage_get_session`, `lineage_blame_line`, `lineage_search`, `lineage_doctor`, `lineage_materialize`, `lineage_rebuild_index`, `lineage_export`, `lineage_remap`, plus the traversal verbs `lineage_search_within`, `lineage_turns_around`, `lineage_produced_by`, `lineage_sessions_for_commit`. See [docs/mcp/README.md](docs/mcp/README.md). Reads through `lineage-git` + `lineage-search` + `lineage-retrieval` — do not bypass policy/redaction. The traversal verbs are defined once in `lineage-retrieval::VERBS` and must stay equal across the CLI and MCP surfaces (registry tests enforce this).
+Tools: `lineage_list_sessions`, `lineage_get_session`, `lineage_blame_line`, `lineage_search`, `lineage_doctor`, `lineage_materialize`, `lineage_rebuild_index`, `lineage_export`, `lineage_remap`, plus the traversal verbs `lineage_search_within`, `lineage_turns_around`, `lineage_produced_by`, `lineage_sessions_for_commit`, and `lineage_fork_brief`. See [docs/mcp/README.md](docs/mcp/README.md). Reads through `lineage-git` + `lineage-search` + `lineage-retrieval` — do not bypass policy/redaction. The traversal verbs are defined once in `lineage-retrieval::VERBS`, and continuing a session in `lineage-retrieval::CONTINUE_SESSION` beside it; both must stay equal across the CLI and MCP surfaces (registry tests enforce this).
 
 ## Developing the VS Code extension
 
