@@ -85,7 +85,7 @@ since it resolves from lineage's refs rather than a local transcript file:
 
 ```bash
 git lineage fork <session-id>            # writes the transcript, prints what to run
-git lineage fork <session-id> --dry-run  # show what would be written
+git lineage fork <session-id> --brief    # context block for a subagent
 ```
 
 It mints a new session that belongs to you, leaves the original untouched, and

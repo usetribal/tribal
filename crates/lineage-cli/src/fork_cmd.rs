@@ -23,7 +23,6 @@ const FILES_SHOWN: usize = 5;
 #[derive(Debug, Clone, Default)]
 pub struct ForkRequest {
     pub pick: ForkPickOptions,
-    pub dry_run: bool,
     pub brief: bool,
     pub json: bool,
 }
@@ -36,7 +35,7 @@ pub fn fork(repo_path: &Path, request: ForkRequest) -> Result<()> {
             return Ok(());
         }
     }
-    fork_resolved(repo_path, &picked.session_id, request.dry_run, request.brief)
+    fork_resolved(repo_path, &picked.session_id, request.brief)
 }
 
 fn should_stop_after_json(request: &ForkRequest, picked: &ForkPickResult) -> bool {
@@ -46,12 +45,7 @@ fn should_stop_after_json(request: &ForkRequest, picked: &ForkPickResult) -> boo
         && request.pick.pick.is_none()
 }
 
-fn fork_resolved(
-    repo_path: &Path,
-    session_id: &str,
-    dry_run: bool,
-    as_brief: bool,
-) -> Result<()> {
+fn fork_resolved(repo_path: &Path, session_id: &str, as_brief: bool) -> Result<()> {
     let repo = open_repo(repo_path)?;
     let id = resolve_session(repo.inner(), session_id).map_err(|error| error.to_string())?;
     let source = read_conversation(repo.inner(), &id)?.ok_or_else(|| {
@@ -63,7 +57,7 @@ fn fork_resolved(
     })?;
 
     if as_brief {
-        return print_brief(&repo, &source, dry_run);
+        return print_brief(&repo, &source);
     }
 
     let rendered = render_for(repo.workdir(), &source)?;
@@ -78,18 +72,6 @@ fn fork_resolved(
     }
 
     print_provenance(&source);
-
-    if dry_run {
-        println!(
-            "Would write {} ({}).",
-            rendered.path.display(),
-            human_size(rendered.contents.len())
-        );
-        println!("Nothing was written and no fork was recorded (--dry-run).");
-        println!();
-        print_next_step(&rendered);
-        return Ok(());
-    }
 
     write_transcript(&rendered)?;
 
@@ -114,19 +96,7 @@ fn fork_resolved(
     Ok(())
 }
 
-fn print_brief(
-    repo: &lineage_git::LineageRepo,
-    source: &Conversation,
-    dry_run: bool,
-) -> Result<()> {
-    if dry_run {
-        return Err(
-            "--brief and --dry-run cannot be combined: --brief already writes nothing, \
-             so there is no write for --dry-run to preview. Drop --dry-run"
-                .into(),
-        );
-    }
-
+fn print_brief(repo: &lineage_git::LineageRepo, source: &Conversation) -> Result<()> {
     let selection = brief::select(source, brief::MAX_TURNS, brief::MAX_BYTES);
     let block = brief::render_brief(
         source,
@@ -247,18 +217,6 @@ fn print_next_step(rendered: &RenderedTranscript) {
     );
 }
 
-fn human_size(bytes: usize) -> String {
-    const KIB: usize = 1024;
-    const MIB: usize = KIB * 1024;
-    if bytes >= MIB {
-        return format!("{:.1} MB", bytes as f64 / MIB as f64);
-    }
-    if bytes >= KIB {
-        return format!("{} KB", bytes / KIB);
-    }
-    format!("{bytes} bytes")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -290,13 +248,6 @@ mod tests {
             serde_json::Value::String("Alice".into()),
         );
         assert!(describe_author(&conv).starts_with("Alice's claude session"));
-    }
-
-    #[test]
-    fn a_transcript_size_reads_as_a_magnitude_not_a_byte_count() {
-        assert_eq!(human_size(512), "512 bytes");
-        assert_eq!(human_size(2048), "2 KB");
-        assert_eq!(human_size(1_541_947), "1.5 MB");
     }
 
     #[test]

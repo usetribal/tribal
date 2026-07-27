@@ -127,9 +127,6 @@ enum Commands {
         /// Pick the Nth search result (1-based) when --query matches several
         #[arg(long)]
         pick: Option<usize>,
-        /// Show what would be written without writing it
-        #[arg(long)]
-        dry_run: bool,
         /// Print a context block for a subagent instead of writing a transcript
         #[arg(long)]
         brief: bool,
@@ -488,7 +485,6 @@ fn main() -> ExitCode {
             session_id,
             query,
             pick,
-            dry_run,
             brief,
             json,
         } => fork_cmd::fork(
@@ -499,7 +495,6 @@ fn main() -> ExitCode {
                     query,
                     pick,
                 },
-                dry_run,
                 brief,
                 json,
             },

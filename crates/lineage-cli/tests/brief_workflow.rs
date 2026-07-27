@@ -344,23 +344,6 @@ fn an_oversized_session_drops_edits_first_and_says_what_it_withheld() {
     assert!(!stdout.contains("file0.rs"), "{stdout}");
 }
 
-/// `--dry-run` answers "what would be written"; `--brief` writes nothing by
-/// design. Combining them has no coherent meaning, so it is named rather than
-/// silently resolved one way.
-#[test]
-fn brief_and_dry_run_together_are_refused() {
-    let dir = init_repo();
-    let home = tempfile::tempdir().unwrap();
-    commands::init_config(dir.path()).unwrap();
-    let source = seed_alice_session(dir.path());
-
-    let output = run_brief(dir.path(), home.path(), source.id.as_str(), &["--dry-run"]);
-    assert!(!output.status.success());
-    let stderr = String::from_utf8(output.stderr).unwrap();
-    assert!(stderr.contains("--brief"), "{stderr}");
-    assert!(stderr.contains("--dry-run"), "{stderr}");
-}
-
 #[test]
 fn an_unknown_session_id_says_what_to_do_next() {
     let dir = init_repo();
