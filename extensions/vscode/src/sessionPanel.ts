@@ -222,7 +222,6 @@ function renderSessionHtml(conversation: Conversation): string {
         : conversation.architecture_summary
           ? `<div class="summary"><h2>Architecture summary</h2><pre>${escapeHtml(conversation.architecture_summary)}</pre></div>`
           : "";
-    const agent = agentLabel(conversation.agent);
     const ended = conversation.ended_at ? ` · ended ${escapeHtml(conversation.ended_at)}` : "";
     return `<!DOCTYPE html>
 <html lang="en">
