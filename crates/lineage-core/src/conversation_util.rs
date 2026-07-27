@@ -317,7 +317,11 @@ pub fn opening_ask(conv: &Conversation, max_chars: usize) -> Option<String> {
         .iter()
         .find(|turn| turn.role == Role::User && !turn.content.trim().is_empty())?;
     Some(truncate_line(
-        &first.content.split_whitespace().collect::<Vec<_>>().join(" "),
+        &first
+            .content
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" "),
         max_chars,
     ))
 }
@@ -472,9 +476,9 @@ mod tests {
         let mut c = Conversation::new(AgentKind::Claude, "/tmp");
         c.metadata.insert(
             SESSION_SUMMARY_KEY.into(),
-            serde_json::Value::String("Lineage platform RLS audit".into()),
+            serde_json::Value::String("Lineage RLS audit".into()),
         );
-        assert_eq!(display_title(&c), "Lineage platform RLS audit");
+        assert_eq!(display_title(&c), "Lineage RLS audit");
     }
 
     #[test]

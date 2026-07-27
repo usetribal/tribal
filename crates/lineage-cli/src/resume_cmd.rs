@@ -26,13 +26,12 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 pub fn resume(repo_path: &Path, session_hint: &str) -> Result<()> {
     let repo = open_repo(repo_path)?;
     let id = resolve_session(repo.inner(), session_hint).map_err(|error| error.to_string())?;
-    let source =
-        read_conversation(repo.inner(), &id)?.ok_or_else(|| {
-            format!(
-                "no session {session_hint} in this repository's lineage refs. \
+    let source = read_conversation(repo.inner(), &id)?.ok_or_else(|| {
+        format!(
+            "no session {session_hint} in this repository's lineage refs. \
              `git lineage list` shows what is here"
-            )
-        })?;
+        )
+    })?;
 
     // Refusals — the agent cannot be reopened at all, or this session carries no
     // vendor id — arrive from the adapter naming the agent, rather than as a
