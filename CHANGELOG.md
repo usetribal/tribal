@@ -7,10 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Removed
-
-- `git lineage fork --dry-run` — fork always writes the transcript and records the edge; use `--json` for structured preflight when resolving a session id
-
 ### Added
 
 - `git lineage fork <session-id> --brief` — print a self-contained context block for starting a **subagent** on someone's session, instead of writing a transcript. Plain `fork` continues a session in *your own* window, which is the wrong move when the question is "what did they do?" rather than "let me take this over": it costs the current context window a whole second session. `--brief` writes nothing at all — no transcript, no fork edge — and prints a block the calling agent hands to a subagent it spawns itself. Lineage does not spawn it: that path is model-initiated, so lineage's job is purely to emit the text. This is an **initial context load, not a fork**, which is why no edge is recorded. The block is three parts: the brief (whose session, when, and the selected turns, each headed by the `session#turn` handle the traversal commands take), the **traversal vocabulary** embedded verbatim, and a marked trailing task slot (`--- TASK (append the subagent's task below this line) ---`) that lineage leaves empty because the task belongs to the calling agent. The vocabulary is load-bearing rather than decorative: the `SessionStart` hook fires for the session the user is in and **never for a spawned subagent**, so a subagent handed only a brief could read the session and could not traverse it. `fork` is omitted from that embedded vocabulary — a subagent has no way to tell it is already inside one, and offering it invites recursion. Selection is a **fixed rule, never a judgement**: every user prompt with content (all of them — the prompts are the intent thread, and showing only the first makes a negotiation read as a single question), every turn that changed code, and the last assistant turn. No model call, no summarisation, no ranking by relevance, so the block is reproducible from the session (`ARCHITECTURE.md` invariant 3). Capped at 100 turns **and** 64 KiB — a turn cap alone bounds nothing when one whole-file edit can be megabytes, the same reason `turn_indexable_text` caps edit snippets — and over either cap turns are dropped lowest-priority first: edit turns oldest-first, then user prompts oldest-first, with the last assistant turn never dropped (a prompt is irreplaceable context; an edit is recoverable by traversal). **Anything dropped is stated in the output** (`12 of 40 edit turns shown`), because a partial account of someone else's session that does not admit it is partial is what makes a brief untrustworthy. Works for any stored session, including one pulled from a teammate or from an agent this build cannot write a transcript for — reading a session and continuing it are different capabilities, so `--brief` does not inherit fork's renderable-transcript requirement.
@@ -208,6 +204,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- `git lineage fork --dry-run` — fork always writes the transcript and records the edge; use `--json` for structured preflight when resolving a session id
 - The extension's `.lineage/forks/` transcript copy. It was written on every fork and never read back by anything — the working half was always the shell-out. `git lineage fork` writes the transcript the harness actually opens, so the copy has no remaining role. Existing `.lineage/forks/` directories are inert and can be deleted
 - `examples/demo-repo` bundled demo; use `tests/fixtures/` for samples and `./scripts/setup.sh` on your own project
 
