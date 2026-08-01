@@ -186,6 +186,7 @@ injections), so read it from `.git/lineage/events.jsonl` directly.
 | `git lineage login --server URL` | Sign in to a Lineage server (browser device flow) |
 | `git lineage sync [--server URL] [--token TOKEN] [--remote origin]` | Push redacted sessions to a Lineage server |
 | `git lineage pull [--server URL] [--token TOKEN] [--remote origin] [--dry-run]` | Pull teammates' sessions down from a Lineage server (see [Pull teammates' sessions](#pull-teammates-sessions)) |
+| `git lineage share [--session ID] [--server URL] [--token TOKEN] [--remote origin] [--no-open]` | Share one session as a link anyone can open (see [Share a session as a link](#share-a-session-as-a-link)) |
 
 `login` prints a verification URL and code, waits for the browser approval, and
 stores an opaque session handle in `~/.config/lineage/credentials.json` (0600;
@@ -291,6 +292,60 @@ Notes:
   activity as prose regardless, so it still reads as history.
 - Private sessions are never emitted by the server, so nothing that arrives here
   needs re-filtering.
+
+## Share a session as a link
+
+`git lineage share` turns the session you are in into a link anyone can open
+without a Lineage account, and opens it in your browser.
+
+```bash
+git lineage share
+```
+
+```text
+sharing session 01HQZX8K9V2M3N4P5Q6R7S8T9U (14 turn(s))
+
+    https://uselineage.io/s/7Kq2mXvB9nRt4Ls0Yc1Hpz
+
+Pinned at 14 turn(s): continuing this session does not change what the link shows.
+```
+
+Capture is the `sync` path with a filter, not a second upload route: the session
+is re-imported so the link catches the turns it has *now*, the same redaction
+rules run before anything crosses the wire, and what is pushed is an ordinary
+`sync-batch-v0` narrowed to that one conversation. `--server`, `--token`, and
+`--remote` resolve exactly as they do for `sync`. Implements
+[share-v0](../../specs/share-v0.md).
+
+**Which session gets shared.** With no arguments, the most recently modified
+agent transcript for this working directory — the one you are almost certainly
+in. `--session` overrides it and takes the same id forms as `fork`: a lineage id,
+an id prefix, or the harness UUID you can copy out of your terminal.
+
+```bash
+git lineage share --session 01HQZX8K9V2M3N4P5Q6R7S8T9U
+git lineage share --session 550e8400-e29b-41d4-a716-446655440000
+```
+
+**A private session is refused, never stripped.** Sharing a session your repo
+config marks private fails with the session named and nothing is uploaded.
+Privacy is not something a link may unset — un-mark the session
+(`refs/lineage/config` decides what counts as private) if you meant to share it.
+
+Notes:
+
+- **The URL is the credential.** Whoever holds `/s/<token>` can read that one
+  conversation and nothing else — not the repo, not your other sessions. The
+  server stores only the token's hash, so it cannot show you the link twice.
+- **A share never grows.** It is pinned at the turn count it had when you ran
+  the command. Continuing the session afterwards changes nothing for people
+  holding the link; run `share` again to publish a longer prefix, which mints a
+  new link rather than updating the old one.
+- `--no-open` prints the link without launching a browser. The browser is a
+  convenience either way: on a headless box the launch fails, the command says
+  so, and the printed link is still the share.
+- A session pulled from a server is not shareable from here — the server that
+  holds it is the one to share it from.
 
 ## Fork a session
 

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use lineage_cli::{
     commands, context_cmd, digest, doctor_cmd, fork_cmd, hooks_cmd, init_cmd, pull_cmd, resume_cmd,
-    retrieval_cmd, session_pick, skill_cmd,
+    retrieval_cmd, session_pick, share_cmd, skill_cmd,
 };
 use lineage_retrieval::{DEFAULT_AROUND_RADIUS, DEFAULT_TRAVERSAL_LIMIT};
 use std::process::ExitCode;
@@ -194,6 +194,30 @@ enum Commands {
         /// Git remote whose URL identifies the repo to the server
         #[arg(long, default_value = "origin")]
         remote: String,
+    },
+    /// Share one session as a link anyone can open without an account
+    ///
+    /// Pushes the session you are in to the Lineage server the same way `sync`
+    /// does — same redaction, and a private session is refused rather than
+    /// stripped — then mints a link pinned at the turns it has now. Continuing
+    /// the session afterwards does not change what the link shows.
+    Share {
+        /// Server base URL; defaults to the server stored by `login`
+        #[arg(long)]
+        server: Option<String>,
+        /// Bearer token; falls back to LINEAGE_TOKEN, then the stored login
+        #[arg(long)]
+        token: Option<String>,
+        /// Git remote whose URL identifies the repo to the server
+        #[arg(long, default_value = "origin")]
+        remote: String,
+        /// Session to share — lineage id, id prefix, or harness UUID; defaults
+        /// to the most recently active session for this directory
+        #[arg(long)]
+        session: Option<String>,
+        /// Print the link without opening a browser
+        #[arg(long)]
+        no_open: bool,
     },
     /// Pull teammates' sessions down from a Lineage server
     ///
@@ -613,6 +637,22 @@ fn main() -> ExitCode {
             token,
             remote,
         } => commands::sync(&repo_path, server.as_deref(), token.as_deref(), &remote),
+        Commands::Share {
+            server,
+            token,
+            remote,
+            session,
+            no_open,
+        } => share_cmd::share(
+            &repo_path,
+            &share_cmd::ShareRequest {
+                server,
+                token,
+                remote,
+                session_id: session,
+                no_open,
+            },
+        ),
         Commands::Pull {
             server,
             token,

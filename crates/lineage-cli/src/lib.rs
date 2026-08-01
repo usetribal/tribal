@@ -13,4 +13,5 @@ pub mod pull_cmd;
 pub mod resume_cmd;
 pub mod retrieval_cmd;
 pub mod session_pick;
+pub mod share_cmd;
 pub mod skill_cmd;

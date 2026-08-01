@@ -618,7 +618,11 @@ pub fn login(server: &str) -> Result<()> {
 // Explicit flag / LINEAGE_TOKEN bypass the stored login entirely (CI, scripts);
 // otherwise the stored session handle is exchanged for a fresh 15-minute JWT,
 // which comfortably outlives a sync run — no mid-run refresh needed.
-fn resolve_sync_token(server: &str, token: Option<&str>) -> Result<String> {
+//
+// Shared with `share`, which pushes through the same transport and must resolve
+// its token the same way — a second precedence order would be a second thing to
+// get wrong.
+pub(crate) fn resolve_sync_token(server: &str, token: Option<&str>) -> Result<String> {
     let explicit = token
         .map(str::to_string)
         .filter(|t| !t.is_empty())
