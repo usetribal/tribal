@@ -6,7 +6,12 @@ use chrono::Utc;
 
 use crate::events::{EventLog, Outcome};
 
-const SKILL_MD: &str = include_str!("../assets/skills/lineage/SKILL.md");
+/// Every bundled skill, as (directory name, `SKILL.md` contents). Each is
+/// installed into every selected target, so adding one here is the whole change.
+const BUNDLED_SKILLS: &[(&str, &str)] = &[
+    ("lineage", include_str!("../assets/skills/lineage/SKILL.md")),
+    ("share", include_str!("../assets/skills/share/SKILL.md")),
+];
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -30,13 +35,17 @@ impl SkillTarget {
         }
     }
 
-    pub fn skill_path(self, repo_path: &Path) -> PathBuf {
+    pub fn skills_dir(self, repo_path: &Path) -> PathBuf {
         let subdir = match self {
-            Self::Cursor => ".cursor/skills/lineage/SKILL.md",
-            Self::Claude => ".claude/skills/lineage/SKILL.md",
-            Self::Codex => ".agents/skills/lineage/SKILL.md",
+            Self::Cursor => ".cursor/skills",
+            Self::Claude => ".claude/skills",
+            Self::Codex => ".agents/skills",
         };
         repo_path.join(subdir)
+    }
+
+    pub fn skill_path(self, repo_path: &Path, skill: &str) -> PathBuf {
+        self.skills_dir(repo_path).join(skill).join("SKILL.md")
     }
 
     pub fn doc_hint(self) -> &'static str {
@@ -111,9 +120,11 @@ fn init_skill_impl(repo_path: &Path, targets: &[String], force: bool, verbose: b
 
     let mut existing = Vec::new();
     for target in &resolved {
-        let path = target.skill_path(repo_path);
-        if path.exists() && !force {
-            existing.push(path);
+        for (skill, _) in BUNDLED_SKILLS {
+            let path = target.skill_path(repo_path, skill);
+            if path.exists() && !force {
+                existing.push(path);
+            }
         }
     }
     if !existing.is_empty() {
@@ -126,20 +137,22 @@ fn init_skill_impl(repo_path: &Path, targets: &[String], force: bool, verbose: b
     }
 
     if verbose {
-        println!("installing lineage agent skill:");
+        println!("installing lineage agent skills:");
     }
     for target in &resolved {
-        let path = target.skill_path(repo_path);
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        fs::write(&path, SKILL_MD)?;
-        if verbose {
-            println!("  {}: {}", path.display(), target.doc_hint());
+        for (skill, contents) in BUNDLED_SKILLS {
+            let path = target.skill_path(repo_path, skill);
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::write(&path, contents)?;
+            if verbose {
+                println!("  {}: {}", path.display(), target.doc_hint());
+            }
         }
     }
     if verbose {
-        println!("Agents can use lineage to search sessions, blame lines, and show conversations.");
+        println!("Agents can use lineage to search sessions, blame lines, show conversations, and share a session as a link.");
     }
 
     if let Some(log) = EventLog::for_repo_path(repo_path) {
@@ -175,8 +188,17 @@ mod tests {
         let t = resolve_targets(&["agents".into()]);
         assert_eq!(t, vec![SkillTarget::Codex]);
         assert!(t[0]
-            .skill_path(Path::new("/repo"))
+            .skill_path(Path::new("/repo"), "lineage")
             .ends_with(".agents/skills/lineage/SKILL.md"));
+    }
+
+    #[test]
+    fn bundles_lineage_and_share_skills() {
+        let names: Vec<&str> = BUNDLED_SKILLS.iter().map(|(name, _)| *name).collect();
+        assert_eq!(names, vec!["lineage", "share"]);
+        assert!(BUNDLED_SKILLS
+            .iter()
+            .all(|(_, contents)| contents.starts_with("---\nname: ")));
     }
 
     #[test]

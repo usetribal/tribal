@@ -98,7 +98,7 @@ fn run_non_interactive(repo_path: &Path, options: &InitOptions) -> Result<()> {
     commands::init_config(repo_path)?;
     let skill_targets = skill_targets_for_init(options);
     match skill_targets {
-        None => println!("agent skill: skipped"),
+        None => println!("agent skills: skipped"),
         Some(ref targets) => skill_cmd::init_skill(repo_path, targets, true)?,
     }
     let hooks_installed = install_hooks_with_retry(repo_path, options.force_hooks, false)?;
@@ -163,8 +163,8 @@ fn run_interactive(repo_path: &Path, options: &InitOptions) -> Result<()> {
     println!();
 
     step_heading(
-        "Agent skill",
-        Some("bundled SKILL.md for your coding agents"),
+        "Agent skills",
+        Some("bundled lineage and share skills for your coding agents"),
     );
     let skill_targets = prompt_skill_targets()?;
     match skill_targets {
@@ -174,7 +174,7 @@ fn run_interactive(repo_path: &Path, options: &InitOptions) -> Result<()> {
             let installed = skill_cmd::resolve_targets(targets);
             for (i, target) in installed.iter().enumerate() {
                 let last = i + 1 == installed.len();
-                step_item(!last, format!("{}", target.skill_path(repo_path).display()));
+                step_item(!last, format!("{}", target.skills_dir(repo_path).display()));
             }
         }
     }

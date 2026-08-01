@@ -63,7 +63,7 @@ make msrv                    # verify Rust 1.86 MSRV
 | `src/skill_cmd.rs` | `init-skill` (bundled skill install) |
 | `src/hooks_cmd.rs` | Hook install/uninstall |
 | `assets/hooks/` | Pre-commit / post-commit hook scripts |
-| `assets/skills/lineage/` | Bundled end-user skill (installed by `init-skill`) |
+| `assets/skills/` | Bundled end-user skills — `lineage/`, `share/` (installed by `init-skill`) |
 
 ```bash
 cargo test -p lineage-cli
