@@ -81,6 +81,7 @@ See [Import](../import.md).
 | `git lineage show <id> [--json] [--hydrate-images]` | Show conversation |
 | `git lineage blame <path>[:line] [--json]` | Lineage for a file line |
 | `git lineage fork [<session-id>] [--query <text>] [--pick N] [--json]` | Continue someone else's session — search or pick when id omitted (see [Fork a session](#fork-a-session)) |
+| `git lineage fork <share-url> [--into DIR] [--no-open] [--server URL]` | Fork a session from a share link — clones the repo if needed and opens the harness (see [Fork a session](#fork-a-session)) |
 | `git lineage fork <session-id> --brief` | Print a context block for starting a subagent on that session; writes nothing (see [Brief a subagent](#brief-a-subagent-on-a-session)) |
 | `git lineage search <query>` | Full-text search (auto-rebuilds stale index) |
 | `git lineage rebuild [--embed]` | Rebuild all derived state (links, line objects, index) from stored sessions; `--embed` also runs the dense-embedding backfill |
@@ -351,6 +352,14 @@ Notes:
 
 `git lineage fork <session-id>` picks up a teammate's agent session and hands you
 a native, resumable one carrying their context.
+
+`git lineage fork <share-url>` does the same from a share link — no account, no
+`git lineage init`, no prior setup. It fetches the shared session, works out
+where to land it (the current checkout if its remote matches, the most recently
+used matching checkout it has seen, or a fresh clone into `./<name>` — printed,
+never asked), writes the transcript, and opens the harness on it. `--into <dir>`
+forks somewhere explicit instead, `--no-open` prints the resume command rather
+than running it, and `--server` overrides the API origin for local stacks.
 
 Find one with `git lineage list`, which shows id, date, turn count, agent, model,
 and who ran it, newest first:
