@@ -66,22 +66,26 @@ pub struct ExchangeResponse {
     pub expires_in: u64,
 }
 
-pub fn credentials_path() -> Result<PathBuf> {
+/// The CLI's per-machine config directory. Everything the CLI stores about the
+/// machine rather than about a repository lives here — the login, and the repo
+/// registry beside it.
+pub fn config_dir() -> Result<PathBuf> {
     if let Ok(dir) = std::env::var(CONFIG_DIR_ENV) {
         if !dir.is_empty() {
-            return Ok(PathBuf::from(dir).join("credentials.json"));
+            return Ok(PathBuf::from(dir));
         }
     }
     if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
         if !xdg.is_empty() {
-            return Ok(PathBuf::from(xdg).join("lineage").join("credentials.json"));
+            return Ok(PathBuf::from(xdg).join("lineage"));
         }
     }
-    let home = std::env::var("HOME").map_err(|_| "cannot locate credentials: HOME is not set")?;
-    Ok(PathBuf::from(home)
-        .join(".config")
-        .join("lineage")
-        .join("credentials.json"))
+    let home = std::env::var("HOME").map_err(|_| "cannot locate config: HOME is not set")?;
+    Ok(PathBuf::from(home).join(".config").join("lineage"))
+}
+
+pub fn credentials_path() -> Result<PathBuf> {
+    Ok(config_dir()?.join("credentials.json"))
 }
 
 pub fn load_credentials() -> Result<Credentials> {
