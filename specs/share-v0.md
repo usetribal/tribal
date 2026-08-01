@@ -65,10 +65,14 @@ Consequences a client may rely on:
 ### Create
 
 Authenticated with the same bearer token as sync ([sync-protocol-v0
-Transport](sync-protocol-v0.md#transport)). The token's verified claims supply
-the tenant and the creating user; nothing in the request body can override
-them. The request names the conversation; the server reads its current turn
-count and pins it — a client never supplies the count.
+Transport](sync-protocol-v0.md#transport)), and scoped the same way: the
+request names the repository by its normalized remote URL, and the workspace is
+inferred from that repository's owner namespace against the caller's
+memberships — the bearer token identifies the user, never a workspace, and
+nothing in the request body can name one. The token's verified claims supply
+the creating user. The request names the conversation within that repository;
+the server reads its current turn count and pins it — a client never supplies
+the count.
 
 The server MUST refuse to share a conversation marked `private: true`, or one
 descended from a private conversation, with a specific error rather than a
