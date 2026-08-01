@@ -30,9 +30,9 @@ git lineage init --no-import        # skip first import
 git lineage init-config             # write default refs/lineage/config only
 ```
 
-### Agent skill
+### Agent skills
 
-Bundled skill teaches agents to use lineage features (search, blame, share, rebase, resume). Installed during init or manually:
+Two bundled skills: `lineage` teaches agents to use lineage features (search, blame, share, rebase, resume), and `share` teaches them to turn the current session into a link. Installed during init or manually:
 
 ```bash
 git lineage init-skill
@@ -43,9 +43,9 @@ git lineage init-skill --target all --force
 
 | Target | Install path |
 |--------|--------------|
-| `cursor` | `.cursor/skills/lineage/SKILL.md` |
-| `claude` | `.claude/skills/lineage/SKILL.md` |
-| `codex` / `agents` | `.agents/skills/lineage/SKILL.md` |
+| `cursor` | `.cursor/skills/{lineage,share}/SKILL.md` |
+| `claude` | `.claude/skills/{lineage,share}/SKILL.md` |
+| `codex` / `agents` | `.agents/skills/{lineage,share}/SKILL.md` |
 | `all` | All three (default) |
 
 Re-run with `--force` after upgrading the CLI to refresh skill content.

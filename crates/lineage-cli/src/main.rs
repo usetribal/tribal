@@ -46,7 +46,7 @@ enum Commands {
         /// Skill targets: cursor, claude, codex, agents, all, none
         #[arg(long = "target", value_parser = skill_cmd::parse_skill_target)]
         target: Vec<String>,
-        /// Skip agent skill install
+        /// Skip agent skills install
         #[arg(long)]
         no_skill: bool,
         /// Skip initial import
@@ -58,7 +58,7 @@ enum Commands {
     },
     /// Write default refs/lineage/config
     InitConfig,
-    /// Install bundled agent skill for lineage context retrieval
+    /// Install bundled agent skills for lineage context retrieval and session sharing
     InitSkill {
         /// Targets: cursor, claude, codex, agents (same as codex), all (default: all)
         #[arg(long = "target", value_parser = skill_cmd::parse_skill_target)]
