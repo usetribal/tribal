@@ -1,8 +1,9 @@
 use std::path::PathBuf;
 
+use chrono::Utc;
 use lineage_cli::{
-    commands, context_cmd, digest, doctor_cmd, fork_cmd, hooks_cmd, init_cmd, pull_cmd, resume_cmd,
-    retrieval_cmd, session_pick, share_cmd, skill_cmd,
+    commands, context_cmd, digest, doctor_cmd, fork_cmd, hooks_cmd, init_cmd, pull_cmd,
+    repo_registry, resume_cmd, retrieval_cmd, session_pick, share_cmd, skill_cmd,
 };
 use lineage_retrieval::{DEFAULT_AROUND_RADIUS, DEFAULT_TRAVERSAL_LIMIT};
 use std::process::ExitCode;
@@ -108,8 +109,14 @@ enum Commands {
     /// prose, so nothing hands you file handles or checkpoints that no longer
     /// exist.
     ///
-    /// Claude Code sessions only for now. The command prints what to run rather
-    /// than launching the agent for you.
+    /// Given a share link instead of an id, this fetches that one session
+    /// without a login, resolves where to land it — this repository, a checkout
+    /// you already have, or a fresh clone — and opens it. Nothing is asked;
+    /// each choice is printed. `--no-open` prints the command instead of
+    /// running it, and `--into <dir>` overrides where it lands.
+    ///
+    /// Claude Code sessions only for now. Given an id, the command prints what
+    /// to run rather than launching the agent for you.
     /// `--brief` does something different: it writes nothing and prints a
     /// self-contained context block — whose session it was, the turns that
     /// carry the intent and the code changes, and the traversal commands — for
@@ -118,8 +125,9 @@ enum Commands {
     /// stored session, including one pulled from a teammate that this build
     /// cannot write a transcript for.
     Fork {
-        /// Session to continue — lineage id, id prefix, or harness UUID
-        /// (`git lineage list` shows titles and ids)
+        /// Session to continue — lineage id, id prefix, harness UUID
+        /// (`git lineage list` shows titles and ids), or a share link
+        /// (`https://<host>/s/<token>`)
         session_id: Option<String>,
         /// Search local sessions by topic when no id is given
         #[arg(long)]
@@ -133,6 +141,15 @@ enum Commands {
         /// Structured output for agents (candidates or resolved session)
         #[arg(long)]
         json: bool,
+        /// Share links: fork into this directory instead of resolving where to land
+        #[arg(long)]
+        into: Option<PathBuf>,
+        /// Share links: Lineage server to fetch from (default: derived from the link)
+        #[arg(long)]
+        server: Option<String>,
+        /// Share links: print the command to continue the session instead of running it
+        #[arg(long)]
+        no_open: bool,
     },
     /// Reopen one of your own sessions in the agent that produced it
     ///
@@ -456,6 +473,13 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
     let repo_path = cli.repo.unwrap_or_else(|| PathBuf::from("."));
 
+    // The one place the registry is written. Recording here rather than in each
+    // command means every subcommand run inside a checkout keeps it fresh, and
+    // a new subcommand cannot forget to — which is what makes `fork <share-url>`
+    // able to find a repository the receiver cloned months ago. Best-effort by
+    // contract: a machine-level cache must never fail a repository command.
+    repo_registry::record(&repo_path, Utc::now());
+
     let result = match cli.command {
         Commands::Doctor {
             json,
@@ -511,6 +535,9 @@ fn main() -> ExitCode {
             pick,
             brief,
             json,
+            into,
+            server,
+            no_open,
         } => fork_cmd::fork(
             &repo_path,
             fork_cmd::ForkRequest {
@@ -521,6 +548,11 @@ fn main() -> ExitCode {
                 },
                 brief,
                 json,
+                share: fork_cmd::ShareOptions {
+                    server,
+                    into,
+                    no_open,
+                },
             },
         ),
         Commands::Resume { session_id } => resume_cmd::resume(&repo_path, &session_id),

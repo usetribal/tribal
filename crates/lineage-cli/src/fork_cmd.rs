@@ -2,7 +2,7 @@
 //! your own harness.
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use chrono::Utc;
 use lineage_adapters::all_adapters;
@@ -14,6 +14,7 @@ use crate::brief;
 use crate::digest::traversal_vocabulary;
 use crate::events::{EventLog, Outcome};
 use crate::session_pick::{self, ForkPickOptions, ForkPickResult};
+use crate::share_fork;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -25,9 +26,36 @@ pub struct ForkRequest {
     pub pick: ForkPickOptions,
     pub brief: bool,
     pub json: bool,
+    /// Share-link options, meaningful only when the argument is a share URL.
+    pub share: ShareOptions,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ShareOptions {
+    pub server: Option<String>,
+    pub into: Option<PathBuf>,
+    pub no_open: bool,
 }
 
 pub fn fork(repo_path: &Path, request: ForkRequest) -> Result<()> {
+    // A share link and a session id cannot be confused: ids are ULIDs, id
+    // prefixes, or harness UUIDs, none of which carry a scheme or a slash. So
+    // the argument decides which fork this is, with no flag to remember.
+    if let Some(url) = request
+        .pick
+        .session_id
+        .as_deref()
+        .filter(|argument| share_fork::is_share_url(argument))
+    {
+        share_fork::fork_share(&share_fork::ShareForkRequest {
+            url: url.to_string(),
+            server: request.share.server.clone(),
+            into: request.share.into.clone(),
+            no_open: request.share.no_open,
+        })?;
+        return Ok(());
+    }
+
     let picked = session_pick::pick_fork_session(repo_path, &request.pick)?;
     if request.json {
         println!("{}", serde_json::to_string_pretty(&picked)?);
@@ -35,7 +63,10 @@ pub fn fork(repo_path: &Path, request: ForkRequest) -> Result<()> {
             return Ok(());
         }
     }
-    fork_resolved(repo_path, &picked.session_id, request.brief)
+    if let Some(rendered) = fork_resolved(repo_path, &picked.session_id, request.brief)? {
+        print_next_step(&rendered);
+    }
+    Ok(())
 }
 
 fn should_stop_after_json(request: &ForkRequest, picked: &ForkPickResult) -> bool {
@@ -45,7 +76,17 @@ fn should_stop_after_json(request: &ForkRequest, picked: &ForkPickResult) -> boo
         && request.pick.pick.is_none()
 }
 
-fn fork_resolved(repo_path: &Path, session_id: &str, as_brief: bool) -> Result<()> {
+/// Fork a session that is already in this repository's refs, returning what was
+/// written so a caller can open it. `None` for `--brief`, which writes nothing.
+///
+/// Public because forking a share is this exact step with the session put there
+/// first: the share path resolves where to land and persists the conversation,
+/// then hands off here rather than growing a second copy of the fork rules.
+pub fn fork_resolved(
+    repo_path: &Path,
+    session_id: &str,
+    as_brief: bool,
+) -> Result<Option<RenderedTranscript>> {
     let repo = open_repo(repo_path)?;
     let id = resolve_session(repo.inner(), session_id).map_err(|error| error.to_string())?;
     let source = read_conversation(repo.inner(), &id)?.ok_or_else(|| {
@@ -57,7 +98,8 @@ fn fork_resolved(repo_path: &Path, session_id: &str, as_brief: bool) -> Result<(
     })?;
 
     if as_brief {
-        return print_brief(&repo, &source);
+        print_brief(&repo, &source)?;
+        return Ok(None);
     }
 
     let rendered = render_for(repo.workdir(), &source)?;
@@ -92,8 +134,24 @@ fn fork_resolved(repo_path: &Path, session_id: &str, as_brief: bool) -> Result<(
     println!("Wrote {}", rendered.path.display());
     println!("Recorded fork {} (continues {})", fork.id, source.id);
     println!();
-    print_next_step(&rendered);
-    Ok(())
+    Ok(Some(rendered))
+}
+
+/// What to run, for a caller that is not going to run it. Separate from
+/// [`fork_resolved`] because forking a share runs it instead, and printing a
+/// command beside a session that is already open would read as an instruction.
+pub fn print_next_step(rendered: &RenderedTranscript) {
+    println!(
+        "To continue it, run this from {}:",
+        rendered.resume_cwd.display()
+    );
+    println!();
+    println!("    {}", rendered.resume_command);
+    println!();
+    println!("You get their context, not their transcript: tool calls are replayed as prose,");
+    println!(
+        "so the session reads as history rather than handing you handles that no longer exist."
+    );
 }
 
 fn print_brief(repo: &lineage_git::LineageRepo, source: &Conversation) -> Result<()> {
@@ -201,20 +259,6 @@ fn short_shas(shas: &[String]) -> String {
         .map(|sha| sha.chars().take(8).collect::<String>())
         .collect::<Vec<_>>()
         .join(", ")
-}
-
-fn print_next_step(rendered: &RenderedTranscript) {
-    println!(
-        "To continue it, run this from {}:",
-        rendered.resume_cwd.display()
-    );
-    println!();
-    println!("    {}", rendered.resume_command);
-    println!();
-    println!("You get their context, not their transcript: tool calls are replayed as prose,");
-    println!(
-        "so the session reads as history rather than handing you handles that no longer exist."
-    );
 }
 
 #[cfg(test)]
