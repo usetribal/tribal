@@ -42,7 +42,14 @@ lineage-cli = { path = "crates/lineage-cli" }
 
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
-git2 = "0.19"
+# Local object and ref access only — every network operation (clone, fetch,
+# push, LFS) shells out to the user's own `git`, which already holds their
+# credentials, SSH agent, and proxy config. libgit2's own transports would
+# duplicate all of that, and they are what drags in libssh2 and a dynamically
+# linked OpenSSL: a binary that then refuses to start when the host's libssl
+# major differs from the build machine's, and cannot be built for musl at all.
+# Dropping the default features is what makes a release artifact portable.
+git2 = { version = "0.19", default-features = false }
 rusqlite = { version = "0.32", features = ["bundled"] }
 schemars = { version = "1", features = ["chrono04"] }
 serde = { version = "1", features = ["derive"] }
