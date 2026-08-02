@@ -25,6 +25,7 @@ use lineage_core::{LineageId, PullOrigin};
 use lineage_git::{open_repo, persist_conversation, read_conversation_stored};
 use serde::{Deserialize, Serialize};
 
+use crate::auth;
 use crate::pull_cmd::{merge_pulled, PulledConversation};
 use crate::repo_registry;
 
@@ -189,17 +190,75 @@ fn web_origin(url: &str) -> Option<String> {
 
 /// The API origin that serves the share the web origin displayed.
 ///
-/// The deployment publishes the web app at `app.<domain>` and the API at
-/// `api.<domain>`, so swapping the label is the whole derivation. Any other
-/// host is used as-is — a single-origin or self-hosted deployment serves both
-/// from one place, and `--server` covers the rest.
+/// A stored login wins when one shares the link's origin: whoever logged in
+/// named the API themselves, path and all, which no derivation can infer. That
+/// covers path-prefixed and split-port deployments (`http://localhost:3000/api`
+/// behind a web app on `:4200`), where guessing from the host alone sends the
+/// fetch at the web server and gets HTML back.
+///
+/// Otherwise the deployment publishes the web app at `app.<domain>` and the API
+/// at `api.<domain>`, so swapping the label is the derivation. Any other host is
+/// used as-is — a single-origin deployment serves both from one place, and an
+/// anonymous receiver with no credentials at all still resolves. `--server`
+/// overrides everything.
 fn api_origin(web_origin: &str) -> String {
+    stored_server_for(web_origin).unwrap_or_else(|| api_origin_without_login(web_origin))
+}
+
+fn api_origin_without_login(web_origin: &str) -> String {
     match web_origin.split_once("://") {
         Some((scheme, host)) if host.starts_with("app.") => {
             format!("{scheme}://api.{}", &host["app.".len()..])
         }
         _ => web_origin.to_string(),
     }
+}
+
+/// A logged-in server that can serve this link.
+///
+/// Preferred in two steps. A stored server sharing the link's origin is the
+/// surest match — same host and port, so only the path differs. Failing that, a
+/// **local** link falls back to the default server: a dev stack splits the web
+/// app and API across ports (`:4200` and `:3000/api`), which no rule can derive
+/// from the link alone, and the developer running it is logged in to exactly the
+/// stack they are testing. That fallback is deliberately confined to loopback —
+/// on a real deployment, pointing a stranger's fork at whatever server they last
+/// logged in to would be wrong.
+fn stored_server_for(web_origin: &str) -> Option<String> {
+    let credentials = auth::load_credentials().ok()?;
+    let matching = credentials
+        .servers
+        .keys()
+        .filter(|server| same_origin(server, web_origin))
+        .max_by_key(|server| server.len());
+    if let Some(server) = matching {
+        return Some(server.clone());
+    }
+    if !is_loopback(web_origin) {
+        return None;
+    }
+    credentials
+        .default_server
+        .filter(|server| is_loopback(server))
+}
+
+fn same_origin(server: &str, web_origin: &str) -> bool {
+    server == web_origin
+        || server
+            .strip_prefix(web_origin)
+            .is_some_and(|rest| rest.starts_with('/'))
+}
+
+fn is_loopback(url: &str) -> bool {
+    let host = url
+        .split_once("://")
+        .map(|(_, rest)| rest)
+        .unwrap_or(url)
+        .split('/')
+        .next()
+        .unwrap_or_default();
+    let name = host.split(':').next().unwrap_or_default();
+    name == "localhost" || name == "127.0.0.1" || name == "[::1]"
 }
 
 // --- Landing resolution ---------------------------------------------------------
@@ -559,15 +618,59 @@ mod tests {
 
     #[test]
     fn the_api_origin_is_derived_from_the_web_origin_the_link_carries() {
+        assert_eq!(
+            api_origin_without_login("https://app.uselineage.io"),
+            "https://api.uselineage.io"
+        );
         let link = parse_share_url("https://app.uselineage.io/s/tok123", None).unwrap();
-        assert_eq!(link.server, "https://api.uselineage.io");
         assert_eq!(link.token, "tok123");
     }
 
     #[test]
     fn a_single_origin_deployment_is_left_alone() {
-        let link = parse_share_url("http://localhost:4200/s/tok123", None).unwrap();
-        assert_eq!(link.server, "http://localhost:4200");
+        assert_eq!(
+            api_origin_without_login("http://localhost:4200"),
+            "http://localhost:4200"
+        );
+    }
+
+    /// The case that sent the fetch at the web server and got HTML back: the API
+    /// lives under a path prefix, which no host rewrite can infer. Only a login
+    /// naming it knows, so a matching stored server wins.
+    #[test]
+    fn a_login_under_the_links_origin_is_preferred_over_the_host_rewrite() {
+        assert!(same_origin(
+            "http://localhost:4200/api",
+            "http://localhost:4200"
+        ));
+        assert!(same_origin(
+            "http://localhost:4200",
+            "http://localhost:4200"
+        ));
+    }
+
+    #[test]
+    fn a_login_to_an_unrelated_server_does_not_match() {
+        assert!(!same_origin(
+            "https://api.elsewhere.dev",
+            "https://app.uselineage.io"
+        ));
+        // A shared prefix is not a shared origin: only a path boundary counts.
+        assert!(!same_origin(
+            "http://localhost:42000",
+            "http://localhost:4200"
+        ));
+    }
+
+    /// The default-server fallback is confined to loopback: a dev stack splits
+    /// web and API across ports, but pointing a stranger's fork at whatever
+    /// server they last logged in to would be wrong on a real deployment.
+    #[test]
+    fn only_local_links_may_fall_back_to_the_default_server() {
+        assert!(is_loopback("http://localhost:4200"));
+        assert!(is_loopback("http://127.0.0.1:3000/api"));
+        assert!(!is_loopback("https://app.uselineage.io"));
+        assert!(!is_loopback("https://localhost.evil.dev"));
     }
 
     #[test]
