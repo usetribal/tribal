@@ -359,7 +359,14 @@ where to land it (the current checkout if its remote matches, the most recently
 used matching checkout it has seen, or a fresh clone into `./<name>` — printed,
 never asked), writes the transcript, and opens the harness on it. `--into <dir>`
 forks somewhere explicit instead, `--no-open` prints the resume command rather
-than running it, and `--server` overrides the API origin for local stacks.
+than running it, and `--server` overrides the API origin.
+
+The API origin is asked for, not guessed: a share link names the web app, and
+where the API sits relative to it differs per deployment, so the link's origin is
+read for `/.well-known/lineage.json` naming its API base (`share-v0`). An origin
+that publishes nothing falls back to rewriting `app.<domain>` to `api.<domain>`,
+which is why a deployment serving its API under a path prefix needs either the
+document or `--server`.
 
 Find one with `git lineage list`, which shows id, date, turn count, agent, model,
 and who ran it, newest first:

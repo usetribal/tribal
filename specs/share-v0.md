@@ -94,6 +94,39 @@ What a fetch returns is bounded three ways:
    caller who learns a digest elsewhere would otherwise be able to read it
    through the share.
 
+### Finding the API
+
+A share link names the **web** origin — the page a receiver opens. Fetching the
+share needs the **API** origin, and the two are not the same in most
+deployments: one publishes the app at `app.<domain>` and the API at
+`api.<domain>/api`, a development stack splits them across ports, and a
+single-origin deployment serves both from one place under one prefix. None of
+that is recoverable from the link, so a receiver must not guess it.
+
+Every origin that serves share pages MUST therefore publish a discovery
+document at `/.well-known/lineage.json`, served without authentication:
+
+```json
+{ "api": "https://api.example.com/api" }
+```
+
+`api` is the absolute origin the API is served from, **path prefix included**,
+with no trailing slash. It is the base a client joins `/v0/shares/{token}` onto.
+Servers MAY add fields; clients MUST ignore ones they do not know.
+
+A client resolving a share link MUST try, in order:
+
+1. An explicitly configured API origin, if the invocation supplies one.
+2. The discovery document at the link origin's `/.well-known/lineage.json`.
+3. A last-resort derivation from the link origin, so a deployment that predates
+   discovery still resolves.
+
+Step 3 exists only so an older server is not bricked, and MUST NOT be reached
+when a discovery document is present. A client MUST tolerate the document being
+absent, unparsable, or served as something other than JSON — single-page apps
+commonly answer unknown paths with HTML rather than a 404 — and MUST treat any
+of those as "not published" rather than as a failure to report.
+
 ## Wire shapes
 
 The share fetch does **not** define a conversation encoding. It returns the

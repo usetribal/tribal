@@ -25,7 +25,6 @@ use lineage_core::{LineageId, PullOrigin};
 use lineage_git::{open_repo, persist_conversation, read_conversation_stored};
 use serde::{Deserialize, Serialize};
 
-use crate::auth;
 use crate::pull_cmd::{merge_pulled, PulledConversation};
 use crate::repo_registry;
 
@@ -37,6 +36,12 @@ const FETCH_TIMEOUT: Duration = Duration::from_secs(60);
 /// that serves the same share to a client (`specs/share-v0.md` "Endpoints").
 const SHARE_PATH_SEGMENT: &str = "s";
 const SHARE_FETCH_PATH: &str = "/v0/shares";
+
+/// Where a share-serving origin publishes its API origin (share-v0 "Finding the
+/// API"). Short timeout: it is one small document on the way to the real fetch,
+/// and falling back to the derivation beats making the receiver wait.
+const DISCOVERY_PATH: &str = "/.well-known/lineage.json";
+const DISCOVERY_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Where a clone lands when the receiver ran the command from their home
 /// directory — the deep-link landing, where `./<name>` would scatter checkouts
@@ -67,6 +72,13 @@ pub struct ShareFetchResponse {
     pub created_at: DateTime<Utc>,
 }
 
+/// What an origin publishes about itself. Only the API base matters to a fork;
+/// unknown fields are ignored so the document can grow (share-v0 "Evolution").
+#[derive(Debug, Clone, Deserialize)]
+struct DiscoveryDocument {
+    api: String,
+}
+
 /// The one server call, behind a trait so every resolution branch below is
 /// testable without a network.
 pub trait ShareFetchTransport {
@@ -95,7 +107,7 @@ impl ShareFetchTransport for HttpTransport {
         let response = ureq::get(&url)
             .timeout(FETCH_TIMEOUT)
             .call()
-            .map_err(describe_fetch_failure)?;
+            .map_err(|error| describe_fetch_failure(&url, error))?;
         Ok(response.into_json()?)
     }
 }
@@ -104,15 +116,36 @@ impl ShareFetchTransport for HttpTransport {
 /// answers revoked and never-issued with the same status on purpose (share-v0
 /// "Fetch") — so the message says the link does not work and never claims to
 /// know which of the two it was.
-fn describe_fetch_failure(error: ureq::Error) -> String {
+///
+/// A 404 from the *route* rather than the share means we asked the wrong server,
+/// which is a different problem with a different fix: reporting it as a dead
+/// link sends the receiver to ask for a new one that will fail identically.
+fn describe_fetch_failure(url: &str, error: ureq::Error) -> String {
     match error {
-        ureq::Error::Status(404, _) => {
-            "this link is no longer available: it may have been revoked, or the link may be \
-             mistyped. Ask whoever shared it for a new one"
-                .to_string()
+        ureq::Error::Status(404, response) => {
+            if is_share_miss(response) {
+                return "this link is no longer available: it may have been revoked, or the link \
+                        may be mistyped. Ask whoever shared it for a new one"
+                    .to_string();
+            }
+            format!(
+                "no share endpoint at {url} — the server answered, but nothing serves shares \
+                 there. If this deployment publishes its API elsewhere, name it with --server"
+            )
         }
         other => format!("could not fetch the shared session: {other}"),
     }
+}
+
+/// Whether a 404 came from the share lookup or from there being no such route.
+///
+/// The share miss carries the server's own JSON error; a routing miss is
+/// whatever the framework emits for an unmapped path. Only the former names the
+/// share, so an unreadable body is treated as a routing miss — the message that
+/// suggests checking the server is the safer of the two to be wrong with.
+fn is_share_miss(response: ureq::Response) -> bool {
+    let body = response.into_string().unwrap_or_default();
+    body.contains("share link not found")
 }
 
 // --- URL parsing ----------------------------------------------------------------
@@ -141,6 +174,16 @@ pub fn is_share_url(argument: &str) -> bool {
 /// page they are already on, but it carries no origin — that form needs
 /// `--server`.
 pub fn parse_share_url(url: &str, server_override: Option<&str>) -> Result<ShareLink> {
+    resolve_share_url(url, server_override, &discover_api_origin)
+}
+
+/// [`parse_share_url`] with the discovery fetch injected, so every resolution
+/// branch is testable without a network.
+pub fn resolve_share_url(
+    url: &str,
+    server_override: Option<&str>,
+    discover: &dyn Fn(&str) -> Option<String>,
+) -> Result<ShareLink> {
     let token = share_token(url)?;
 
     if let Some(server) = server_override {
@@ -157,7 +200,7 @@ pub fn parse_share_url(url: &str, server_override: Option<&str>) -> Result<Share
         )
     })?;
     Ok(ShareLink {
-        server: api_origin(&origin),
+        server: api_origin(&origin, discover),
         token,
     })
 }
@@ -190,22 +233,25 @@ fn web_origin(url: &str) -> Option<String> {
 
 /// The API origin that serves the share the web origin displayed.
 ///
-/// A stored login wins when one shares the link's origin: whoever logged in
-/// named the API themselves, path and all, which no derivation can infer. That
-/// covers path-prefixed and split-port deployments (`http://localhost:3000/api`
-/// behind a web app on `:4200`), where guessing from the host alone sends the
-/// fetch at the web server and gets HTML back.
+/// The origin is asked rather than guessed: where the API sits relative to the
+/// web app is a property of the deployment (`app.<domain>` beside
+/// `api.<domain>/api` here, split ports in a dev stack, one origin for a
+/// self-hoster), and none of it is recoverable from the link. share-v0 "Finding
+/// the API" makes every origin that serves share pages publish it.
 ///
-/// Otherwise the deployment publishes the web app at `app.<domain>` and the API
-/// at `api.<domain>`, so swapping the label is the derivation. Any other host is
-/// used as-is — a single-origin deployment serves both from one place, and an
-/// anonymous receiver with no credentials at all still resolves. `--server`
-/// overrides everything.
-fn api_origin(web_origin: &str) -> String {
-    stored_server_for(web_origin).unwrap_or_else(|| api_origin_without_login(web_origin))
+/// The derivation below is only the fallback for an origin that publishes no
+/// document — a server predating discovery, which would otherwise be bricked.
+/// `--server` overrides both.
+fn api_origin(web_origin: &str, discover: &dyn Fn(&str) -> Option<String>) -> String {
+    discover(web_origin).unwrap_or_else(|| derived_api_origin(web_origin))
 }
 
-fn api_origin_without_login(web_origin: &str) -> String {
+/// The pre-discovery guess: this deployment publishes the web app at
+/// `app.<domain>` and the API at `api.<domain>`, so swapping the label is the
+/// derivation. Any other host is used as-is, which is right for a single-origin
+/// deployment and wrong for a path-prefixed one — it cannot see a prefix, which
+/// is precisely why discovery exists.
+fn derived_api_origin(web_origin: &str) -> String {
     match web_origin.split_once("://") {
         Some((scheme, host)) if host.starts_with("app.") => {
             format!("{scheme}://api.{}", &host["app.".len()..])
@@ -214,51 +260,21 @@ fn api_origin_without_login(web_origin: &str) -> String {
     }
 }
 
-/// A logged-in server that can serve this link.
+/// Reads the discovery document a share-serving origin publishes.
 ///
-/// Preferred in two steps. A stored server sharing the link's origin is the
-/// surest match — same host and port, so only the path differs. Failing that, a
-/// **local** link falls back to the default server: a dev stack splits the web
-/// app and API across ports (`:4200` and `:3000/api`), which no rule can derive
-/// from the link alone, and the developer running it is logged in to exactly the
-/// stack they are testing. That fallback is deliberately confined to loopback —
-/// on a real deployment, pointing a stranger's fork at whatever server they last
-/// logged in to would be wrong.
-fn stored_server_for(web_origin: &str) -> Option<String> {
-    let credentials = auth::load_credentials().ok()?;
-    let matching = credentials
-        .servers
-        .keys()
-        .filter(|server| same_origin(server, web_origin))
-        .max_by_key(|server| server.len());
-    if let Some(server) = matching {
-        return Some(server.clone());
-    }
-    if !is_loopback(web_origin) {
+/// Every failure is `None` — a missing document, a timeout, HTML from a
+/// single-page app answering an unknown path with its shell, a body that is not
+/// the expected shape. Discovery is an improvement on guessing, never a new way
+/// for a fork to fail, so the caller falls back rather than reporting.
+fn discover_api_origin(web_origin: &str) -> Option<String> {
+    let url = format!("{}{DISCOVERY_PATH}", web_origin.trim_end_matches('/'));
+    let response = ureq::get(&url).timeout(DISCOVERY_TIMEOUT).call().ok()?;
+    let document: DiscoveryDocument = response.into_json().ok()?;
+    let api = document.api.trim_end_matches('/').to_string();
+    if !api.starts_with("http://") && !api.starts_with("https://") {
         return None;
     }
-    credentials
-        .default_server
-        .filter(|server| is_loopback(server))
-}
-
-fn same_origin(server: &str, web_origin: &str) -> bool {
-    server == web_origin
-        || server
-            .strip_prefix(web_origin)
-            .is_some_and(|rest| rest.starts_with('/'))
-}
-
-fn is_loopback(url: &str) -> bool {
-    let host = url
-        .split_once("://")
-        .map(|(_, rest)| rest)
-        .unwrap_or(url)
-        .split('/')
-        .next()
-        .unwrap_or_default();
-    let name = host.split(':').next().unwrap_or_default();
-    name == "localhost" || name == "127.0.0.1" || name == "[::1]"
+    Some(api)
 }
 
 // --- Landing resolution ---------------------------------------------------------
@@ -616,68 +632,95 @@ mod tests {
         assert!(!is_share_url("aaaaaaaa-0000-0000-0000-000000000001"));
     }
 
+    /// The server's own share miss (`apps/api` SharesService) versus what a
+    /// framework emits for a path it does not route. Both are 404s, and telling
+    /// a receiver their link died when we asked the wrong server sends them to
+    /// ask for a replacement that fails identically.
     #[test]
-    fn the_api_origin_is_derived_from_the_web_origin_the_link_carries() {
-        assert_eq!(
-            api_origin_without_login("https://app.uselineage.io"),
-            "https://api.uselineage.io"
+    fn a_missing_route_is_not_reported_as_a_dead_link() {
+        let routing_miss = ureq::Error::Status(
+            404,
+            ureq::Response::new(
+                404,
+                "Not Found",
+                r#"{"message":"Cannot GET /v0/shares/tok"}"#,
+            )
+            .unwrap(),
         );
-        let link = parse_share_url("https://app.uselineage.io/s/tok123", None).unwrap();
+        let message = describe_fetch_failure("https://api.example.dev/v0/shares/tok", routing_miss);
+        assert!(message.contains("no share endpoint"), "got: {message}");
+        assert!(!message.contains("no longer available"), "got: {message}");
+    }
+
+    #[test]
+    fn a_revoked_or_unknown_token_still_reads_as_a_dead_link() {
+        let share_miss = ureq::Error::Status(
+            404,
+            ureq::Response::new(404, "Not Found", r#"{"message":"share link not found"}"#).unwrap(),
+        );
+        let message = describe_fetch_failure("https://api.example.dev/v0/shares/tok", share_miss);
+        assert!(message.contains("no longer available"), "got: {message}");
+    }
+
+    fn publishes(api: &'static str) -> impl Fn(&str) -> Option<String> {
+        move |_| Some(api.to_string())
+    }
+
+    fn publishes_nothing(_: &str) -> Option<String> {
+        None
+    }
+
+    /// The bug this whole path exists for: the API lives under a path prefix,
+    /// which no host rewrite can infer, so the fetch went to a route that does
+    /// not exist. The origin says where it is instead.
+    #[test]
+    fn the_api_origin_comes_from_the_document_the_link_origin_publishes() {
+        let link = resolve_share_url(
+            "https://app.uselineage.io/s/tok123",
+            None,
+            &publishes("https://api.uselineage.io/api"),
+        )
+        .unwrap();
+        assert_eq!(link.server, "https://api.uselineage.io/api");
         assert_eq!(link.token, "tok123");
+    }
+
+    /// A dev stack splits the web app and API across ports — the shape that
+    /// nothing derivable from the link can reach, and that a stored login used
+    /// to cover for locally.
+    #[test]
+    fn split_ports_resolve_from_the_document_rather_than_the_host() {
+        let link = resolve_share_url(
+            "http://localhost:4200/s/tok",
+            None,
+            &publishes("http://localhost:3000/api"),
+        )
+        .unwrap();
+        assert_eq!(link.server, "http://localhost:3000/api");
+    }
+
+    /// A server predating discovery must still resolve rather than dead-end.
+    #[test]
+    fn an_origin_publishing_nothing_falls_back_to_the_host_rewrite() {
+        let link =
+            resolve_share_url("https://app.uselineage.io/s/tok", None, &publishes_nothing).unwrap();
+        assert_eq!(link.server, "https://api.uselineage.io");
     }
 
     #[test]
     fn a_single_origin_deployment_is_left_alone() {
         assert_eq!(
-            api_origin_without_login("http://localhost:4200"),
+            derived_api_origin("http://localhost:4200"),
             "http://localhost:4200"
         );
     }
 
-    /// The case that sent the fetch at the web server and got HTML back: the API
-    /// lives under a path prefix, which no host rewrite can infer. Only a login
-    /// naming it knows, so a matching stored server wins.
     #[test]
-    fn a_login_under_the_links_origin_is_preferred_over_the_host_rewrite() {
-        assert!(same_origin(
-            "http://localhost:4200/api",
-            "http://localhost:4200"
-        ));
-        assert!(same_origin(
-            "http://localhost:4200",
-            "http://localhost:4200"
-        ));
-    }
-
-    #[test]
-    fn a_login_to_an_unrelated_server_does_not_match() {
-        assert!(!same_origin(
-            "https://api.elsewhere.dev",
-            "https://app.uselineage.io"
-        ));
-        // A shared prefix is not a shared origin: only a path boundary counts.
-        assert!(!same_origin(
-            "http://localhost:42000",
-            "http://localhost:4200"
-        ));
-    }
-
-    /// The default-server fallback is confined to loopback: a dev stack splits
-    /// web and API across ports, but pointing a stranger's fork at whatever
-    /// server they last logged in to would be wrong on a real deployment.
-    #[test]
-    fn only_local_links_may_fall_back_to_the_default_server() {
-        assert!(is_loopback("http://localhost:4200"));
-        assert!(is_loopback("http://127.0.0.1:3000/api"));
-        assert!(!is_loopback("https://app.uselineage.io"));
-        assert!(!is_loopback("https://localhost.evil.dev"));
-    }
-
-    #[test]
-    fn an_explicit_server_wins_over_the_links_own_origin() {
-        let link = parse_share_url(
+    fn an_explicit_server_wins_over_the_document() {
+        let link = resolve_share_url(
             "https://app.uselineage.io/s/tok",
             Some("http://127.0.0.1:3000/"),
+            &publishes("https://api.uselineage.io/api"),
         )
         .unwrap();
         assert_eq!(link.server, "http://127.0.0.1:3000");
@@ -686,19 +729,25 @@ mod tests {
 
     #[test]
     fn query_and_fragment_are_not_part_of_the_token() {
-        let link = parse_share_url("https://app.example.dev/s/tok?utm=mail#top", None).unwrap();
+        let link = resolve_share_url(
+            "https://app.example.dev/s/tok?utm=mail#top",
+            None,
+            &publishes_nothing,
+        )
+        .unwrap();
         assert_eq!(link.token, "tok");
     }
 
     #[test]
     fn a_path_only_link_needs_a_server_and_says_so() {
-        let error = parse_share_url("/s/tok", None).expect_err("no origin to fetch from");
+        let error = resolve_share_url("/s/tok", None, &publishes_nothing)
+            .expect_err("no origin to fetch from");
         assert!(error.to_string().contains("--server"), "got: {error}");
     }
 
     #[test]
     fn a_url_that_is_not_a_share_link_is_refused_by_shape() {
-        let error = parse_share_url("https://example.com/sessions/abc", None)
+        let error = resolve_share_url("https://example.com/sessions/abc", None, &publishes_nothing)
             .expect_err("not a share link");
         assert!(error.to_string().contains("/s/<token>"), "got: {error}");
     }
