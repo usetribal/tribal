@@ -4,10 +4,31 @@ use chrono::{DateTime, Utc};
 use lineage_core::{AgentKind, Conversation, LineageError};
 
 pub struct SessionRef {
+    /// The vendor's own name for this session, and the sole input to its lineage
+    /// id (`derive_session_id`). Adapters must set it to something identical on
+    /// every machine that observes the same session and unchanged as the session
+    /// is appended to — in practice the transcript's filename stem, which every
+    /// supported vendor derives from its session id.
+    ///
+    /// It must also be per-transcript, not per-conversation: Claude's subagent
+    /// transcripts repeat their parent's in-file `sessionId`, so keying on that
+    /// would collapse a parent and its subagents into one session.
     pub id_hint: String,
     pub agent: AgentKind,
     pub source_path: PathBuf,
+    /// When the transcript was last written, used for reporting and `--since`
+    /// filtering. Never an input to the session id: vendors append as a session
+    /// runs, so this moves while the session stays the same.
     pub started_at: Option<DateTime<Utc>>,
+}
+
+impl SessionRef {
+    /// The opaque token `derive_session_id` keys on. Named so call sites read as
+    /// identity rather than as a hint, and so the contract above has one place
+    /// to be enforced if a vendor ever needs something other than the stem.
+    pub fn session_token(&self) -> &str {
+        &self.id_hint
+    }
 }
 
 pub trait AgentSource: Send + Sync {

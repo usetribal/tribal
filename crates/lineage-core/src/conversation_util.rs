@@ -8,6 +8,15 @@ use crate::{ArtifactKind, Conversation, Role, Turn};
 
 /// Claude Code's own session title from a `"type":"summary"` transcript entry.
 pub const SESSION_SUMMARY_KEY: &str = "session_summary";
+
+/// Modification time of the transcript at the moment it was last read, RFC 3339.
+///
+/// The incremental import skips a session whose transcript has not been written
+/// since this stamp. It cannot use `ended_at` for that: `ended_at` is the last
+/// *turn's* timestamp, while the vendor keeps writing records after it, so the
+/// file's mtime is reliably later than `ended_at` on every session and nothing
+/// would ever skip.
+pub const SOURCE_MTIME_KEY: &str = "source_mtime";
 /// Heuristic summary generated at import when no vendor summary exists.
 pub const ARCHITECTURE_SUMMARY_KEY: &str = "architecture_summary";
 

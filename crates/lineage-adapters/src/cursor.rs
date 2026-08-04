@@ -138,12 +138,7 @@ impl SessionReader for CursorAdapter {
             .map_err(|e| LineageError::Other(e.to_string()))?;
 
         let started_at = session.started_at.unwrap_or_else(Utc::now);
-        let started_key = started_at.to_rfc3339();
-        let id = derive_session_id(
-            AgentKind::Cursor,
-            session.source_path.to_str().unwrap_or(""),
-            &started_key,
-        );
+        let id = derive_session_id(AgentKind::Cursor, session.session_token());
 
         let mut conversation = Conversation {
             schema_version: CONVERSATION_SCHEMA.into(),
