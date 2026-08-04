@@ -330,6 +330,7 @@ mod tests {
                     name: "Edit".into(),
                     arguments: r#"{"file_path": "commands.rs"}"#.into(),
                     result: None,
+                    target: None,
                 }],
                 model: None,
                 timestamp: None,

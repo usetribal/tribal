@@ -395,6 +395,7 @@ mod tests {
                 name: "Edit".into(),
                 arguments: format!(r#"{{"file_path": "{path}"}}"#),
                 result: None,
+                target: None,
             }],
             model: None,
             timestamp: None,

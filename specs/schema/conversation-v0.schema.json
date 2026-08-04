@@ -220,6 +220,17 @@
             "string",
             "null"
           ]
+        },
+        "target": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolTarget"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Absent on documents written before this field existed, and on calls whose\narguments name nothing worth showing."
         }
       },
       "required": [
@@ -227,6 +238,32 @@
         "name"
       ],
       "type": "object"
+    },
+    "ToolTarget": {
+      "description": "The one argument that says what a tool call acted on, resolved at import.\n\n`arguments` is the vendor's raw JSON and its keys differ per harness — Claude\nCode sends `file_path` where Cursor sends `path`. Resolving that belongs with\nthe adapters that already know each harness's shape, so every consumer reads\na field instead of re-parsing a blob and guessing.",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/ToolTargetKind"
+        },
+        "value": {
+          "description": "Repo-relative for `Path` when a workspace root was known at import.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "value"
+      ],
+      "type": "object"
+    },
+    "ToolTargetKind": {
+      "description": "What kind of thing a [`ToolTarget`] names, so a consumer can render it\nwithout re-deriving that from the string. A path can be shown relative to a\nrepository; a command cannot be split on separators; a subject is free text.",
+      "enum": [
+        "path",
+        "command",
+        "subject"
+      ],
+      "type": "string"
     },
     "Turn": {
       "properties": {

@@ -41,6 +41,7 @@ fn alices_session(workspace: &Path) -> Conversation {
                 name: "Read".into(),
                 arguments: r#"{"file_path":"src/auth.rs"}"#.into(),
                 result: None,
+                target: None,
             }],
         ),
         turn(
@@ -51,6 +52,7 @@ fn alices_session(workspace: &Path) -> Conversation {
                 name: "tool_result".into(),
                 arguments: String::new(),
                 result: Some("pub fn middleware() {}".into()),
+                target: None,
             }],
         ),
         turn(Role::Assistant, "Fixed by matching on method.", vec![]),

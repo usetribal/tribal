@@ -2,7 +2,7 @@ use std::path::Path;
 
 use lineage_core::{
     normalize_repo_path_unscoped, Artifact, ArtifactKind, ArtifactResolve, ResolveStrategy,
-    ToolCall,
+    ToolCall, ToolTarget, ToolTargetKind,
 };
 use serde_json::Value;
 
@@ -71,17 +71,15 @@ pub fn extract_cursor_content(
                     .or_else(|| item.get("arguments"))
                     .map(|v| v.to_string())
                     .unwrap_or_default();
+                let raw_input = item.get("input").or_else(|| item.get("arguments"));
                 tool_calls.push(ToolCall {
                     id: id.clone(),
                     name: name.clone(),
                     arguments: input.clone(),
                     result: None,
+                    target: tool_target(&name, raw_input, workspace_root),
                 });
-                artifacts.extend(artifacts_from_tool_input(
-                    &name,
-                    item.get("input").or_else(|| item.get("arguments")),
-                    workspace_root,
-                ));
+                artifacts.extend(artifacts_from_tool_input(&name, raw_input, workspace_root));
             }
             _ => {}
         }
@@ -136,6 +134,7 @@ pub fn extract_claude_content(
                     name: name.clone(),
                     arguments: input.clone(),
                     result: None,
+                    target: tool_target(&name, item.get("input"), workspace_root),
                 });
                 artifacts.extend(artifacts_from_tool_input(
                     &name,
@@ -162,6 +161,9 @@ pub fn extract_claude_content(
                     name: "tool_result".into(),
                     arguments: String::new(),
                     result: Some(result.chars().take(2000).collect()),
+                    // A result carries no arguments; what it answered is named on
+                    // the call it shares an id with.
+                    target: None,
                 });
             }
             _ => {}
@@ -251,13 +253,7 @@ pub fn artifacts_from_tool_input(
         return shell_artifacts(input, workspace_root);
     }
 
-    let path = input
-        .get("path")
-        .or_else(|| input.get("file_path"))
-        .or_else(|| input.get("file"))
-        .or_else(|| input.get("target"))
-        .and_then(|v| v.as_str())
-        .map(String::from);
+    let path = first_str(input, PATH_KEYS);
 
     if lower.contains("patch") || lower == "apply_patch" {
         if let Some(patch) = input
@@ -350,16 +346,73 @@ fn is_shell_tool(name: &str) -> bool {
     matches!(name, "shell" | "bash" | "exec_command") || name.contains("terminal")
 }
 
+/// Argument keys naming a file, most specific first. Shared with
+/// [`artifacts_from_tool_input`] so the two cannot disagree about which key a
+/// harness uses.
+const PATH_KEYS: &[&str] = &["path", "file_path", "file", "target", "notebook_path"];
+
+/// Argument keys naming a shell command.
+const COMMAND_KEYS: &[&str] = &["command", "cmd"];
+
+/// Argument keys carrying free text: what was searched for, asked, or fetched.
+const SUBJECT_KEYS: &[&str] = &["pattern", "query", "url", "prompt", "description"];
+
+fn first_str(input: &Value, keys: &[&str]) -> Option<String> {
+    keys.iter()
+        .find_map(|key| input.get(key))
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.trim().is_empty())
+        .map(String::from)
+}
+
+/// What a call acted on, resolved from the vendor's arguments.
+///
+/// This is the same resolution [`artifacts_from_tool_input`] performs, kept
+/// rather than discarded: that function yields nothing for read-style calls,
+/// which correctly mint no artifact but still touched a file worth naming.
+/// Paths outrank commands and commands outrank free text, so a call naming a
+/// file reads as that file whatever else it carries.
+pub fn tool_target(
+    name: &str,
+    input: Option<&Value>,
+    workspace_root: Option<&Path>,
+) -> Option<ToolTarget> {
+    let input = input?;
+
+    // Shell tools carry a `command` that may also mention paths; the command is
+    // what the caller actually invoked, so it wins for them specifically.
+    if is_shell_tool(&name.to_lowercase()) {
+        return first_str(input, COMMAND_KEYS).map(|value| ToolTarget {
+            kind: ToolTargetKind::Command,
+            value,
+        });
+    }
+
+    if let Some(path) = first_str(input, PATH_KEYS) {
+        return Some(ToolTarget {
+            kind: ToolTargetKind::Path,
+            value: normalize_repo_path_unscoped(&path, workspace_root),
+        });
+    }
+    if let Some(command) = first_str(input, COMMAND_KEYS) {
+        return Some(ToolTarget {
+            kind: ToolTargetKind::Command,
+            value: command,
+        });
+    }
+    first_str(input, SUBJECT_KEYS).map(|value| ToolTarget {
+        kind: ToolTargetKind::Subject,
+        value,
+    })
+}
+
 /// A shell invocation yields either the file writes recovered from its command
 /// (heredocs — the post-image is in the text, so these materialize like any
 /// edit) or, failing that, a single terminal-command artifact preserving the
 /// command for context.
 fn shell_artifacts(input: &Value, workspace_root: Option<&Path>) -> Vec<Artifact> {
-    let command = input
-        .get("command")
-        .or_else(|| input.get("cmd"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
+    let command = first_str(input, COMMAND_KEYS).unwrap_or_default();
+    let command = command.as_str();
 
     let writes = crate::shell_writes::parse_shell_writes(command);
     if !writes.is_empty() {
@@ -686,5 +739,52 @@ mod tests {
         });
         let arts = artifacts_from_tool_input("Bash", Some(&input), None);
         assert!(arts.iter().all(|a| a.kind != ArtifactKind::FileEdit));
+    }
+
+    // The same tool names its path differently per harness; both must resolve.
+    #[test]
+    fn a_path_resolves_from_either_harness_key() {
+        for input in [
+            json!({ "file_path": "/repo/src/auth.rs" }),
+            json!({ "path": "/repo/src/auth.rs" }),
+        ] {
+            let target = tool_target("Read", Some(&input), Some(Path::new("/repo"))).unwrap();
+            assert_eq!(target.kind, ToolTargetKind::Path);
+            assert_eq!(target.value, "src/auth.rs");
+        }
+    }
+
+    // A read mints no artifact — correctly, it authored nothing — but it still
+    // touched a file worth naming, which is the gap `target` closes.
+    #[test]
+    fn a_read_names_its_file_even_though_it_produces_no_artifact() {
+        let input = json!({ "file_path": "src/auth.rs" });
+        assert!(artifacts_from_tool_input("Read", Some(&input), None).is_empty());
+        assert_eq!(
+            tool_target("Read", Some(&input), None).unwrap().value,
+            "src/auth.rs"
+        );
+    }
+
+    #[test]
+    fn a_shell_call_names_its_command_even_when_the_command_mentions_a_path() {
+        let input = json!({ "command": "cat /etc/hosts", "path": "/etc/hosts" });
+        let target = tool_target("Bash", Some(&input), None).unwrap();
+        assert_eq!(target.kind, ToolTargetKind::Command);
+        assert_eq!(target.value, "cat /etc/hosts");
+    }
+
+    #[test]
+    fn a_search_falls_back_to_its_subject() {
+        let input = json!({ "pattern": "TODO" });
+        let target = tool_target("Grep", Some(&input), None).unwrap();
+        assert_eq!(target.kind, ToolTargetKind::Subject);
+        assert_eq!(target.value, "TODO");
+    }
+
+    #[test]
+    fn a_call_naming_nothing_worth_showing_has_no_target() {
+        assert!(tool_target("TodoWrite", Some(&json!({ "todos": [] })), None).is_none());
+        assert!(tool_target("Read", None, None).is_none());
     }
 }

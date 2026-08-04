@@ -220,6 +220,7 @@ fn read_only_sessions_are_not_evidence() {
             name: "Read".into(),
             arguments: "{\"file_path\": \"src/auth.rs\"}".into(),
             result: None,
+            target: None,
         }],
         model: None,
         timestamp: None,
