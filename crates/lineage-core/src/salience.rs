@@ -130,6 +130,7 @@ mod tests {
             name: name.into(),
             arguments: "{}".into(),
             result: None,
+            target: None,
         }
     }
 

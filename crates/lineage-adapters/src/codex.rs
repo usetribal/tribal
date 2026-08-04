@@ -16,7 +16,9 @@ use serde_json::Value;
 use walkdir::WalkDir;
 
 use crate::citations::enrich_turn_with_citations;
-use crate::content::{artifacts_from_tool_input, enrich_turn_with_images, extract_text_content};
+use crate::content::{
+    artifacts_from_tool_input, enrich_turn_with_images, extract_text_content, tool_target,
+};
 use crate::metadata::{finalize_session_metadata, insert_str, normalize_model, vendor_session_id};
 use crate::path_util::paths_match_workspace;
 
@@ -300,6 +302,7 @@ fn parse_rollout_lines(
                     .unwrap_or_default();
                 let artifacts =
                     artifacts_from_tool_input(&name, body.get("arguments"), workspace_root);
+                let target = tool_target(&name, body.get("arguments"), workspace_root);
                 turns.push(make_turn(
                     turn_index,
                     Role::Tool,
@@ -310,6 +313,7 @@ fn parse_rollout_lines(
                         name,
                         arguments: args,
                         result: None,
+                        target,
                     }],
                     artifacts,
                 ));
@@ -411,6 +415,7 @@ fn parse_rollout_lines(
                         let parsed_args = body.get("arguments").and_then(parse_tool_arguments);
                         let artifacts =
                             artifacts_from_tool_input(&name, parsed_args.as_ref(), workspace_root);
+                        let target = tool_target(&name, parsed_args.as_ref(), workspace_root);
                         turns.push(make_turn(
                             turn_index,
                             Role::Tool,
@@ -421,6 +426,7 @@ fn parse_rollout_lines(
                                 name,
                                 arguments: args,
                                 result: None,
+                                target,
                             }],
                             artifacts,
                         ));

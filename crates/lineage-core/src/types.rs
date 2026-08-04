@@ -55,6 +55,30 @@ pub enum Confidence {
     Manual,
 }
 
+/// What kind of thing a [`ToolTarget`] names, so a consumer can render it
+/// without re-deriving that from the string. A path can be shown relative to a
+/// repository; a command cannot be split on separators; a subject is free text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolTargetKind {
+    Path,
+    Command,
+    Subject,
+}
+
+/// The one argument that says what a tool call acted on, resolved at import.
+///
+/// `arguments` is the vendor's raw JSON and its keys differ per harness — Claude
+/// Code sends `file_path` where Cursor sends `path`. Resolving that belongs with
+/// the adapters that already know each harness's shape, so every consumer reads
+/// a field instead of re-parsing a blob and guessing.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct ToolTarget {
+    pub kind: ToolTargetKind,
+    /// Repo-relative for `Path` when a workspace root was known at import.
+    pub value: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct ToolCall {
     pub id: String,
@@ -63,6 +87,10 @@ pub struct ToolCall {
     pub arguments: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub result: Option<String>,
+    /// Absent on documents written before this field existed, and on calls whose
+    /// arguments name nothing worth showing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target: Option<ToolTarget>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -484,6 +512,46 @@ impl Default for LineageManifest {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Old-client/new-server compatibility, per decision 0001: a CLI that predates
+    // `target` sends documents without it, and those must still parse.
+    #[test]
+    fn a_tool_call_written_before_target_existed_still_deserializes() {
+        let call: ToolCall =
+            serde_json::from_str(r#"{"id":"tc-1","name":"Read","arguments":"{}"}"#).unwrap();
+        assert!(call.target.is_none());
+    }
+
+    #[test]
+    fn a_target_round_trips_through_json() {
+        let call = ToolCall {
+            id: "tc-1".into(),
+            name: "Read".into(),
+            arguments: "{}".into(),
+            result: None,
+            target: Some(ToolTarget {
+                kind: ToolTargetKind::Path,
+                value: "src/auth.rs".into(),
+            }),
+        };
+        let parsed: ToolCall =
+            serde_json::from_str(&serde_json::to_string(&call).unwrap()).unwrap();
+        assert_eq!(parsed.target, call.target);
+    }
+
+    // Absent rather than null, so a document stays the same size as before the
+    // field existed for the calls that have no target.
+    #[test]
+    fn an_absent_target_is_omitted_rather_than_serialized_as_null() {
+        let call = ToolCall {
+            id: "tc-1".into(),
+            name: "Read".into(),
+            arguments: "{}".into(),
+            result: None,
+            target: None,
+        };
+        assert!(!serde_json::to_string(&call).unwrap().contains("target"));
+    }
 
     #[test]
     fn conversation_round_trip() {

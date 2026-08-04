@@ -372,6 +372,7 @@ mod tests {
             name: "tool_result".into(),
             arguments: String::new(),
             result: Some("pub mod auth;".into()),
+            target: None,
         });
         let conv = conversation(vec![turn(Role::User, "read auth.rs"), tool_turn]);
         let rendered =
@@ -400,6 +401,7 @@ mod tests {
             name: "Read".into(),
             arguments: r#"{"file_path":"src/auth.rs"}"#.into(),
             result: None,
+            target: None,
         });
         let conv = conversation(vec![assistant]);
         let rendered =

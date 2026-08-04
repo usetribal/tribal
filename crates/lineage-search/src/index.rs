@@ -1691,6 +1691,7 @@ mod tests {
                 name: "Read".into(),
                 arguments: "{\"file_path\": \"src/a.rs\"}".into(),
                 result: None,
+                target: None,
             }],
             model: None,
             timestamp: None,

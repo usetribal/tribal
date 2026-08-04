@@ -31,5 +31,6 @@ pub use sync::{
 pub use types::{
     AgentKind, Artifact, ArtifactKind, ArtifactResolve, Confidence, Conversation, ForkOrigin,
     GitNote, LineObject, LineageManifest, PullOrigin, ResolveStrategy, Role, SessionIndex,
-    ToolCall, Turn, CONVERSATION_SCHEMA, GIT_NOTES_SCHEMA, LINE_OBJECT_SCHEMA,
+    ToolCall, ToolTarget, ToolTargetKind, Turn, CONVERSATION_SCHEMA, GIT_NOTES_SCHEMA,
+    LINE_OBJECT_SCHEMA,
 };

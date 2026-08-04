@@ -112,9 +112,36 @@ Set at first import from the repository git config (`user.email`, `user.name`). 
   "id": "tc-001",
   "name": "edit_file",
   "arguments": "{\"path\":\"src/auth.rs\"}",
-  "result": "ok"
+  "result": "ok",
+  "target": { "kind": "path", "value": "src/auth.rs" }
 }
 ```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | yes | Vendor call id; a `tool_result` repeats the id of the call it answers |
+| `name` | string | yes | Tool name as the harness reported it |
+| `arguments` | string | no | Vendor-raw JSON, keys differing per harness |
+| `result` | string | no | Output, present on the entry carrying a tool's answer |
+| `target` | ToolTarget | no | What the call acted on, resolved at import |
+
+## ToolTarget
+
+The one argument that says what a call acted on. `arguments` keys differ per
+harness, so resolving them belongs with the adapter that knows each harness;
+consumers read this field instead of re-parsing the blob.
+
+```json
+{ "kind": "path", "value": "src/auth.rs" }
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `kind` | string | yes | `path`, `command`, or `subject` |
+| `value` | string | yes | Repo-relative for `path` when a workspace root was known |
+
+Absent when a call names nothing worth showing, and on documents written before
+the field existed — a consumer must treat it as optional.
 
 ## Artifact
 

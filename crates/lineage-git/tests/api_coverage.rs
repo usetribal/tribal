@@ -81,6 +81,7 @@ fn exercises_public_git_api_surface() {
             name: "edit".into(),
             arguments: r#"{"path":"api.rs"}"#.into(),
             result: Some("y".repeat(200)),
+            target: None,
         }],
         model: None,
         timestamp: None,
