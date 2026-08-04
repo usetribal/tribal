@@ -4,8 +4,8 @@ use std::path::Path;
 use chrono::{DateTime, Utc};
 use lineage_adapters::all_adapters;
 use lineage_core::{
-    conversation_modified_code, display_title, generate_architecture_summary, AgentKind,
-    CommitMappingMode, LastImportState, LineageId, LineageRepoConfig,
+    conversation_modified_code, derive_session_id, display_title, generate_architecture_summary,
+    AgentKind, CommitMappingMode, LastImportState, LineageId, LineageRepoConfig, SOURCE_MTIME_KEY,
 };
 use lineage_git::{
     assemble_batch, best_commit_for_conversation, blame_with_lineage, chunk_batch, delete_session,
@@ -68,10 +68,27 @@ pub fn import(
         agents.iter().filter_map(|a| AgentKind::parse(a)).collect()
     };
 
-    let existing_ids: std::collections::HashSet<LineageId> = if incremental {
-        list_session_ids(inner)?.into_iter().collect()
+    // The transcript mtime each stored session was last read at, keyed by id.
+    // A file untouched since then has nothing new, so it never has to be parsed.
+    let stored_mtimes: std::collections::HashMap<LineageId, DateTime<Utc>> = if incremental {
+        let mut mtimes = std::collections::HashMap::new();
+        for id in list_session_ids(inner)? {
+            let Some(conv) = read_conversation_stored(inner, &id)? else {
+                continue;
+            };
+            let stamped = conv
+                .metadata
+                .get(SOURCE_MTIME_KEY)
+                .and_then(|v| v.as_str())
+                .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+                .map(|dt| dt.with_timezone(&Utc));
+            if let Some(mtime) = stamped {
+                mtimes.insert(id, mtime);
+            }
+        }
+        mtimes
     } else {
-        std::collections::HashSet::new()
+        std::collections::HashMap::new()
     };
 
     let adapters = all_adapters(workdir);
@@ -95,19 +112,22 @@ pub fn import(
                 }
             }
 
+            let source_mtime = fs::metadata(&session.source_path)
+                .and_then(|meta| meta.modified())
+                .map(DateTime::<Utc>::from)
+                .ok();
+
+            // Skip a stored session whose transcript has not been written since
+            // it was last read. Direct lookup, not a substring scan over stored
+            // ids: the id is a hash, so a token never appears inside one, and
+            // the old `contains` check could never match — which is why every
+            // session was re-imported on every commit.
             if incremental {
-                let id_hint = session.id_hint.clone();
-                if existing_ids.iter().any(|id| id.as_str().contains(&id_hint)) {
-                    if let Ok(meta) = fs::metadata(&session.source_path) {
-                        if let Ok(modified) = meta.modified() {
-                            let modified: DateTime<Utc> = modified.into();
-                            if let Some(started) = session.started_at {
-                                if modified <= started {
-                                    skipped += 1;
-                                    continue;
-                                }
-                            }
-                        }
+                let id = derive_session_id(kind, session.session_token());
+                if let (Some(modified), Some(read_at)) = (source_mtime, stored_mtimes.get(&id)) {
+                    if modified <= *read_at {
+                        skipped += 1;
+                        continue;
                     }
                 }
             }
@@ -117,6 +137,16 @@ pub fn import(
                     let source = session.source_path.display().to_string();
                     conv.metadata
                         .insert("source".into(), serde_json::Value::String(source.clone()));
+                    // Stamped from the mtime read before parsing, not re-statted
+                    // after: a vendor appending mid-import would otherwise stamp
+                    // a time newer than the content actually read, and the next
+                    // run would skip turns it never stored.
+                    if let Some(modified) = source_mtime {
+                        conv.metadata.insert(
+                            SOURCE_MTIME_KEY.into(),
+                            serde_json::Value::String(modified.to_rfc3339()),
+                        );
+                    }
                     if is_private_session(&source, &repo_config) {
                         conv.private = true;
                     }

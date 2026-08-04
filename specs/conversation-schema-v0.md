@@ -24,7 +24,7 @@ Stable contract for agent session data stored in lineage.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `schema_version` | string | yes | Always `conversation-v0` |
-| `id` | string | yes | ULID, stable across re-import |
+| `id` | string | yes | Stable across re-import; derived for an imported session, a ULID for a fork — see [ID stability](#id-stability) |
 | `agent` | string | yes | `cursor`, `claude`, or `codex` |
 | `started_at` | ISO8601 | yes | Session start |
 | `ended_at` | ISO8601 | no | Session end |
@@ -81,6 +81,7 @@ Set at first import from the repository git config (`user.email`, `user.name`). 
 | `prompted_by_name` | Git name of the developer who had the agent conversation |
 | `session_summary` | Human-readable title from the harness (Claude Code `"type":"summary"` entry); preferred over `architecture_summary` for display |
 | `architecture_summary` | Heuristic summary generated at import when no vendor summary exists |
+| `source_mtime` | Modification time of the transcript when it was last read, RFC 3339. An incremental import skips a session whose transcript has not been written since; `ended_at` cannot serve this purpose because the agent keeps writing records after the final turn's timestamp |
 
 ## Turn
 
@@ -147,4 +148,10 @@ must not be counted as authorship.
 
 ## ID stability
 
-Session IDs are derived from `(agent, source_path, started_at)` at first import. Re-import updates content but preserves ID when the source key matches.
+An imported session's id is `sha256("session-v2" : agent : vendor_token)`, truncated to 26 hex characters. `vendor_token` is the agent's own name for the session, supplied by its adapter — in practice the transcript's filename stem, which every supported agent derives from its session id. Codex prefers the `session_id` in its `session_meta` record and falls back to the stem.
+
+The key is deliberately narrow. Nothing machine-local enters it, so two people — or two git worktrees — importing the same transcript derive the same id and their copies merge rather than duplicate. Nothing that grows with the transcript enters it either, so appending turns to a live session leaves its id unchanged and re-import updates that session in place.
+
+The token must be per-transcript rather than per-conversation: an agent may record several transcripts under one vendor session id (Claude's subagent transcripts repeat their parent's `sessionId`), and keying on the shared value would collapse them into a single session.
+
+Forked sessions do not use this key. A fork is a new session rather than a re-observation of an existing one, so it mints a fresh ULID and records its origin in `fork_origin`.

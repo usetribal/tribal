@@ -105,17 +105,14 @@ impl SessionReader for CodexAdapter {
             .or(session.started_at)
             .unwrap_or_else(Utc::now);
 
-        let started_key = meta
+        // Codex states its session id in the rollout's `session_meta` line;
+        // where that is missing the filename stem carries the same id, so the
+        // fallback is the stem rather than anything time-derived.
+        let token = meta
             .session_id
             .as_deref()
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| started_at.to_rfc3339());
-
-        let id = derive_session_id(
-            AgentKind::Codex,
-            session.source_path.to_str().unwrap_or(""),
-            &started_key,
-        );
+            .unwrap_or_else(|| session.session_token());
+        let id = derive_session_id(AgentKind::Codex, token);
 
         let parsed = parse_rollout_lines(&content, Some(self.workspace_root.as_path()))?;
         let mut conversation = Conversation {
