@@ -196,13 +196,13 @@ enum Commands {
     },
     /// Sign in to a Lineage server (browser device flow)
     Login {
-        /// Server base URL (e.g. https://api.uselineage.io/api)
+        /// Server base URL; defaults to production or the server stored by a previous login
         #[arg(long)]
-        server: String,
+        server: Option<String>,
     },
     /// Push redacted sessions to a Lineage server
     Sync {
-        /// Server base URL; defaults to the server stored by `login`
+        /// Server base URL; defaults to production or the server stored by `login`
         #[arg(long)]
         server: Option<String>,
         /// Bearer token; falls back to LINEAGE_TOKEN, then the stored login
@@ -219,7 +219,7 @@ enum Commands {
     /// stripped — then mints a link pinned at the turns it has now. Continuing
     /// the session afterwards does not change what the link shows.
     Share {
-        /// Server base URL; defaults to the server stored by `login`
+        /// Server base URL; defaults to production or the server stored by `login`
         #[arg(long)]
         server: Option<String>,
         /// Bearer token; falls back to LINEAGE_TOKEN, then the stored login
@@ -241,7 +241,7 @@ enum Commands {
     /// Never deletes: sessions the server does not mention are left alone, and
     /// turns you already have are kept as they are.
     Pull {
-        /// Server base URL; defaults to the server stored by `login`
+        /// Server base URL; defaults to production or the server stored by `login`
         #[arg(long)]
         server: Option<String>,
         /// Bearer token; falls back to LINEAGE_TOKEN, then the stored login
@@ -663,7 +663,7 @@ fn main() -> ExitCode {
             },
         },
         Commands::Export { redact, format } => commands::export(&repo_path, redact, &format),
-        Commands::Login { server } => commands::login(&server),
+        Commands::Login { server } => commands::login(server.as_deref()),
         Commands::Sync {
             server,
             token,

@@ -13,10 +13,12 @@ fn login_stores_handle_and_exchange_resolves_token() {
     let config_dir = tempfile::tempdir().unwrap();
     std::env::set_var(auth::CONFIG_DIR_ENV, config_dir.path());
 
+    assert_eq!(auth::resolve_server(None).unwrap(), auth::DEFAULT_SERVER);
+
     let server = spawn_mock_server();
 
     // Login: device start → pending poll → complete poll → stored credentials.
-    lineage_cli::commands::login(&server).unwrap();
+    lineage_cli::commands::login(Some(server.as_str())).unwrap();
 
     let credentials = auth::load_credentials().unwrap();
     assert_eq!(credentials.default_server.as_deref(), Some(server.as_str()));
