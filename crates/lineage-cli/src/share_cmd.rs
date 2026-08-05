@@ -216,7 +216,22 @@ fn refresh(repo: &LineageRepo, session: &SessionRef) -> Result<Conversation> {
     let imported = apply_policy(&policy, conversation).conversation;
 
     persist_import(inner, std::slice::from_ref(&imported))?;
-    Ok(imported)
+
+    // Read back what was written rather than returning what went in. Persisting
+    // rewrites a conversation — media artifacts are externalized to
+    // `.lineage/media`, large content is compacted, ephemeral fields are
+    // stripped — and it does that to its own copy, so `imported` is the
+    // pre-persistence shape. Pushing that shape uploads an image inline as a
+    // `data:` URL where the stored turn holds a media path, which is a different
+    // document for the same turn id: the server hashes turns to keep them
+    // write-once, so it rejects the share as a content mismatch.
+    read_conversation_stored(inner, &imported.id)?.ok_or_else(|| {
+        format!(
+            "session {} was imported but could not be read back, so there is nothing to share",
+            imported.id
+        )
+        .into()
+    })
 }
 
 fn adapter_for(
@@ -394,6 +409,67 @@ mod tests {
 
         let error = prepare_for_share(&repo, conversation).expect_err("private must refuse");
         assert!(error.to_string().contains("private"), "got: {error}");
+    }
+
+    /// A share must push the *stored* conversation, not the one handed to
+    /// `persist_import`. Persisting rewrites its own copy — externalizing media,
+    /// compacting content — so the in-memory value keeps the adapter's inline
+    /// `data:` URL while the stored turn holds a media path. Pushing the former
+    /// is a different document for the same turn id, which the server rejects as
+    /// a content-hash mismatch.
+    #[test]
+    fn persisting_leaves_the_callers_copy_un_externalized() {
+        use lineage_core::{Artifact, ArtifactKind, LineageId, Role, Turn};
+
+        let dir = tempfile::tempdir().unwrap();
+        std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(dir.path())
+            .output()
+            .unwrap();
+        let repo = open_repo(dir.path()).unwrap();
+
+        const INLINE_PNG: &str = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNgYGAAAAAEAAH2FzhVAAAAAElFTkSuQmCC";
+
+        let mut conversation =
+            Conversation::new(AgentKind::Claude, dir.path().display().to_string());
+        conversation.turns.push(Turn {
+            id: LineageId::from(format!("{}-0", conversation.id)),
+            role: Role::User,
+            content: "look at this".into(),
+            tool_calls: vec![],
+            model: None,
+            timestamp: None,
+            artifacts: vec![Artifact {
+                kind: ArtifactKind::Image,
+                path: INLINE_PNG.into(),
+                blob_ref: None,
+                content_hash: None,
+                mime_type: Some("image/png".into()),
+                preview_data_url: None,
+                line_range: None,
+                resolve: None,
+            }],
+        });
+
+        persist_import(repo.inner(), std::slice::from_ref(&conversation)).unwrap();
+
+        // The value the caller still holds is the pre-persistence one.
+        assert_eq!(conversation.turns[0].artifacts[0].path, INLINE_PNG);
+
+        let stored = read_conversation_stored(repo.inner(), &conversation.id)
+            .unwrap()
+            .expect("persisted session must read back");
+        let artifact = &stored.turns[0].artifacts[0];
+        assert!(
+            artifact.path.starts_with(".lineage/media/"),
+            "stored artifact should be externalized, got: {}",
+            artifact.path
+        );
+        assert!(
+            artifact.content_hash.is_some(),
+            "stored artifact needs a hash"
+        );
     }
 
     #[test]
