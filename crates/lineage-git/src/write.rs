@@ -46,6 +46,15 @@ pub fn persist_conversation(
     let mut commits_linked = 0usize;
 
     for commit_sha in &conversation.commit_shas {
+        // A session may name history this checkout has not fetched — a fork of a
+        // teammate's session on an unmerged branch, or a pull that ran before the
+        // commits landed. Skip it rather than failing: the session itself is
+        // fully in hand, and re-persisting after a `git fetch` links the commit
+        // then. Matches the pull path's rule in docs/sync-semantics.md, where an
+        // unresolvable sha is dropped rather than failing the whole operation.
+        if commit_oid(repo, commit_sha).is_none() {
+            continue;
+        }
         let line_objects =
             materialize_line_objects(repo, &conversation, commit_sha, Confidence::Exact)?;
         let mut line_ids = Vec::new();

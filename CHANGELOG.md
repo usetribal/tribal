@@ -236,6 +236,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Import no longer panics when resolving line numbers for edits whose matched text ends in a multibyte character (e.g. an em dash in transcript content): `line_number_at` floors the byte offset to a char boundary before slicing
 - `git lineage delete` now overwrites git notes instead of merging, so session and line-object IDs are actually removed from commit notes
 
+- Persisting a session no longer fails when it names a commit this checkout does not have. `git lineage fork` of a teammate's session died with `object not found - no match for id`, because materializing line objects resolves each of a session's `commit_shas` against the object database and a commit on an unmerged or unfetched branch is simply absent. That contradicted the point of `fork`, which exists so a receiver can pick up a session from a machine that may not even have the repo: a session touching unpushed history was un-forkable by anyone but its author. The unresolvable sha is now skipped and the session still lands, matching the rule the pull path already follows (`docs/sync-semantics.md`) — the transcript is fully in hand, only the commit link is deferred, and re-persisting after a `git fetch` picks it up
+
 ### Known limitations
 
 - Cursor transcripts do not include tool results (per Cursor storage format)
