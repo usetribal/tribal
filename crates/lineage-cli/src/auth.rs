@@ -16,6 +16,9 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// Production Lineage API base URL when no `--server` and no stored default.
+pub const DEFAULT_SERVER: &str = "https://api.uselineage.io/api";
+
 /// Overrides the credentials directory; primarily a test seam, but also lets
 /// CI jobs isolate credentials from the machine account.
 pub const CONFIG_DIR_ENV: &str = "LINEAGE_CONFIG_DIR";
@@ -164,7 +167,7 @@ pub fn exchange(server: &str, session_handle: &str) -> Result<ExchangeResponse> 
     Ok(response.into_json()?)
 }
 
-/// Resolves the server to talk to: explicit flag, else the stored default.
+/// Resolves the server to talk to: explicit flag, stored default, else production.
 pub fn resolve_server(flag: Option<&str>) -> Result<String> {
     if let Some(server) = flag {
         return Ok(normalize_server(server));
@@ -172,16 +175,17 @@ pub fn resolve_server(flag: Option<&str>) -> Result<String> {
     if let Some(server) = load_credentials()?.default_server {
         return Ok(server);
     }
-    Err("no server: pass --server or run `git lineage login --server <url>`".into())
+    Ok(normalize_server(DEFAULT_SERVER))
 }
 
 /// Exchanges the stored session handle for a fresh short-lived access token.
 pub fn access_token_for(server: &str) -> Result<String> {
     let server = normalize_server(server);
     let credentials = load_credentials()?;
-    let stored = credentials.servers.get(&server).ok_or_else(|| {
-        format!("not logged in to {server}: run `git lineage login --server {server}`")
-    })?;
+    let stored = credentials
+        .servers
+        .get(&server)
+        .ok_or_else(|| format!("not logged in to {server}: run `git lineage login`"))?;
     Ok(exchange(&server, &stored.session_handle)?.access_token)
 }
 

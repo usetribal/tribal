@@ -184,7 +184,7 @@ injections), so read it from `.git/lineage/events.jsonl` directly.
 
 | Command | Description |
 |---------|-------------|
-| `git lineage login --server URL` | Sign in to a Lineage server (browser device flow) |
+| `git lineage login [--server URL]` | Sign in to a Lineage server (browser device flow; defaults to production) |
 | `git lineage sync [--server URL] [--token TOKEN] [--remote origin]` | Push redacted sessions to a Lineage server |
 | `git lineage pull [--server URL] [--token TOKEN] [--remote origin] [--dry-run]` | Pull teammates' sessions down from a Lineage server (see [Pull teammates' sessions](#pull-teammates-sessions)) |
 | `git lineage share [--session ID] [--server URL] [--token TOKEN] [--remote origin] [--no-open]` | Share one session as a link anyone can open (see [Share a session as a link](#share-a-session-as-a-link)) |

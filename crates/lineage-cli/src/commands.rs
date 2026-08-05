@@ -607,8 +607,9 @@ pub fn export(repo_path: &Path, redact: bool, format: &str) -> Result<()> {
 /// and code, polls until the browser approval completes the login server-side,
 /// and stores the returned session handle (the durable credential — the JWT it
 /// mints is short-lived and re-minted per command).
-pub fn login(server: &str) -> Result<()> {
-    let start = auth::device_start(server)?;
+pub fn login(server: Option<&str>) -> Result<()> {
+    let server = auth::resolve_server(server)?;
+    let start = auth::device_start(&server)?;
     println!("To sign in, open this URL in a browser:");
     println!();
     println!("  {}", start.verification_uri_complete);
@@ -622,7 +623,7 @@ pub fn login(server: &str) -> Result<()> {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(start.expires_in);
     let mut interval = start.interval;
     loop {
-        match auth::device_poll(server, &start.device_code)? {
+        match auth::device_poll(&server, &start.device_code)? {
             auth::DevicePollResponse::Pending { slow_down } => {
                 if slow_down {
                     // OAuth device-flow rule: back off by 5s when told to slow down.
@@ -630,7 +631,7 @@ pub fn login(server: &str) -> Result<()> {
                 }
             }
             auth::DevicePollResponse::Complete { session_handle, .. } => {
-                auth::store_login(server, session_handle)?;
+                auth::store_login(&server, session_handle)?;
                 println!(
                     "Logged in. Credentials stored in {}.",
                     auth::credentials_path()?.display()
