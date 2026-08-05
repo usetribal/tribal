@@ -13,7 +13,7 @@ use lineage_git::{
     link_session_to_commit, list_session_ids, map_commit_to_sessions,
     materialize_session_at_commit, open_repo, persist_import, purge_orphans, read_conversation,
     read_conversation_stored, read_repo_config, remap_orphaned_commits, resolve_session,
-    stamp_prompted_by, sync_push_with_progress, write_last_import, write_repo_config,
+    stamp_prompted_by, sync_push_with_progress, write_last_import, write_repo_config, LineageRepo,
     PROMPTED_BY_EMAIL, PROMPTED_BY_NAME, SYNC_CONVERSATIONS_PER_CHUNK,
 };
 use lineage_policy::{
@@ -207,17 +207,8 @@ pub fn import(
     }
 
     let results = persist_import(inner, &conversations)?;
-    let index = LineageIndex::open(lineage_repo.git_dir().join("lineage").join("index.db"))?;
-    for r in &results {
-        if let Some(conv) = read_conversation(inner, &r.session_id)? {
-            index.index_conversation(&conv)?;
-        }
-    }
-    // Mirror the newly imported sessions' line objects and chain them. Import
-    // with --link-head may have just materialized objects; walking them now
-    // keeps `context chain` answerable without a full rebuild.
     let imported_ids: Vec<LineageId> = conversations.iter().map(|c| c.id.clone()).collect();
-    index.populate_line_tables_for_sessions(inner, &imported_ids)?;
+    index_persisted_sessions(&lineage_repo, &imported_ids)?;
     write_last_import(inner, &LastImportState::new(imported_ids))?;
 
     let line_objects: usize = results.iter().map(|r| r.line_objects_written).sum();
@@ -779,6 +770,49 @@ fn print_hits(inner: &git2::Repository, hits: &[SearchHit]) {
         println!(
             "{}  {}  score={:.2}  {}",
             title, hit.session_id, hit.score, hit.snippet
+        );
+    }
+}
+
+/// Add freshly persisted sessions to the search index.
+///
+/// Persisting writes refs; indexing is a separate stage downstream of it
+/// (`docs/ARCHITECTURE.md`, import flow steps 5 and 8), and `lineage-git` cannot
+/// reach the index without inverting the crate graph. The CLI is the one crate
+/// that depends on both, so this is where the two meet — shared by every path
+/// that persists rather than repeated at each, because a path that forgets it
+/// writes sessions `search` and `context query` cannot see.
+pub fn index_persisted_sessions(repo: &LineageRepo, session_ids: &[LineageId]) -> Result<()> {
+    if session_ids.is_empty() {
+        return Ok(());
+    }
+
+    let inner = repo.inner();
+    let index = LineageIndex::open(repo.git_dir().join("lineage").join("index.db"))?;
+    for id in session_ids {
+        if let Some(conv) = read_conversation(inner, id)? {
+            index.index_conversation(&conv)?;
+        }
+    }
+    // Mirror the sessions' line objects and chain them, so `context chain` is
+    // answerable without a full rebuild.
+    index.populate_line_tables_for_sessions(inner, session_ids)?;
+    Ok(())
+}
+
+/// Index sessions someone else's machine produced, without letting the index
+/// decide whether the operation succeeded.
+///
+/// `fork` and `pull` have already written the session to refs by the time this
+/// runs, so a failure here costs searchability and nothing else — reporting it
+/// as a failed fork would tell the receiver nothing landed when everything did.
+/// The warning names the recovery, because a silently unsearchable session is
+/// the worse outcome of the two.
+pub fn index_persisted_sessions_best_effort(repo: &LineageRepo, session_ids: &[LineageId]) {
+    if let Err(error) = index_persisted_sessions(repo, session_ids) {
+        eprintln!(
+            "warning: session saved but not added to the search index ({error}); \
+             run `git lineage rebuild-index` to make it searchable"
         );
     }
 }

@@ -42,6 +42,7 @@ use lineage_git::{
 use serde::{Deserialize, Serialize};
 
 use crate::auth;
+use crate::commands::index_persisted_sessions_best_effort;
 use crate::events::{EventLog, Outcome};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -445,6 +446,7 @@ pub fn run_pull(
             .collect(),
     })?;
 
+    let mut persisted: Vec<LineageId> = Vec::new();
     for incoming in &fetched.conversations {
         let incoming = &drop_absent_commits(repo, incoming)?;
         let existing =
@@ -456,9 +458,16 @@ pub fn run_pull(
         }
         if !dry_run {
             persist_conversation(repo.inner(), &merged)?;
+            persisted.push(merged.id.clone());
         }
         report.written.push(incoming.id.clone());
     }
+
+    // Indexed once for the batch rather than per session: opening the index is
+    // the fixed cost, and a pull brings down many sessions at a time. Best
+    // effort — the sessions are already on disk, and a pull that reported
+    // failure after writing them would be lying about what landed.
+    index_persisted_sessions_best_effort(repo, &persisted);
     Ok(report)
 }
 
