@@ -384,3 +384,49 @@ fn init_skill_refuses_without_force_when_present() {
     skill_cmd::init_skill(dir.path(), &["cursor".into()], false).unwrap();
     assert!(skill_cmd::init_skill(dir.path(), &["cursor".into()], false).is_err());
 }
+
+/// A session that arrived from someone else must be searchable like one imported
+/// here. Persisting writes refs and indexing is a separate stage, so a path that
+/// persists without indexing leaves exactly the sessions a teammate forked or
+/// pulled invisible to `search` and `context query`.
+#[test]
+fn indexing_persisted_sessions_makes_them_searchable() {
+    use lineage_core::{AgentKind, Conversation, LineageId, Role, Turn};
+    use lineage_git::persist_conversation;
+    use lineage_search::LineageIndex;
+
+    let dir = tempfile::tempdir().unwrap();
+    std::process::Command::new("git")
+        .args(["init"])
+        .current_dir(dir.path())
+        .output()
+        .unwrap();
+    let repo = lineage_git::open_repo(dir.path()).unwrap();
+
+    let mut conv = Conversation::new(AgentKind::Claude, dir.path().display().to_string());
+    conv.turns.push(Turn {
+        id: LineageId::new(),
+        role: Role::User,
+        content: "the marker fact is BLUE-PANGOLIN".into(),
+        tool_calls: vec![],
+        model: None,
+        timestamp: None,
+        artifacts: vec![],
+    });
+    persist_conversation(repo.inner(), &conv).unwrap();
+
+    let index_path = repo.git_dir().join("lineage").join("index.db");
+    let before = LineageIndex::open(&index_path).unwrap();
+    assert!(
+        before.search("BLUE-PANGOLIN", 10).unwrap().is_empty(),
+        "persisting alone must not have indexed it — that is the gap under test"
+    );
+    drop(before);
+
+    lineage_cli::commands::index_persisted_sessions(&repo, std::slice::from_ref(&conv.id)).unwrap();
+
+    let after = LineageIndex::open(&index_path).unwrap();
+    let hits = after.search("BLUE-PANGOLIN", 10).unwrap();
+    assert_eq!(hits.len(), 1, "the session should now be findable");
+    assert_eq!(hits[0].session_id, conv.id.to_string());
+}

@@ -25,6 +25,7 @@ use lineage_core::{LineageId, PullOrigin};
 use lineage_git::{open_repo, persist_conversation, read_conversation_stored};
 use serde::{Deserialize, Serialize};
 
+use crate::commands::index_persisted_sessions_best_effort;
 use crate::pull_cmd::{merge_pulled, PulledConversation};
 use crate::repo_registry;
 
@@ -460,6 +461,10 @@ pub fn persist_shared(
     let existing = read_conversation_stored(repo.inner(), &id)?;
     let merged = merge_pulled(existing, &share.conversation, &share_origin(server));
     persist_conversation(repo.inner(), &merged)?;
+    // Persisting writes refs; searching reads an index. Without this the session
+    // a receiver just forked is the one thing `search` and `context query` cannot
+    // find — exactly backwards for a session someone picked up to work from.
+    index_persisted_sessions_best_effort(&repo, std::slice::from_ref(&merged.id));
     Ok(merged.id.to_string())
 }
 
