@@ -2,7 +2,7 @@
 
 [← Documentation index](../README.md) · [CLI reference](../cli/README.md) · [Developing](../developing.md)
 
-The Lineage MCP server exposes repository session data to AI tools via the [Model Context Protocol](https://modelcontextprotocol.io/). Agents can search, blame, and inspect conversations without shelling out manually.
+The Tribal MCP server exposes repository session data to AI tools via the [Model Context Protocol](https://modelcontextprotocol.io/). Agents can search, blame, and inspect conversations without shelling out manually.
 
 ## Install
 
@@ -27,7 +27,7 @@ The server reads through the same git and policy layers as the CLI. It does not 
 |------|-------------|
 | `lineage_list_sessions` | List imported sessions |
 | `lineage_get_session` | Fetch session by id (redacted by policy) |
-| `lineage_blame_line` | Lineage for file path and line number |
+| `lineage_blame_line` | Tribal for file path and line number |
 | `lineage_search` | Full-text search over session content |
 | `lineage_doctor` | Repository lineage health |
 | `lineage_materialize` | Materialize line objects at HEAD or a commit |

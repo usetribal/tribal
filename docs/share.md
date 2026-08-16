@@ -2,7 +2,7 @@
 
 [← Documentation index](README.md) · [LFS](lfs.md) · [Privacy](privacy.md)
 
-Lineage data lives in git refs and notes alongside your code. Teammates with repository access can fetch the same sessions, blame, and search after pulling lineage refs.
+Tribal data lives in git refs and notes alongside your code. Teammates with repository access can fetch the same sessions, blame, and search after pulling lineage refs.
 
 ## What to push
 
@@ -62,7 +62,7 @@ Read [Privacy and policy](privacy.md). Remove or delete sensitive sessions (`git
 
 ## VS Code and MCP
 
-Teammates can use the [VS Code extension](vscode.md) or [MCP server](mcp/README.md) against the same refs after fetch. No separate Lineage account or cloud sync is required.
+Teammates can use the [VS Code extension](vscode.md) or [MCP server](mcp/README.md) against the same refs after fetch. No separate Tribal account or cloud sync is required.
 
 ## Rebases and force-push
 

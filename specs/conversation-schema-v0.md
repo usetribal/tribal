@@ -54,7 +54,7 @@ new session id with its own turns; the source session is unchanged.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `source_session_id` | string | yes | Lineage id of the forked session; mirrors `parent_session_id` |
+| `source_session_id` | string | yes | Tribal id of the forked session; mirrors `parent_session_id` |
 | `forked_session_handle` | string | yes | Vendor id minted for the forked copy — never the source session's |
 | `forked_at` | ISO8601 | yes | When the fork was taken |
 | `lineage_version` | string | yes | Version that wrote the edge |

@@ -3,7 +3,7 @@
   "displayName": "Lineage",
   "description": "Git-native AI agent provenance in VS Code",
   "version": "0.1.0",
-  "publisher": "lineage-dev",
+  "publisher": "usetribal",
   "engines": {
     "vscode": "^1.85.0"
   },

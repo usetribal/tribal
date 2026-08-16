@@ -1,12 +1,12 @@
 <p align="center">
   <img
     src="assets/lineage-banner.png"
-    alt="Lineage: Preserve the prompts, decisions, and context behind every commit"
+    alt="Tribal: Preserve the prompts, decisions, and context behind every commit"
     width="1024"
   />
 </p>
 
-# Lineage
+# Tribal
 
 [![Rust](https://img.shields.io/badge/rust-1.86%2B-orange?logo=rust&logoColor=white)](https://rust-lang.org/tools/install)
 [![Git](https://img.shields.io/badge/git-2.20%2B-blue?logo=git&logoColor=white)](https://git-scm.com/)
@@ -18,13 +18,13 @@
 git lineage init
 ```
 
-Lineage is agent-first engineering context memory for your codebase. It imports sessions from Cursor, Claude Code, and Codex into your git repo, linked to the commits, files, and lines they touched, so your team and your agents can search past decisions, blame a line back to the prompt that wrote it, and pick up where a conversation left off. Stored as git refs and notes.
+Tribal is agent-first engineering context memory for your codebase. It imports sessions from Cursor, Claude Code, and Codex into your git repo, linked to the commits, files, and lines they touched, so your team and your agents can search past decisions, blame a line back to the prompt that wrote it, and pick up where a conversation left off. Stored as git refs and notes.
 
-## Why Lineage?
+## Why Tribal?
 
 Git tells you what changed. It doesn't tell you why, or what your agents already discussed three sprints ago.
 
-Lineage closes that gap with **local, in-repo memory**: agent context lives in your git repository as refs and notes, not in a vendor cloud. It travels with `git push`, code review, onboarding, and the next agent session. Secrets are redacted before anything is written.
+Tribal closes that gap with **local, in-repo memory**: agent context lives in your git repository as refs and notes, not in a vendor cloud. It travels with `git push`, code review, onboarding, and the next agent session. Secrets are redacted before anything is written.
 
 | | |
 |---|---|
@@ -34,11 +34,11 @@ Lineage closes that gap with **local, in-repo memory**: agent context lives in y
 
 ## Setup
 
-### 1. Clone lineage
+### 1. Clone tribal
 
 ```bash
-git clone https://github.com/lineage-dev/lineage.git
-cd lineage
+git clone https://github.com/usetribal/tribal.git
+cd tribal
 ```
 
 ### 2. Install the CLI and VS Code extension

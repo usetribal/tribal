@@ -45,7 +45,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: Lineage version
+      label: Tribal version
       description: Output of `git lineage --version` or `git-lineage --version`
     validations:
       required: true

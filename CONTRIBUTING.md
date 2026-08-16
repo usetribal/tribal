@@ -1,6 +1,6 @@
-# Contributing to Lineage
+# Contributing to Tribal
 
-Thank you for your interest in contributing! Lineage is an open-source project and we welcome bug reports, feature requests, documentation improvements, and code contributions.
+Thank you for your interest in contributing! Tribal is an open-source project and we welcome bug reports, feature requests, documentation improvements, and code contributions.
 
 ## Getting started
 
@@ -13,8 +13,8 @@ Thank you for your interest in contributing! Lineage is an open-source project a
 ### Setup
 
 ```bash
-git clone https://github.com/lineage-dev/lineage.git
-cd lineage
+git clone https://github.com/usetribal/tribal.git
+cd tribal
 cargo build
 cargo test --workspace
 
@@ -45,7 +45,7 @@ Use `make help` for common tasks (`make check` runs the full local gate).
 
 ### Reporting bugs
 
-Open a [bug report](https://github.com/lineage-dev/lineage/issues/new?template=bug_report.yml) with:
+Open a [bug report](https://github.com/usetribal/tribal/issues/new?template=bug_report.yml) with:
 
 - Steps to reproduce
 - Expected vs actual behavior
@@ -56,7 +56,7 @@ Open a [bug report](https://github.com/lineage-dev/lineage/issues/new?template=b
 
 ### Suggesting features
 
-Open a [feature request](https://github.com/lineage-dev/lineage/issues/new?template=feature_request.yml). For large changes, open an issue for discussion before submitting a PR.
+Open a [feature request](https://github.com/usetribal/tribal/issues/new?template=feature_request.yml). For large changes, open an issue for discussion before submitting a PR.
 
 ### Pull requests
 
@@ -121,4 +121,4 @@ Be respectful and constructive. See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 ## Questions?
 
-Open a [discussion](https://github.com/lineage-dev/lineage/discussions) or issue if something is unclear. We're happy to help you find a good first contribution.
+Open a [discussion](https://github.com/usetribal/tribal/discussions) or issue if something is unclear. We're happy to help you find a good first contribution.

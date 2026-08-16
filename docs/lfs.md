@@ -2,7 +2,7 @@
 
 [← Documentation index](README.md) · [Share](share.md) · [Configuration](configuration.md)
 
-Agent sessions can include long tool output, patches, and images. Lineage stores compact conversation JSON in git refs and moves payloads above `large_blob_threshold_bytes` into Git LFS by default (see [Configuration](configuration.md)).
+Agent sessions can include long tool output, patches, and images. Tribal stores compact conversation JSON in git refs and moves payloads above `large_blob_threshold_bytes` into Git LFS by default (see [Configuration](configuration.md)).
 
 ## What gets stored where
 

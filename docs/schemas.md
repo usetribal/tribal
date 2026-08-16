@@ -2,7 +2,7 @@
 
 [← Documentation index](README.md) · [Architecture](ARCHITECTURE.md) · [specs/](../specs/)
 
-Lineage domain data uses explicit versioned schemas. The `specs/` directory is the source of truth; Rust types in `lineage-core` and JSON blobs in git refs must match.
+Tribal domain data uses explicit versioned schemas. The `specs/` directory is the source of truth; Rust types in `lineage-core` and JSON blobs in git refs must match.
 
 ## Schema documents
 

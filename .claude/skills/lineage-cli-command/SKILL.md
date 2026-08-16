@@ -6,7 +6,7 @@ description: >-
   tests/workflow.rs. Use when adding CLI commands, flags, or git lineage UX.
 ---
 
-# Lineage CLI command
+# Tribal CLI command
 
 ## Structure
 

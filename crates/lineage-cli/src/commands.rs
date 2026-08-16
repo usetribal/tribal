@@ -594,7 +594,7 @@ pub fn export(repo_path: &Path, redact: bool, format: &str) -> Result<()> {
     Ok(())
 }
 
-/// Runs the device login against a Lineage server: prints the verification URL
+/// Runs the device login against a Tribal server: prints the verification URL
 /// and code, polls until the browser approval completes the login server-side,
 /// and stores the returned session handle (the durable credential — the JWT it
 /// mints is short-lived and re-minted per command).

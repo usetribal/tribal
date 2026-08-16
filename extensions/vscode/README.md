@@ -22,4 +22,4 @@ Package: `npm run package` → install `.vsix` via **Extensions: Install from VS
 npm run check
 ```
 
-Open the lineage repo root, press **F5**, select **Lineage Extension**. See [Developing](../../docs/developing.md).
+Open the tribal repo root, press **F5**, select **Tribal Extension**. See [Developing](../../docs/developing.md).

@@ -1,7 +1,7 @@
 ---
 name: schema-change
 description: >-
-  Changes Lineage domain schemas (Conversation, LineObject, git notes, repo
+  Changes Tribal domain schemas (Conversation, LineObject, git notes, repo
   config). Requires specs/ updates first, lineage-core type changes, migration
   notes, and downstream crate/test updates. Use when modifying specs/*.md,
   lineage-core types, JSON output shapes, or schema_version fields.

@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes how Lineage is structured and how data flows through the system.
+This document describes how Tribal is structured and how data flows through the system.
 
 ## Design goals
 
@@ -11,7 +11,7 @@ This document describes how Lineage is structured and how data flows through the
 
 ## Invariants
 
-Design goals describe what Lineage aims for; these are the rules a change must not
+Design goals describe what Tribal aims for; these are the rules a change must not
 break. They are load-bearing — each exists because violating it produced a real defect.
 If a change appears to require breaking one, that is a signal the model needs extending,
 not that the rule needs an exception.

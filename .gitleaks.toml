@@ -1,0 +1,31 @@
+# Gitleaks configuration for the public repository.
+#
+# Extends the stock ruleset rather than replacing it, so new upstream rules are
+# picked up automatically.
+[extend]
+useDefault = true
+
+# lineage-policy IS the redaction engine, and it is tested against a corpus of
+# deliberately realistic fake credentials. Those test vectors match the very
+# rules the crate vendors, so a scan of this repository will always flag them.
+#
+# Scoping the exemption to the crate's source keeps the gate meaningful
+# everywhere else: a real credential committed anywhere outside these paths
+# still fails the scan. Allowlisting by path rather than by fingerprint is
+# deliberate — fingerprints are commit-specific, so adding a test vector would
+# silently re-break the gate and invite a blanket exemption instead.
+#
+# Every value under these paths must remain obviously synthetic. Anything that
+# could be mistaken for a live credential does not belong in a fixture.
+#
+# The leading `oss/` is optional so one config serves both scans: from the
+# monorepo root paths are `oss/crates/...`, while in the extracted public repo
+# this file sits at the root and the same paths are `crates/...`.
+[allowlist]
+description = "Synthetic secret fixtures for the redaction engine's own tests"
+paths = [
+  '''(oss/)?crates/lineage-policy/src/policy\.rs''',
+  '''(oss/)?crates/lineage-policy/src/gitleaks/mod\.rs''',
+  '''(oss/)?crates/lineage-policy/src/gitleaks/detect\.rs''',
+  '''(oss/)?crates/lineage-policy/src/gitleaks/fixtures\.json''',
+]

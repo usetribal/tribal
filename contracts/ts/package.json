@@ -1,7 +1,7 @@
 {
   "name": "@lineage/contracts",
   "version": "0.1.0",
-  "description": "TypeScript bindings (zod) for the Lineage public contracts, generated from specs/schema",
+  "description": "TypeScript bindings (zod) for the Tribal public contracts, generated from specs/schema",
   "license": "MIT",
   "private": true,
   "type": "module",

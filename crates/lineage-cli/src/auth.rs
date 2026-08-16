@@ -1,5 +1,5 @@
-//! Client half of the Lineage server CLI login. The CLI only ever talks to the
-//! Lineage server — the device flow's identity provider stays a server-side
+//! Client half of the Tribal server CLI login. The CLI only ever talks to the
+//! Tribal server — the device flow's identity provider stays a server-side
 //! concern, and the durable credential here is an opaque session handle, not a
 //! provider refresh token. The handle is exchanged for a short-lived JWT at the
 //! start of every authenticated command, so no access-token expiry bookkeeping
@@ -16,7 +16,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// Production Lineage API base URL when no `--server` and no stored default.
+/// Production Tribal API base URL when no `--server` and no stored default.
 pub const DEFAULT_SERVER: &str = "https://api.uselineage.io/api";
 
 /// Overrides the credentials directory; primarily a test seam, but also lets

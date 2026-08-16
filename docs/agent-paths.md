@@ -2,7 +2,7 @@
 
 [← Documentation index](README.md) · [Import](import.md) · [Adapters](adapters.md)
 
-Lineage discovers agent transcripts on disk during import. Discovery is scoped to your **repository working directory** — run commands from the project root you initialized.
+Tribal discovers agent transcripts on disk during import. Discovery is scoped to your **repository working directory** — run commands from the project root you initialized.
 
 ## Search order
 

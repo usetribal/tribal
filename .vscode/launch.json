@@ -2,7 +2,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Lineage Extension",
+      "name": "Tribal Extension",
       "type": "extensionHost",
       "request": "launch",
       "args": [
@@ -14,7 +14,7 @@
       "sourceMaps": true
     },
     {
-      "name": "Lineage Extension (other project)",
+      "name": "Tribal Extension (other project)",
       "type": "extensionHost",
       "request": "launch",
       "args": [

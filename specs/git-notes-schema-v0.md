@@ -44,7 +44,7 @@ refs/lineage/lfs-data/<sha256>  # Transport blobs for git push/fetch
 
 ## Merge / push
 
-Lineage refs and notes are normal git objects. `git push` distributes them when refs are pushed:
+Tribal refs and notes are normal git objects. `git push` distributes them when refs are pushed:
 
 ```bash
 git push origin refs/lineage/* refs/notes/lineage

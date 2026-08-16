@@ -2,7 +2,7 @@
 
 [← Documentation index](README.md) · [Import](import.md) · [Configuration](configuration.md)
 
-Lineage can install two git hooks that keep imported sessions current and linked to commits without manual import commands.
+Tribal can install two git hooks that keep imported sessions current and linked to commits without manual import commands.
 
 ## Install and remove
 
@@ -32,7 +32,7 @@ Import failures on pre-commit log to stderr but **do not block** the commit by d
 
 ## Contributor repos vs application repos
 
-The Lineage **monorepo** uses separate contributor hooks (format + lint) via `make install-hooks` and `core.hooksPath .githooks`. Application repositories use lineage import hooks from `git lineage install-hook`.
+The Tribal **monorepo** uses separate contributor hooks (format + lint) via `make install-hooks` and `core.hooksPath .githooks`. Application repositories use lineage import hooks from `git lineage install-hook`.
 
 Do not assume both hook systems on the same repo without merging scripts manually.
 

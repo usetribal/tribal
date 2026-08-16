@@ -79,7 +79,7 @@ See [Import](../import.md).
 |---------|-------------|
 | `git lineage list [--commit SHA] [--json]` | List sessions or sessions at commit |
 | `git lineage show <id> [--json] [--hydrate-images]` | Show conversation |
-| `git lineage blame <path>[:line] [--json]` | Lineage for a file line |
+| `git lineage blame <path>[:line] [--json]` | Tribal for a file line |
 | `git lineage fork [<session-id>] [--query <text>] [--pick N] [--json]` | Continue someone else's session — search or pick when id omitted (see [Fork a session](#fork-a-session)) |
 | `git lineage fork <share-url> [--into DIR] [--no-open] [--server URL]` | Fork a session from a share link — clones the repo if needed and opens the harness (see [Fork a session](#fork-a-session)) |
 | `git lineage fork <session-id> --brief` | Print a context block for starting a subagent on that session; writes nothing (see [Brief a subagent](#brief-a-subagent-on-a-session)) |
@@ -184,9 +184,9 @@ injections), so read it from `.git/lineage/events.jsonl` directly.
 
 | Command | Description |
 |---------|-------------|
-| `git lineage login [--server URL]` | Sign in to a Lineage server (browser device flow; defaults to production) |
-| `git lineage sync [--server URL] [--token TOKEN] [--remote origin]` | Push redacted sessions to a Lineage server |
-| `git lineage pull [--server URL] [--token TOKEN] [--remote origin] [--dry-run]` | Pull teammates' sessions down from a Lineage server (see [Pull teammates' sessions](#pull-teammates-sessions)) |
+| `git lineage login [--server URL]` | Sign in to a Tribal server (browser device flow; defaults to production) |
+| `git lineage sync [--server URL] [--token TOKEN] [--remote origin]` | Push redacted sessions to a Tribal server |
+| `git lineage pull [--server URL] [--token TOKEN] [--remote origin] [--dry-run]` | Pull teammates' sessions down from a Tribal server (see [Pull teammates' sessions](#pull-teammates-sessions)) |
 | `git lineage share [--session ID] [--server URL] [--token TOKEN] [--remote origin] [--no-open]` | Share one session as a link anyone can open (see [Share a session as a link](#share-a-session-as-a-link)) |
 
 `login` prints a verification URL and code, waits for the browser approval, and
@@ -297,7 +297,7 @@ Notes:
 ## Share a session as a link
 
 `git lineage share` turns the session you are in into a link anyone can open
-without a Lineage account, and opens it in your browser.
+without a Tribal account, and opens it in your browser.
 
 ```bash
 git lineage share
@@ -426,7 +426,7 @@ self-contained context block for handing to a **subagent** — one the calling
 agent spawns with its own tool — so someone else's session can be investigated
 without loading it into the current window.
 
-Lineage cannot spawn the subagent; that is model-initiated. Its whole job here
+Tribal cannot spawn the subagent; that is model-initiated. Its whole job here
 is to emit the text.
 
 ```bash
@@ -443,7 +443,7 @@ The block has three parts:
    this block and not move beyond it. `fork` is deliberately not among them — a
    subagent cannot tell it is already inside one.
 3. **A marked task slot** — a trailing `--- TASK (append the subagent's task
-   below this line) ---` line. Lineage does not supply the task; the calling
+   below this line) ---` line. Tribal does not supply the task; the calling
    agent appends it.
 
 Which turns appear is a fixed rule, not a judgement:

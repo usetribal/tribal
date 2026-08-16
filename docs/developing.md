@@ -1,8 +1,8 @@
-# Developing Lineage
+# Developing Tribal
 
 [← Documentation index](README.md) · [Architecture](ARCHITECTURE.md) · [CONTRIBUTING.md](../CONTRIBUTING.md)
 
-Guide for contributors working on the Lineage monorepo: CLI, MCP server, VS Code extension, and Rust library crates.
+Guide for contributors working on the Tribal monorepo: CLI, MCP server, VS Code extension, and Rust library crates.
 
 ## Prerequisites
 
@@ -14,12 +14,12 @@ Guide for contributors working on the Lineage monorepo: CLI, MCP server, VS Code
 ## First-time setup
 
 ```bash
-git clone https://github.com/lineage-dev/lineage.git
-cd lineage
+git clone https://github.com/usetribal/tribal.git
+cd tribal
 make setup
 ```
 
-`make setup` builds the CLI, compiles the extension, runs `git lineage init` in the lineage repo, and installs contributor git hooks (format + lint on commit).
+`make setup` builds the CLI, compiles the extension, runs `git lineage init` in the tribal repo, and installs contributor git hooks (format + lint on commit).
 
 Optional flags:
 
@@ -107,7 +107,7 @@ cd extensions/vscode
 npm run check
 ```
 
-Press **F5** with the lineage repo open. CLI JSON changes require updating extension TypeScript types and command registrations.
+Press **F5** with the tribal repo open. CLI JSON changes require updating extension TypeScript types and command registrations.
 
 ## Contributor skills
 

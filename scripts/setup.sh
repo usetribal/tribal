@@ -11,7 +11,7 @@ REPO_PATH=""
 
 usage() {
   cat <<'EOF'
-Install Lineage and configure a git repository.
+Install Tribal and configure a git repository.
 
 Usage:
   ./scripts/setup.sh [options] [REPO_PATH]
@@ -138,6 +138,6 @@ Next steps:
   git lineage blame <file>:<line>
 
 VS Code extension dev:
-  Open the lineage repo in VS Code and press F5.
+  Open the tribal repo in VS Code and press F5.
 
 EOF

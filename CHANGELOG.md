@@ -263,5 +263,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Schema specifications v0 (conversation, line-object, git-notes)
 - CI workflow (test, clippy, fmt)
 
-[Unreleased]: https://github.com/lineage-dev/lineage/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/lineage-dev/lineage/releases/tag/v0.1.0
+[Unreleased]: https://github.com/usetribal/tribal/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/usetribal/tribal/releases/tag/v0.1.0
