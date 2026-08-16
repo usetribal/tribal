@@ -68,3 +68,11 @@ ureq = { version = "2", features = ["json"] }
 # pre-tokenizer); the training/http/progressbar features are not needed here.
 safetensors = "0.4"
 tokenizers = { version = "0.21", default-features = false, features = ["onig"] }
+
+# Dependencies build optimized even in dev/test: the policy engine compiles 221
+# gitleaks regexes at first use, and an unoptimized `regex` spends ~29s on that
+# DFA construction in every test binary that touches policy. Optimizing deps
+# only (workspace crates stay unoptimized for fast incremental rebuilds and
+# usable backtraces) cuts that to ~2.5s.
+[profile.dev.package."*"]
+opt-level = 3
