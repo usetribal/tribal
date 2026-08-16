@@ -2,7 +2,7 @@
 
 [← Documentation index](README.md) · [CLI reference](cli/README.md) · [Resume and fork](resume-and-fork.md)
 
-The Lineage extension brings session search, timeline view, gutter blame, and resume/fork into VS Code and Cursor. It shells out to `git lineage` for all repository operations.
+The Tribal extension brings session search, timeline view, gutter blame, and resume/fork into VS Code and Cursor. It shells out to `git lineage` for all repository operations.
 
 ## Install
 
@@ -70,8 +70,8 @@ Install the generated `.vsix` via **Extensions: Install from VSIX**.
 
 1. Run `git lineage init` in your project (or use **Init Config** + **Install Git Hooks** from the palette).
 2. **Import Sessions** or commit with hooks enabled.
-3. Open the Lineage activity bar to browse sessions.
-4. Use **Show Lineage for Line** or gutter icons while editing.
+3. Open the Tribal activity bar to browse sessions.
+4. Use **Show Tribal for Line** or gutter icons while editing.
 5. **Resume** or **Fork** when continuing Claude/Codex work.
 
 ## Developing the extension
@@ -84,7 +84,7 @@ npm install
 npm run check
 ```
 
-Press **F5** in the lineage monorepo with the **Lineage Extension** launch configuration. Default settings point `lineage.cliPath` at the debug `git-lineage` binary built by `make setup`.
+Press **F5** in the tribal monorepo with the **Tribal Extension** launch configuration. Default settings point `lineage.cliPath` at the debug `git-lineage` binary built by `make setup`.
 
 See [Developing](developing.md) for full contributor workflow.
 

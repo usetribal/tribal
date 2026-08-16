@@ -6,7 +6,7 @@ description: >-
   lineage search/git exposure via MCP.
 ---
 
-# Lineage MCP server
+# Tribal MCP server
 
 ## Layout
 

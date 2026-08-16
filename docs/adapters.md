@@ -2,7 +2,7 @@
 
 [← Documentation index](README.md) · [Agent paths](agent-paths.md) · [Architecture](ARCHITECTURE.md)
 
-Adapters translate vendor agent transcript formats into Lineage's canonical conversation schema. They live in `lineage-adapters` and are invoked by the import pipeline in `lineage-agent`.
+Adapters translate vendor agent transcript formats into Tribal's canonical conversation schema. They live in `lineage-adapters` and are invoked by the import pipeline in `lineage-agent`.
 
 ## Supported agents
 

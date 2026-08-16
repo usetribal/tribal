@@ -468,7 +468,7 @@ pub fn persist_shared(
     Ok(merged.id.to_string())
 }
 
-/// A shared session came from a Lineage server the same way a pulled one did,
+/// A shared session came from a Tribal server the same way a pulled one did,
 /// so it is marked with the same origin — `fork` and `list` then describe it
 /// identically whether it arrived by link or by `pull`.
 fn share_origin(server: &str) -> PullOrigin {

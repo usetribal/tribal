@@ -18,7 +18,7 @@ SETUP_FLAGS += --force-hooks
 endif
 
 help:
-	@echo "Lineage targets:"
+	@echo "Tribal targets:"
 	@echo "  make setup        - one-command local dev setup (CLI, extension, git lineage init)"
 	@echo "    REPO=path        target git repo (default: lineage repo root)"
 	@echo "    IMPORT=1         run initial import after setup"

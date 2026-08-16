@@ -1,6 +1,6 @@
 # Agent guide
 
-Lineage is a Rust monorepo for **git-native AI agent provenance**: it imports sessions from Cursor, Claude Code, and Codex into git refs and notes, links them to commits and lines, and exposes that context through a CLI, MCP server, and VS Code extension. No external database — data lives in `refs/lineage/*` and `refs/notes/lineage`.
+Tribal is a Rust monorepo for **git-native AI agent provenance**: it imports sessions from Cursor, Claude Code, and Codex into git refs and notes, links them to commits and lines, and exposes that context through a CLI, MCP server, and VS Code extension. No external database — data lives in `refs/lineage/*` and `refs/notes/lineage`.
 
 Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for crate boundaries and import flow before changing behavior — including its **Invariants**, which are rules a change must not break: the provenance graph is deterministic and backfillable, and rendering decides how to show, never what to show. If a change seems to need an exception, the model needs extending instead. **Release status: pre-release, unpublished — simplicity beats backwards compatibility; no data migrations or deprecation aliases required (re-import/rebuild is the upgrade path). The full policy lives in the enclosing workspace until publication.** `lineage-core` has no `git2`; git I/O stays in `lineage-git`.
 
@@ -103,7 +103,7 @@ npm run compile      # or: make vscode from repo root
 npm run package      # .vsix
 ```
 
-**F5 debug:** open the lineage repo root → **Lineage Extension** in `.vscode/launch.json`. `lineage.cliPath` in `.vscode/settings.json` points at `target/debug/git-lineage` (built by `make setup`).
+**F5 debug:** open the tribal repo root → **Tribal Extension** in `.vscode/launch.json`. `lineage.cliPath` in `.vscode/settings.json` points at `target/debug/git-lineage` (built by `make setup`).
 
 Key sources: `extension.ts`, `sessionsProvider.ts`, `sessionPanel.ts`, `lineageDecorator.ts`, `lineageHoverProvider.ts`, `agentActions.ts`.
 

@@ -2,7 +2,7 @@
 
 [← Documentation index](README.md) · [Developing](developing.md) · [Adapters](adapters.md)
 
-Lineage uses Rust integration tests, fixture-based golden tests, and TypeScript checks for the extension. CI runs the same gates as local `make check` plus coverage and MSRV.
+Tribal uses Rust integration tests, fixture-based golden tests, and TypeScript checks for the extension. CI runs the same gates as local `make check` plus coverage and MSRV.
 
 ## Run tests
 

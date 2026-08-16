@@ -71,7 +71,7 @@ pub fn resolve_session(repo: &Repository, hint: &str) -> Result<LineageId, Resol
 
     let sessions = load_sessions(repo).map_err(|e| ResolveError::NotFound(e.to_string()))?;
 
-    // Lineage ids never contain hyphens; try prefix match before vendor ids do.
+    // Tribal ids never contain hyphens; try prefix match before vendor ids do.
     if !hint.contains('-') {
         let matches: Vec<(&LineageId, &Conversation)> = sessions
             .iter()

@@ -1,6 +1,6 @@
 # Specs
 
-The contract surface of Lineage, in three parts:
+The contract surface of Tribal, in three parts:
 
 - **`schema/`** — generated JSON Schema, the canonical artifact other languages
   consume. Generated from the `lineage-core` Rust types (the canonical

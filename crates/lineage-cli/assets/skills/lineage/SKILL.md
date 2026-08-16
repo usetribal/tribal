@@ -8,9 +8,9 @@ description: >-
   lineage with teammates.
 ---
 
-# Lineage agent skill
+# Tribal agent skill
 
-Lineage stores **AI agent session provenance** in git (`refs/lineage/*`, `refs/notes/lineage`). Setup is handled by `git lineage init` (humans run that once). **Your job is to query, interpret, and advise on lineage data.**
+Tribal stores **AI agent session provenance** in git (`refs/lineage/*`, `refs/notes/lineage`). Setup is handled by `git lineage init` (humans run that once). **Your job is to query, interpret, and advise on lineage data.**
 
 ## When to use lineage
 
@@ -36,13 +36,13 @@ git lineage export --redact --format jsonl
 
 Session JSON may include `metadata.architecture_summary`, `prompted_by_email`, `prompted_by_name`, `vendor_session_id`, `parent_session_id`, and `git_branch`.
 
-## Lineage blame
+## Tribal blame
 
 Combines `git blame` with lineage notes at the introducing commit. JSON `matches` include confidence and content previews. Line objects materialize when sessions link to commits (hooks or manual import + commit).
 
 ## Sharing with your team
 
-Lineage refs travel with the repo:
+Tribal refs travel with the repo:
 
 ```bash
 git lineage lfs push
@@ -125,6 +125,6 @@ If `lineage-mcp` is configured, prefer MCP tools (`lineage_list_sessions`, `line
 ## If nothing is found
 
 - `git lineage import --agent all --incremental`
-- Confirm [agent paths](https://github.com/lineage-dev/lineage/blob/main/docs/agent-paths.md) for Cursor / Claude / Codex
+- Confirm [agent paths](https://github.com/usetribal/tribal/blob/main/docs/agent-paths.md) for Cursor / Claude / Codex
 - Teammates may need `git fetch origin refs/lineage/* refs/notes/lineage`
 - Fall back to `git log` and code comments; lineage augments git, it does not replace it

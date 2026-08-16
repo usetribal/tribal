@@ -24,7 +24,7 @@ git lineage show <session-id> --hydrate-images
 
 Show hydrates large LFS-backed turn content automatically. Use `--hydrate-images` when reviewing image artifacts in the terminal or piping to other tools.
 
-## Lineage blame
+## Tribal blame
 
 Combines `git blame` with lineage notes at the introducing commit:
 

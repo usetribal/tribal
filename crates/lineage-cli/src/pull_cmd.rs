@@ -1,4 +1,4 @@
-//! `git lineage pull` — bring teammates' sessions down from a Lineage server
+//! `git lineage pull` — bring teammates' sessions down from a Tribal server
 //! into this repository's lineage refs.
 //!
 //! Pull is not sync with the arrows reversed. Push merges into an authority;

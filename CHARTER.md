@@ -1,8 +1,8 @@
-# Lineage (Open Source)
+# Tribal (Open Source)
 
-This directory is the **open-source portion of Lineage**: the local, single-engineer
+This directory is the **open-source portion of Tribal**: the local, single-engineer
 toolchain — the Rust workspace, the editor extensions, and the **public contracts** that
-define how Lineage data is shaped and how it syncs.
+define how Tribal data is shaped and how it syncs.
 
 Everything here is intended to be public. It is developed inside a larger private workspace
 today, but it is structured to be **self-contained** so it can be extracted into a standalone
@@ -57,7 +57,7 @@ oss/
     └── vscode/            # VS Code extension (TS) — shells out to the CLI
 ```
 
-The exact crate set tracks the existing local Lineage workspace; the names above are the
+The exact crate set tracks the existing local Tribal workspace; the names above are the
 current members. Keep the strict layering already established in that workspace: `lineage-core`
 and `lineage-policy` at the bottom (no git, no IO), git/agent crates above, adapters/search/mcp
 above those, and the CLI on top.

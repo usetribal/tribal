@@ -99,8 +99,8 @@ Installation and wiring state.
 |-------|------|-------------|
 | `binary_version` | string | Version of the running `git-lineage` |
 | `is_git_repo` | bool | Directory is a git repository |
-| `notes_ref_ok` | bool | Lineage notes ref present or creatable |
-| `index_ref_ok` | bool | Lineage index ref present or creatable |
+| `notes_ref_ok` | bool | Tribal notes ref present or creatable |
+| `index_ref_ok` | bool | Tribal index ref present or creatable |
 | `config_ref_ok` | bool | `refs/lineage/config` present |
 | `index_schema` | object | `{ "has_session_files": bool, "has_index_meta": bool, "generation": int }` — an index built by an older binary reports missing tables |
 | `hook_wiring` | object | `{ "claude_settings_present": bool, "lineage_hook_registered": bool, "loadable_from_session_root": bool }` — the last is false when the repo's hook settings are not at the root the agent session was opened from, so the hook can never fire |

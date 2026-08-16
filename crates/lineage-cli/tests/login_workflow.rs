@@ -57,7 +57,7 @@ fn login_stores_handle_and_exchange_resolves_token() {
     assert!(error.contains("not logged in"), "got: {error}");
 }
 
-/// Mock Lineage auth API: first poll is pending, second completes; first
+/// Mock Tribal auth API: first poll is pending, second completes; first
 /// exchange succeeds, second 401s (simulating a revoked session).
 fn spawn_mock_server() -> String {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

@@ -1,13 +1,13 @@
 ---
 name: lineage-contribute
 description: >-
-  Lineage repo contribution conventions: make check, 80% coverage gate, MSRV
+  Tribal repo contribution conventions: make check, 80% coverage gate, MSRV
   1.86, specs-first schema work, policy-before-persist, crate boundaries, and
   CHANGELOG updates. Use when changing any code or docs in the lineage
   monorepo, reviewing PRs, or fixing CI in this repository.
 ---
 
-# Lineage contribute
+# Tribal contribute
 
 ## Before coding
 

@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Ask a question
-    url: https://github.com/lineage-dev/lineage/discussions
+    url: https://github.com/usetribal/tribal/discussions
     about: Ask questions and discuss ideas with the community
   - name: Security report
-    url: https://github.com/lineage-dev/lineage/blob/main/SECURITY.md
+    url: https://github.com/usetribal/tribal/blob/main/SECURITY.md
     about: Report a security vulnerability privately

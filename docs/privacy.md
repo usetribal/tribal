@@ -2,7 +2,7 @@
 
 [← Documentation index](README.md) · [Configuration](configuration.md) · [Share](share.md)
 
-Lineage imports agent transcripts from your machine into git objects. Policy runs **before** anything is persisted, so secrets and sensitive paths should never reach `refs/lineage/*` in their raw form. You still control what gets pushed and what teammates can read.
+Tribal imports agent transcripts from your machine into git objects. Policy runs **before** anything is persisted, so secrets and sensitive paths should never reach `refs/lineage/*` in their raw form. You still control what gets pushed and what teammates can read.
 
 ## Policy before persist
 
@@ -47,7 +47,7 @@ Anyone with repository access can read pushed lineage data. Treat pushed refs li
 
 ## What lineage reads locally
 
-Import scans agent transcript directories on disk (see [Agent paths](agent-paths.md)). It does not upload transcripts to a Lineage cloud service. Normalized, policy-filtered JSON is written into your local git object store.
+Import scans agent transcript directories on disk (see [Agent paths](agent-paths.md)). It does not upload transcripts to a Tribal cloud service. Normalized, policy-filtered JSON is written into your local git object store.
 
 ## What teammates see
 

@@ -1,9 +1,9 @@
 ---
 name: vscode-extension-dev
 description: >-
-  Develops the Lineage VS Code extension in extensions/vscode. Covers
+  Develops the Tribal VS Code extension in extensions/vscode. Covers
   TypeScript sources, lineageClient CLI integration, npm run check, and F5
-  extension host launch against the lineage repository. Use when changing the VS
+  extension host launch against the tribal repository. Use when changing the VS
   Code extension, session panel, gutter blame, or extension commands.
 ---
 

@@ -3,7 +3,7 @@
 //!
 //! Three things shape this module.
 //!
-//! **Lineage emits text and nothing else.** Spawning a subagent is
+//! **Tribal emits text and nothing else.** Spawning a subagent is
 //! model-initiated: only the calling agent's own tool can do it. So the whole
 //! job here is to print a block that agent can hand on, and the block writes
 //! nothing — no transcript, no fork edge. It is an initial context load, not a

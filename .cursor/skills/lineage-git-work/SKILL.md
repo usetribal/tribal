@@ -7,7 +7,7 @@ description: >-
   transport, or hook behavior.
 ---
 
-# Lineage git work
+# Tribal git work
 
 ## Storage model
 

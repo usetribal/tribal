@@ -18,7 +18,7 @@ Fork is the one that works on a session you did not record yourself.
 |-------|--------|------|-------|
 | Claude Code | Yes | Yes | Fork needs no local transcript and no `vendor_session_id` |
 | Codex | Yes | Not yet | Resume needs `vendor_session_id` from import |
-| Cursor | View only | No | Lineage reads Cursor's IDE sessions; `cursor-agent` has its own separate store |
+| Cursor | View only | No | Tribal reads Cursor's IDE sessions; `cursor-agent` has its own separate store |
 
 ## Fork
 

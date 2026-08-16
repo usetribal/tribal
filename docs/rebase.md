@@ -2,7 +2,7 @@
 
 [← Documentation index](README.md) · [Share](share.md) · [Maintenance](maintenance.md)
 
-Interactive rebase, squash, and amend rewrite commit SHAs. Lineage git notes and session `commit_shas` may still point at old commits, leaving blame and per-commit session lists out of date until you remap.
+Interactive rebase, squash, and amend rewrite commit SHAs. Tribal git notes and session `commit_shas` may still point at old commits, leaving blame and per-commit session lists out of date until you remap.
 
 ## When to remap
 

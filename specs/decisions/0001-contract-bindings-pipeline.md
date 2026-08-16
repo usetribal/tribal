@@ -4,7 +4,7 @@
 
 ## Context
 
-Lineage's data contracts (Conversation, LineObject, …) are consumed in two
+Tribal's data contracts (Conversation, LineObject, …) are consumed in two
 languages: Rust (this repo — the local tooling) and TypeScript (the server
 that ingests synced data). Until now the only cross-language artifact
 was hand-written markdown in `specs/`, kept aligned with the `lineage-core`

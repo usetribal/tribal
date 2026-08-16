@@ -1,12 +1,12 @@
 ---
 name: lineage-release-prep
 description: >-
-  Prepares Lineage releases and merge-ready PRs: CHANGELOG versioning,
+  Prepares Tribal releases and merge-ready PRs: CHANGELOG versioning,
   coverage gate, docs lint, export redaction review, and CI checklist. Use when
   cutting a release, preparing v0.x.0, or finalizing a large PR for merge.
 ---
 
-# Lineage release prep
+# Tribal release prep
 
 ## Pre-merge checklist
 

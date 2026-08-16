@@ -2,57 +2,5 @@
 #
 # GitHub uses the last matching rule. List specific paths first; keep the catch-all last.
 # Enable review: Settings → Branches → branch protection → "Require review from Code Owners"
-#
-# Replace team handles with real @org/team or @username values from your GitHub org.
 
-# Schema contracts (breaking changes need explicit review)
-/specs/ @lineage-dev/core
-
-# Rust workspace
-/Cargo.toml @lineage-dev/core
-/Cargo.lock @lineage-dev/core
-/rust-toolchain.toml @lineage-dev/core
-/clippy.toml @lineage-dev/core
-/rustfmt.toml @lineage-dev/core
-/typos.toml @lineage-dev/infra
-
-# Core domain & policy
-/crates/lineage-core/ @lineage-dev/core
-/crates/lineage-policy/ @lineage-dev/core
-/crates/lineage-agent/ @lineage-dev/core
-
-# Git persistence & storage
-/crates/lineage-git/ @lineage-dev/git
-/crates/lineage-store/ @lineage-dev/git
-
-# Adapters
-/crates/lineage-adapters/ @lineage-dev/adapters
-
-# CLI, search, MCP
-/crates/lineage-cli/ @lineage-dev/cli
-/crates/lineage-search/ @lineage-dev/cli
-/crates/lineage-mcp/ @lineage-dev/cli
-
-# VS Code extension
-/extensions/vscode/ @lineage-dev/vscode
-
-# CI, automation, local dev gates
-/.github/ @lineage-dev/infra
-/scripts/ @lineage-dev/infra
-/Makefile @lineage-dev/infra
-/.pre-commit-config.yaml @lineage-dev/infra
-/.markdownlint.yaml @lineage-dev/infra
-/.markdownlint-cli2.yaml @lineage-dev/infra
-
-# Docs & contributor guides
-/docs/ @lineage-dev/docs
-/AGENTS.md @lineage-dev/docs
-/CONTRIBUTING.md @lineage-dev/docs
-/CHANGELOG.md @lineage-dev/docs
-/README.md @lineage-dev/docs
-
-# Test fixtures
-/tests/ @lineage-dev/core
-
-# Default (must be last)
-* @lineage-dev/maintainers
+* @xifong @garethhaagman

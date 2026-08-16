@@ -27,7 +27,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 const REGISTRY_FILE: &str = "repos.json";
 
-/// The remote a checkout is recorded under. Lineage identifies repositories by
+/// The remote a checkout is recorded under. Tribal identifies repositories by
 /// their `origin` everywhere else (sync, pull, share), so a registry keyed on
 /// anything else would not answer the question a share asks.
 const REGISTRY_REMOTE: &str = "origin";
