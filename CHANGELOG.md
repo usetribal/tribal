@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-17
+
 ### Added
 
 - `ToolCall.target` (`conversation-v0`) — what a tool call acted on, resolved at import into `{kind, value}` where kind is `path`, `command`, or `subject`. `arguments` stays the vendor's raw JSON, and its keys differ per harness — Claude Code sends `file_path` where Cursor sends `path`, and a write's body is `content` in one and `contents` in the other — so every consumer that wanted "what did this call touch" had to re-parse the blob and guess key names, which is harness knowledge leaking out of the adapters that own it. The resolution itself is not new: `artifacts_from_tool_input` already performed it, then discarded the answer for any call that mints no artifact — correctly, since a read authors nothing, but a read still touched a file worth naming. `target` keeps what was being thrown away, and the key lists are now shared between the two so they cannot disagree about which key a harness uses. `kind` travels with the value because a consumer cannot otherwise tell a path it may show repo-relative from a command it must not split on separators. Optional and omitted when absent, so documents written before the field parse unchanged and calls naming nothing worth showing stay the size they were
@@ -267,5 +269,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Schema specifications v0 (conversation, line-object, git-notes)
 - CI workflow (test, clippy, fmt)
 
-[Unreleased]: https://github.com/usetribal/tribal/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/usetribal/tribal/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/usetribal/tribal/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/usetribal/tribal/releases/tag/v0.1.0

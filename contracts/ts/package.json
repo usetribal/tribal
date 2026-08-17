@@ -1,6 +1,6 @@
 {
   "name": "@lineage/contracts",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "TypeScript bindings (zod) for the Tribal public contracts, generated from specs/schema",
   "license": "MIT",
   "private": true,

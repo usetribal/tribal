@@ -113,7 +113,10 @@ pub async fn handle_request(
         "initialize" => Ok(json!({
             "protocolVersion": "2024-11-05",
             "capabilities": { "tools": {} },
-            "serverInfo": { "name": "lineage-mcp", "version": "0.1.0" }
+            // Read from the crate rather than repeated as a literal: that is a
+            // second place to remember at every release, and it had already
+            // drifted from the version this crate actually builds at.
+            "serverInfo": { "name": "lineage-mcp", "version": env!("CARGO_PKG_VERSION") }
         })),
         "notifications/initialized" => Ok(json!({})),
         "tools/list" => Ok(json!({
