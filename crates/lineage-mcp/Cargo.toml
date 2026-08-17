@@ -21,6 +21,14 @@ path = "src/lib.rs"
 name = "lineage-mcp"
 path = "src/main.rs"
 
+# Not published through `dist`: it packages one app per *package*, so a second
+# package with a binary would mint a second set of installers and a second
+# install step. The CLI is what a share-link receiver needs, and it is the only
+# thing the installers promise. Installing this server stays `cargo install`
+# (see AGENTS.md) until it earns its own distribution story.
+[package.metadata.dist]
+dist = false
+
 [dependencies]
 lineage-cli = { workspace = true }
 lineage-core = { workspace = true }

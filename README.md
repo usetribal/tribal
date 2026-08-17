@@ -32,7 +32,25 @@ Tribal closes that gap with **local, in-repo memory**: agent context lives in yo
 | **Agent-agnostic** | Cursor, Claude Code, and Codex today; more adapters coming |
 | **Queryable everywhere** | [CLI](docs/cli/README.md), [MCP](docs/mcp/README.md), and [VS Code](extensions/vscode/README.md) |
 
-## Setup
+## Install
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/usetribal/tribal/releases/latest/download/lineage-cli-installer.sh | sh
+```
+
+Linux (x86_64 and arm64) and macOS (Intel and Apple silicon). The Linux builds
+are static, so they run without anything installed alongside them.
+
+Then, in your project root:
+
+```bash
+cd /path/to/your-app
+git lineage init
+```
+
+## Setup from source
+
+For contributors, or to build the VS Code extension:
 
 ### 1. Clone tribal
 

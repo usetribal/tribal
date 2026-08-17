@@ -83,3 +83,8 @@ tokenizers = { version = "0.21", default-features = false, features = ["onig"] }
 # usable backtraces) cuts that to ~2.5s.
 [profile.dev.package."*"]
 opt-level = 3
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"

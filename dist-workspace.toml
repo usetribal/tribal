@@ -1,0 +1,41 @@
+[workspace]
+members = ["cargo:."]
+
+# Distribution config for `dist` (cargo-dist). The release workflow it drives is
+# generated, never hand-edited: `dist generate` rewrites
+# .github/workflows/release.yml from this file, so a change made in the YAML is
+# silently reverted by the next regeneration. Edit here, then regenerate and
+# commit both — see the Releasing section in AGENTS.md for how to run it
+# without letting dist write outside this directory.
+[dist]
+cargo-dist-version = "0.32.0"
+ci = "github"
+targets = [
+    # Linux is built against musl rather than glibc so the artifact is
+    # static-pie: it then runs on distributions older than the build machine and
+    # inside Alpine images, neither of which a glibc build can promise.
+    "x86_64-unknown-linux-musl",
+    "aarch64-unknown-linux-musl",
+    "aarch64-apple-darwin",
+    "x86_64-apple-darwin",
+]
+
+# Shell only. Homebrew and npm each need a registry account and a published
+# name, which is a decision about packaging identity rather than about being
+# installable — and each one added is another surface that has to keep working
+# at release time. The shell installer assumes nothing but curl, which is the
+# point: someone following a share link may have neither Node nor Homebrew.
+installers = ["shell"]
+
+# A tag push builds and publishes; a pull request only plans, so CI proves the
+# release config still parses without minting artifacts nobody asked for.
+pr-run-mode = "plan"
+
+install-updater = false
+install-path = "CARGO_HOME"
+
+# rusqlite and onig compile C against musl, which the GitHub runners do not
+# ship a cross toolchain for.
+[dist.github-custom-runners]
+x86_64-unknown-linux-musl = "ubuntu-latest"
+aarch64-unknown-linux-musl = "ubuntu-24.04-arm"

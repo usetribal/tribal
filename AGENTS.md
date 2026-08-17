@@ -30,6 +30,33 @@ make check                   # fmt, clippy, test, doc, typos, markdown, vscode l
 
 `make check` does not run coverage or MSRV — CI and PR review handle those.
 
+## Releasing
+
+Pushing a `v*` tag builds and publishes. `.github/workflows/release.yml` is
+**generated** by [`dist`](https://github.com/axodotdev/cargo-dist) from
+`dist-workspace.toml` — edit that file and regenerate, then commit both; a
+hand-edit to the workflow is reverted by the next regeneration.
+
+Regenerate from a copy of this directory rather than in place:
+
+```bash
+tmp="$(mktemp -d)"
+tar --exclude=target --exclude=node_modules -cf - . | tar -xf - -C "$tmp"
+(cd "$tmp" && git init -q && dist generate)
+cp "$tmp/.github/workflows/release.yml" .github/workflows/release.yml
+```
+
+`dist` resolves the workspace by walking **up** from where it runs, so inside
+the enclosing monorepo it finds that root and writes the workflow there instead
+of here — landing a release file in the wrong repository, where nothing
+attributes it to this change. From a standalone checkout it can be run directly.
+
+Only `lineage-cli` is distributed: `dist` packages one app per crate, so adding
+a second would mean a second set of installers. `lineage-mcp` is marked
+`dist = false` and is installed with `cargo install --path crates/lineage-mcp`.
+Installers are shell only for now; Homebrew and npm each need a registry
+identity, which is a separate decision from being installable at all.
+
 Before opening a PR (or when you change behavior that needs coverage proof):
 
 ```bash
