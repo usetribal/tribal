@@ -94,7 +94,7 @@ jobs:
       - uses: crate-ci/typos@master
         with:
           config: typos.toml
-      - uses: DavidAnson/markdownlint-cli2-action@v18
+      - uses: DavidAnson/markdownlint-cli2-action@v24
         with:
           config: .markdownlint-cli2.yaml
 
