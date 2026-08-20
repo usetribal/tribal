@@ -32,20 +32,20 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --workspace --all-targets -- -D warnings
 
+  # Linux only, deliberately. macOS runners bill at roughly ten times the Linux
+  # rate, and running them on every push and every Dependabot pull request cost
+  # more than every other job in this repository combined. What they were
+  # re-proving does not vary by operating system: the suite exercises git
+  # plumbing and file formats, and the one place a darwin-specific break could
+  # reach users is the release build, which compiles the darwin targets anyway.
+  # Restore the matrix here if something ever fails on macOS and nowhere else.
   test:
-    name: Test (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
+    name: Test (ubuntu-latest)
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Install system dependencies (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libssl-dev pkg-config
       - run: cargo test --workspace
 
   msrv:
@@ -55,8 +55,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.86.0
       - uses: Swatinem/rust-cache@v2
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libssl-dev pkg-config
       - run: cargo test --workspace
 
   doc:
@@ -66,8 +64,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libssl-dev pkg-config
       - run: cargo doc --workspace --no-deps --document-private-items
 
   coverage:
@@ -79,8 +75,6 @@ jobs:
         with:
           components: llvm-tools-preview
       - uses: Swatinem/rust-cache@v2
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libssl-dev pkg-config
       - name: Install cargo-llvm-cov
         run: cargo install cargo-llvm-cov
       - name: Check line coverage
