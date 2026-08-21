@@ -243,7 +243,7 @@ git lineage pull
 ```
 
 ```text
-https://api.uselineage.io/api has 3 conversation(s) this repository is missing or behind on (2 new, 1 grown).
+https://api.usetribal.io/api has 3 conversation(s) this repository is missing or behind on (2 new, 1 grown).
 Wrote 3 session(s):
     01HQZX8K9V2M3N4P5Q6R7S8T9U
     01HQZW1A2B3C4D5E6F7G8H9J0K
@@ -306,7 +306,7 @@ git lineage share
 ```text
 sharing session 01HQZX8K9V2M3N4P5Q6R7S8T9U (14 turn(s))
 
-    https://uselineage.io/s/7Kq2mXvB9nRt4Ls0Yc1Hpz
+    https://app.usetribal.io/s/7Kq2mXvB9nRt4Ls0Yc1Hpz
 
 Pinned at 14 turn(s): continuing this session does not change what the link shows.
 ```

@@ -630,7 +630,7 @@ mod tests {
 
     #[test]
     fn a_url_is_a_share_link_and_a_session_id_is_not() {
-        assert!(is_share_url("https://app.uselineage.io/s/tok"));
+        assert!(is_share_url("https://app.usetribal.io/s/tok"));
         assert!(is_share_url("http://localhost:4200/s/tok"));
         assert!(is_share_url("/s/tok"));
         assert!(!is_share_url("01J8Z9QT7QK6X0000000000000"));
@@ -681,12 +681,12 @@ mod tests {
     #[test]
     fn the_api_origin_comes_from_the_document_the_link_origin_publishes() {
         let link = resolve_share_url(
-            "https://app.uselineage.io/s/tok123",
+            "https://app.usetribal.io/s/tok123",
             None,
-            &publishes("https://api.uselineage.io/api"),
+            &publishes("https://api.usetribal.io/api"),
         )
         .unwrap();
-        assert_eq!(link.server, "https://api.uselineage.io/api");
+        assert_eq!(link.server, "https://api.usetribal.io/api");
         assert_eq!(link.token, "tok123");
     }
 
@@ -708,8 +708,8 @@ mod tests {
     #[test]
     fn an_origin_publishing_nothing_falls_back_to_the_host_rewrite() {
         let link =
-            resolve_share_url("https://app.uselineage.io/s/tok", None, &publishes_nothing).unwrap();
-        assert_eq!(link.server, "https://api.uselineage.io");
+            resolve_share_url("https://app.usetribal.io/s/tok", None, &publishes_nothing).unwrap();
+        assert_eq!(link.server, "https://api.usetribal.io");
     }
 
     #[test]
@@ -723,9 +723,9 @@ mod tests {
     #[test]
     fn an_explicit_server_wins_over_the_document() {
         let link = resolve_share_url(
-            "https://app.uselineage.io/s/tok",
+            "https://app.usetribal.io/s/tok",
             Some("http://127.0.0.1:3000/"),
-            &publishes("https://api.uselineage.io/api"),
+            &publishes("https://api.usetribal.io/api"),
         )
         .unwrap();
         assert_eq!(link.server, "http://127.0.0.1:3000");

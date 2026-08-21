@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The default server is now `https://api.usetribal.io/api`, following the hosted service onto its own domain. It applies only when `--server` is omitted **and** no prior login stored a default, so a machine that has run `git lineage login` against any server keeps reaching that one and needs no action. A build older than this release points at a host that no longer answers: re-run `login` with an explicit `--server`, or upgrade. Share links carry their own origin and are unaffected, as is any URL passed explicitly
+
 ## [0.2.0] - 2026-08-17
 
 ### Added

@@ -477,7 +477,7 @@ mod tests {
         assert!(!launch(
             "lineage-no-such-browser-opener",
             &[],
-            "https://uselineage.io/s/token"
+            "https://app.usetribal.io/s/token"
         ));
     }
 

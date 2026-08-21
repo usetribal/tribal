@@ -61,7 +61,7 @@ impl ShareTransport for StubServer {
         self.creates.borrow_mut().push(request.clone());
         Ok(ShareCreateResponse {
             token: "sHaReToKeN0000000000t1".into(),
-            url: "https://uselineage.io/s/sHaReToKeN0000000000t1".into(),
+            url: "https://app.usetribal.io/s/sHaReToKeN0000000000t1".into(),
             turn_count: self.turn_count,
         })
     }
@@ -264,7 +264,7 @@ fn the_pinned_turn_count_comes_back_from_the_server_not_the_client() {
     assert_eq!(response.turn_count, 7);
     assert_eq!(
         response.url,
-        "https://uselineage.io/s/sHaReToKeN0000000000t1"
+        "https://app.usetribal.io/s/sHaReToKeN0000000000t1"
     );
 }
 

@@ -17,7 +17,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 const HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Production Tribal API base URL when no `--server` and no stored default.
-pub const DEFAULT_SERVER: &str = "https://api.uselineage.io/api";
+pub const DEFAULT_SERVER: &str = "https://api.usetribal.io/api";
 
 /// Overrides the credentials directory; primarily a test seam, but also lets
 /// CI jobs isolate credentials from the machine account.

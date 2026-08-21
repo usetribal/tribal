@@ -109,7 +109,7 @@ fn shared_turn(index: usize) -> PulledTurn {
 
 fn link() -> ShareLink {
     ShareLink {
-        server: "https://api.uselineage.io".into(),
+        server: "https://api.usetribal.io".into(),
         token: "sHaReToKeN0000000000t1".into(),
     }
 }
@@ -456,7 +456,7 @@ fn the_pinned_conversation_is_persisted_and_the_fork_edge_recorded() {
     // A shared session arrived from a server, like a pulled one.
     assert_eq!(
         stored.pull_origin.as_ref().unwrap().server,
-        "https://api.uselineage.io"
+        "https://api.usetribal.io"
     );
 
     let fork = fork_of(cwd.path(), CONVERSATION_ID);
@@ -816,7 +816,7 @@ fn a_link_that_is_not_a_share_link_is_refused_before_any_request() {
     let checkout = checkout_of(REPO_URL);
 
     let output = run_cli(
-        &["fork", "https://app.uselineage.io/sessions/abc"],
+        &["fork", "https://app.usetribal.io/sessions/abc"],
         checkout.path(),
         config.path(),
         home.path(),
