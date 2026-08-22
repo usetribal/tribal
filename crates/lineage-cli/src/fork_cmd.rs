@@ -1,4 +1,4 @@
-//! `git lineage continue` — carry on an agent session, whether or not it started
+//! `git lineage fork` — carry on an agent session, whether or not it started
 //! here.
 //!
 //! One verb, because which of the two ways applies is a property of the session
@@ -46,7 +46,7 @@ pub struct ShareOptions {
     pub no_open: bool,
 }
 
-pub fn continue_session(repo_path: &Path, request: ForkRequest) -> Result<()> {
+pub fn fork_session(repo_path: &Path, request: ForkRequest) -> Result<()> {
     // A share link and a session id cannot be confused: ids are ULIDs, id
     // prefixes, or harness UUIDs, none of which carry a scheme or a slash. So
     // the argument decides which path this takes, with no flag to remember.
@@ -121,7 +121,7 @@ fn print_resume(invocation: &ResumeInvocation) {
     println!("    {}", invocation.command);
     println!();
     println!("This is the original session, not a copy: continuing it adds to its history.");
-    println!("To write it out as a new session of your own instead, add --fork.");
+    println!("To write it out as a new session of your own instead, add --new.");
 }
 
 fn should_stop_after_json(request: &ForkRequest, picked: &ForkPickResult) -> bool {

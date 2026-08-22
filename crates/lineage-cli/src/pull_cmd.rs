@@ -578,7 +578,7 @@ fn print_report(report: &PullReport, server: &str, dry_run: bool) {
     println!("Pull never deletes: sessions the server did not mention are untouched,");
     println!("and turns you already had were kept as they were.");
     println!();
-    println!("`git lineage list` shows them; `git lineage continue <id>` continues one.");
+    println!("`git lineage list` shows them; `git lineage fork <id>` continues one.");
 }
 
 fn describe_reasons(reasons: &BTreeMap<String, usize>) -> String {

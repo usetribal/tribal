@@ -337,7 +337,7 @@
           "type": "null"
         }
       ],
-      "description": "Set only when this session was written out by `git lineage continue`. A parent\nwith no `fork_origin` is a harness-spawned branch (sidechain/subagent)."
+      "description": "Set only when this session was written out by `git lineage fork`. A parent\nwith no `fork_origin` is a harness-spawned branch (sidechain/subagent)."
     },
     "id": {
       "type": "string"

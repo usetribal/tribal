@@ -15,30 +15,83 @@ use tracing_subscriber::EnvFilter;
 /// list rather than one per subcommand, so the grouping a 20-command surface
 /// needs has to be written out here. Only the commands worth reaching for
 /// first appear: the rest still run, and `--help` on any of them still works.
-const COMMAND_HELP: &str = "\
-Setup:
-  init          Set up lineage here: config, agent skills, hooks, first import
+/// The commands worth reaching for first, in the order the help lists them.
+///
+/// Single-sourced: `--help` renders this, and `--discover` reports each
+/// command's group from it, so a command cannot be grouped in one and missing
+/// from the other. Commands absent here still run and still have `--help` —
+/// they are the repair verbs and internal endpoints, surfaced by `--discover`
+/// under the "advanced" group rather than crowding the front page.
+const COMMAND_GROUPS: &[(&str, &[(&str, &str)])] = &[
+    (
+        "Setup",
+        &[(
+            "init",
+            "Set up lineage here: config, agent skills, hooks, first import",
+        )],
+    ),
+    (
+        "Sessions",
+        &[
+            ("import", "Import agent sessions into lineage refs"),
+            ("list", "List imported sessions"),
+            ("show", "Show a session"),
+            (
+                "fork",
+                "Continue a session — reopens yours, writes out anyone else's",
+            ),
+            ("blame", "Show which sessions wrote a line"),
+            ("context", "Retrieve context by intent, file, or line"),
+        ],
+    ),
+    (
+        "Team",
+        &[
+            ("login", "Sign in to a Lineage server"),
+            (
+                "sync",
+                "Exchange sessions with the server (push, then pull)",
+            ),
+            ("share", "Share one session as a link anyone can open"),
+        ],
+    ),
+    (
+        "Maintenance",
+        &[
+            ("doctor", "Check lineage health in this repository"),
+            ("rebuild", "Rebuild derived state from stored sessions"),
+        ],
+    ),
+];
 
-Sessions:
-  import        Import agent sessions into lineage refs
-  list          List imported sessions
-  show          Show a session
-  continue      Continue a session — reopens yours, writes out anyone else's
-  blame         Show which sessions wrote a line
-  context       Retrieve context by intent, file, or line
+/// The grouped command list `--help` shows, built from [`COMMAND_GROUPS`].
+fn command_help() -> String {
+    let mut out = String::new();
+    for (index, (group, commands)) in COMMAND_GROUPS.iter().enumerate() {
+        if index > 0 {
+            out.push('\n');
+        }
+        out.push_str(group);
+        out.push_str(":\n");
+        for (name, summary) in *commands {
+            out.push_str(&format!("  {name:<12}  {summary}\n"));
+        }
+    }
+    out.push('\n');
+    out
+}
 
-Team:
-  login         Sign in to a Lineage server
-  sync          Exchange sessions with the server (push, then pull)
-  push          Send your sessions to the server
-  pull          Bring teammates' sessions down
-  share         Share one session as a link anyone can open
-
-Maintenance:
-  doctor        Check lineage health in this repository
-  rebuild       Rebuild derived state from stored sessions
-  delete        Delete an imported session
-";
+/// The group a command is listed under, or `"advanced"` for one that is not on
+/// the front page. Read by `--discover`, so an agent sees the same grouping a
+/// human does plus everything hiding behind it.
+fn group_of(command: &str) -> &'static str {
+    for (group, commands) in COMMAND_GROUPS {
+        if commands.iter().any(|(name, _)| *name == command) {
+            return group;
+        }
+    }
+    "advanced"
+}
 
 #[derive(Parser)]
 #[command(
@@ -49,10 +102,8 @@ Maintenance:
 {about}
 
 {usage-heading} {usage}
-{after-help}
-Options:
+{after-help}Options:
 {options}",
-    after_help = COMMAND_HELP,
     disable_help_subcommand = true
 )]
 struct Cli {
@@ -60,8 +111,12 @@ struct Cli {
     #[arg(long, global = true)]
     repo: Option<PathBuf>,
 
+    /// Print the whole command surface as JSON, for an agent to read
+    #[arg(long, exclusive = true)]
+    discover: bool,
+
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
@@ -165,8 +220,8 @@ enum Commands {
     /// block ends with a marked slot for the subagent's task. It works for any
     /// stored session, including one pulled from a teammate that this build
     /// cannot write a transcript for.
-    #[command(name = "continue", alias = "fork", alias = "resume")]
-    Continue {
+    #[command(name = "fork", alias = "continue", alias = "resume")]
+    Fork {
         /// Session to continue — lineage id, id prefix, harness UUID
         /// (`git lineage list` shows titles and ids), or a share link
         /// (`https://<host>/s/<token>`)
@@ -178,8 +233,8 @@ enum Commands {
         #[arg(long)]
         pick: Option<usize>,
         /// Write the session out as a new one even if your harness holds it
-        #[arg(long)]
-        fork: bool,
+        #[arg(long = "new", alias = "fork")]
+        new_session: bool,
         /// Print a context block for a subagent instead of continuing the session
         #[arg(long)]
         brief: bool,
@@ -229,7 +284,7 @@ enum Commands {
         server: Option<String>,
     },
     /// Push redacted sessions to a Lineage server
-    #[command(name = "push")]
+    #[command(name = "push", hide = true)]
     Push {
         /// Server base URL; defaults to production or the server stored by `login`
         #[arg(long)]
@@ -286,6 +341,7 @@ enum Commands {
     ///
     /// Never deletes: sessions the server does not mention are left alone, and
     /// turns you already have are kept as they are.
+    #[command(hide = true)]
     Pull {
         /// Server base URL; defaults to production or the server stored by `login`
         #[arg(long)]
@@ -336,6 +392,7 @@ enum Commands {
         action: LfsAction,
     },
     /// Delete an imported session (and optionally purge LFS blobs)
+    #[command(hide = true)]
     Delete {
         session_id: String,
         #[arg(long)]
@@ -477,6 +534,75 @@ enum ContextAction {
     },
 }
 
+/// The whole command surface as JSON, walked from the parser itself rather than
+/// written out again — so it cannot drift from what the binary actually accepts,
+/// and hidden commands are reported rather than concealed. An agent reading this
+/// needs the repair verbs precisely because they are the ones it will not guess.
+fn discover(command: &clap::Command) -> serde_json::Value {
+    let commands: Vec<serde_json::Value> = command
+        .get_subcommands()
+        .map(|sub| {
+            serde_json::json!({
+                "name": sub.get_name(),
+                "group": group_of(sub.get_name()),
+                "hidden": sub.is_hide_set(),
+                "summary": sub.get_about().map(|a| a.to_string()),
+                "description": sub.get_long_about().map(|a| a.to_string()),
+                "aliases": sub.get_all_aliases().collect::<Vec<_>>(),
+                "options": options_of(sub),
+                "subcommands": sub
+                    .get_subcommands()
+                    .map(|nested| serde_json::json!({
+                        "name": nested.get_name(),
+                        "summary": nested.get_about().map(|a| a.to_string()),
+                        "options": options_of(nested),
+                    }))
+                    .collect::<Vec<_>>(),
+            })
+        })
+        .collect();
+
+    serde_json::json!({
+        "name": command.get_name(),
+        "version": command.get_version(),
+        "about": command.get_about().map(|a| a.to_string()),
+        "groups": COMMAND_GROUPS.iter().map(|(g, _)| *g).collect::<Vec<_>>(),
+        "commands": commands,
+    })
+}
+
+/// Positionals and flags alike: an agent composing a call needs to know that
+/// `show` takes a bare session id as much as it needs the flag names.
+fn options_of(command: &clap::Command) -> Vec<serde_json::Value> {
+    command
+        .get_arguments()
+        .filter(|arg| !arg.is_hide_set())
+        .map(|arg| {
+            serde_json::json!({
+                "name": arg.get_id().as_str(),
+                "long": arg.get_long(),
+                "positional": arg.is_positional(),
+                "required": arg.is_required_set(),
+                "repeatable": matches!(
+                    arg.get_action(),
+                    clap::ArgAction::Append | clap::ArgAction::Count
+                ),
+                "takes_value": !matches!(
+                    arg.get_action(),
+                    clap::ArgAction::SetTrue | clap::ArgAction::SetFalse | clap::ArgAction::Count
+                ),
+                "help": arg.get_help().map(|h| h.to_string()),
+            })
+        })
+        .collect()
+}
+
+/// The parser with the grouped command list attached. `after_help` is built at
+/// runtime from [`COMMAND_GROUPS`], so it cannot be a derive attribute.
+fn cli_command() -> clap::Command {
+    <Cli as clap::CommandFactory>::command().after_help(command_help())
+}
+
 fn parse_agent(s: &str) -> Result<String, String> {
     match s.to_lowercase().as_str() {
         "cursor" | "claude" | "codex" | "all" => Ok(s.to_lowercase()),
@@ -519,7 +645,27 @@ fn main() -> ExitCode {
         .with_target(false)
         .init();
 
-    let cli = Cli::parse();
+    let cli = match cli_command().try_get_matches() {
+        Ok(matches) => match <Cli as clap::FromArgMatches>::from_arg_matches(&matches) {
+            Ok(cli) => cli,
+            Err(error) => error.exit(),
+        },
+        Err(error) => error.exit(),
+    };
+
+    if cli.discover {
+        let surface = discover(&cli_command());
+        println!("{}", serde_json::to_string_pretty(&surface).unwrap());
+        return ExitCode::SUCCESS;
+    }
+
+    // Only --discover may omit a subcommand; anything else with none is the
+    // bare invocation, which should print help rather than silently succeed.
+    let Some(command) = cli.command else {
+        let _ = cli_command().print_help();
+        return ExitCode::FAILURE;
+    };
+
     let repo_path = cli.repo.unwrap_or_else(|| PathBuf::from("."));
 
     // The one place the registry is written. Recording here rather than in each
@@ -529,7 +675,7 @@ fn main() -> ExitCode {
     // contract: a machine-level cache must never fail a repository command.
     repo_registry::record(&repo_path, Utc::now());
 
-    let result = match cli.command {
+    let result = match command {
         Commands::Doctor {
             json,
             section,
@@ -586,17 +732,17 @@ fn main() -> ExitCode {
             json,
             hydrate_images,
         } => commands::show(&repo_path, &session_id, json, hydrate_images),
-        Commands::Continue {
+        Commands::Fork {
             session_id,
             query,
             pick,
-            fork,
+            new_session,
             brief,
             json,
             into,
             server,
             no_open,
-        } => fork_cmd::continue_session(
+        } => fork_cmd::fork_session(
             &repo_path,
             fork_cmd::ForkRequest {
                 pick: session_pick::ForkPickOptions {
@@ -604,7 +750,7 @@ fn main() -> ExitCode {
                     query,
                     pick,
                 },
-                force_fork: fork,
+                force_fork: new_session,
                 brief,
                 json,
                 share: fork_cmd::ShareOptions {

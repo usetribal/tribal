@@ -80,13 +80,13 @@ Manual refresh: `git lineage import --agent all --incremental` (alias: `ingest`)
 
 ## Continue sessions
 
-`git lineage continue` carries on a stored session — including a teammate's,
+`git lineage fork` carries on a stored session — including a teammate's,
 since it resolves from lineage's refs rather than a local transcript file:
 
 ```bash
-git lineage continue <session-id>            # reopens yours, writes out anyone else's
-git lineage continue <session-id> --fork     # write out even if it could be reopened
-git lineage continue <session-id> --brief    # context block for a subagent
+git lineage fork <session-id>            # reopens yours, writes out anyone else's
+git lineage fork <session-id> --new      # write out even if it could be reopened
+git lineage fork <session-id> --brief    # context block for a subagent
 ```
 
 A session this machine already holds is reopened as itself: nothing is written,

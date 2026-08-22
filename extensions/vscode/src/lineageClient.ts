@@ -117,11 +117,11 @@ export class LineageClient {
     }
 
     async fork(id: string): Promise<string> {
-        return this.run(["continue", "--fork", id]);
+        return this.run(["fork", "--new", id]);
     }
 
     async resume(id: string): Promise<string> {
-        return this.run(["continue", id]);
+        return this.run(["fork", id]);
     }
 
     async installHook(): Promise<string> {

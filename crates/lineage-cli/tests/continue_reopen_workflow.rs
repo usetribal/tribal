@@ -1,4 +1,4 @@
-//! `git lineage continue` end to end, on the reopen half: a session this machine
+//! `git lineage fork` end to end, on the reopen half: a session this machine
 //! holds is resolved from lineage refs, the adapter is asked for the invocation,
 //! and it is printed — writing nothing.
 //!

@@ -52,6 +52,20 @@ Re-run with `--force` after upgrading the CLI to refresh skill content.
 
 ---
 
+## Discovering the surface
+
+`git lineage --discover` prints the whole command surface as JSON — every
+command including the hidden ones, with its group, aliases, options, and nested
+subcommands. It is walked from the parser itself, so it cannot drift from what
+the binary accepts, and it needs no repository.
+
+```bash
+git lineage --discover | jq '.commands[] | select(.hidden) | .name'
+```
+
+Intended for an agent deciding what to call: `--help` shows what a person should
+reach for first, `--discover` shows everything that exists.
+
 ## Command reference
 
 ### Setup and health
@@ -82,9 +96,9 @@ See [Import](../import.md).
 | `git lineage list [--commit SHA] [--json]` | List sessions or sessions at commit |
 | `git lineage show <id> [--json] [--hydrate-images]` | Show conversation |
 | `git lineage blame <path>[:line] [--json]` | Tribal for a file line |
-| `git lineage continue [<session-id>] [--query <text>] [--pick N] [--fork] [--json]` | Continue a session: reopens one this machine holds, writes out any other. `--fork` writes one out even when it could be reopened (see [Continue a session](#continue-a-session)) |
-| `git lineage continue <share-url> [--into DIR] [--no-open] [--server URL]` | Continue a session from a share link — clones the repo if needed and opens the harness (see [Continue a session](#continue-a-session)) |
-| `git lineage continue <session-id> --brief` | Print a context block for starting a subagent on that session; writes nothing (see [Brief a subagent](#brief-a-subagent-on-a-session)) |
+| `git lineage fork [<session-id>] [--query <text>] [--pick N] [--new] [--json]` | Continue a session: reopens one this machine holds, writes out any other. `--new` writes one out even when it could be reopened (see [Fork a session](#fork-a-session)) |
+| `git lineage fork <share-url> [--into DIR] [--no-open] [--server URL]` | Continue a session from a share link — clones the repo if needed and opens the harness (see [Fork a session](#fork-a-session)) |
+| `git lineage fork <session-id> --brief` | Print a context block for starting a subagent on that session; writes nothing (see [Brief a subagent](#brief-a-subagent-on-a-session)) |
 | `git lineage search <query>` | Full-text search (auto-rebuilds stale index). Superseded by `git lineage context query`, which ranks and returns follow-up commands |
 | `git lineage rebuild [--embed]` | Rebuild all derived state (links, line objects, index) from stored sessions; `--embed` also runs the dense-embedding backfill |
 | `git lineage rebuild index` | Rebuild only the search index |
@@ -147,7 +161,7 @@ assert neither surface can gain or lose a verb without the other. MCP agents
 discover them from `tools/list`; CLI sessions learn them from the `SessionStart`
 hook that `context install` wires.
 
-The `SessionStart` vocabulary also names `git lineage continue` and `fork --brief`,
+The `SessionStart` vocabulary also names `git lineage fork` and `fork --brief`,
 so a CLI session knows a session can be *continued* and not only read. That
 capability is registered alongside the verbs (`lineage-retrieval::CONTINUE_SESSION`)
 and reaches MCP as `lineage_fork_brief`, under the same paired tests — but it is
@@ -187,9 +201,12 @@ injections), so read it from `.git/lineage/events.jsonl` directly.
 | Command | Description |
 |---------|-------------|
 | `git lineage login [--server URL]` | Sign in to a Tribal server (browser device flow; defaults to production) |
-| `git lineage push [--server URL] [--token TOKEN] [--remote origin]` | Push redacted sessions to a Tribal server |
-| `git lineage sync [--server URL] [--token TOKEN] [--remote origin]` | Push, then pull — both directions in one command |
-| `git lineage pull [--server URL] [--token TOKEN] [--remote origin] [--dry-run]` | Pull teammates' sessions down from a Tribal server (see [Pull teammates' sessions](#pull-teammates-sessions)) |
+| `git lineage sync [--server URL] [--token TOKEN] [--remote origin]` | Exchange sessions with a Tribal server: push, then pull |
+| `git lineage push [--server URL] [--token TOKEN] [--remote origin]` | Push only — the one-way half of `sync` |
+| `git lineage pull [--server URL] [--token TOKEN] [--remote origin] [--dry-run]` | Pull only — the other half (see [Pull teammates' sessions](#pull-teammates-sessions)) |
+
+`sync` is the one to reach for; `push` and `pull` stay addressable for a
+one-directional run and are hidden from `git lineage -h`.
 | `git lineage share [--session ID] [--server URL] [--token TOKEN] [--remote origin] [--no-open]` | Share one session as a link anyone can open (see [Share a session as a link](#share-a-session-as-a-link)) |
 
 `login` prints a verification URL and code, waits for the browser approval, and
@@ -233,7 +250,7 @@ See [Git hooks](../git-hooks.md).
 
 | Command | Description |
 |---------|-------------|
-| `git lineage delete <session-id> [--purge-blobs]` | Remove session and related objects |
+| `git lineage delete <session-id> [--purge-blobs]` | Remove a session from this repository. Hidden from `git lineage -h`: it is local-only, so it does not stop a synced or shared session reaching anyone else |
 | `git lineage gc` | Purge orphan line objects and unreferenced LFS blobs |
 
 See [Maintenance](../maintenance.md) and [Privacy](../privacy.md).
@@ -260,7 +277,7 @@ Wrote 3 session(s):
 Pull never deletes: sessions the server did not mention are untouched,
 and turns you already had were kept as they were.
 
-`git lineage list` shows them; `git lineage continue <id>` continues one.
+`git lineage list` shows them; `git lineage fork <id>` continues one.
 ```
 
 `--dry-run` reports what would arrive and writes nothing. `--server`, `--token`,
@@ -356,22 +373,22 @@ Notes:
 - A session pulled from a server is not shareable from here — the server that
   holds it is the one to share it from.
 
-## Continue a session
+## Fork a session
 
-`git lineage continue <session-id>` carries on an agent session. Which of the two
+`git lineage fork <session-id>` carries on an agent session. Which of the two
 ways that happens is a property of the session, not a choice you make:
 
 - A session **your harness still holds** is reopened in place. Nothing is
   written, and it stays the same session — continuing it adds to its history.
 - **Any other** — a teammate's, or one pulled from a server — is written out as
   a new session that is yours, carrying their context with theirs recorded as
-  the ancestor. `--fork` forces this even for a session that could be reopened.
+  the ancestor. `--new` forces this even for a session that could be reopened.
 
 Which one happened is printed. Claude Code and Codex can be reopened; Cursor
 declines by name, because the id lineage records comes from its IDE store and
 `cursor-agent --resume` reads a separate CLI store.
 
-`git lineage continue <share-url>` does the same from a share link — no account, no
+`git lineage fork <share-url>` does the same from a share link — no account, no
 `git lineage init`, no prior setup. It fetches the shared session, works out
 where to land it (the current checkout if its remote matches, the most recently
 used matching checkout it has seen, or a fresh clone into `./<name>` — printed,
@@ -397,7 +414,7 @@ and who ran it, newest first:
 Then fork it:
 
 ```bash
-git lineage continue 01HQZX8K9V2M3N4P5Q6R7S8T9U
+git lineage fork 01HQZX8K9V2M3N4P5Q6R7S8T9U
 ```
 
 ```text
@@ -432,14 +449,14 @@ Notes:
   after the fork are attributed to you; the source session is an ancestor, never
   a co-author.
 - Claude Code only for now. Codex and Cursor sessions decline by name — see
-  [Continue a session](../continue-a-session.md) for why each is not supported yet.
+  [Fork a session](../fork-a-session.md) for why each is not supported yet.
 - A session with nothing replayable (all system turns, or content redacted away
   at import) is refused here rather than written out as an empty transcript the
   harness would later reject as "session not found".
 
 ## Brief a subagent on a session
 
-`git lineage continue <session-id> --brief` writes nothing. It prints a
+`git lineage fork <session-id> --brief` writes nothing. It prints a
 self-contained context block for handing to a **subagent** — one the calling
 agent spawns with its own tool — so someone else's session can be investigated
 without loading it into the current window.
@@ -448,7 +465,7 @@ Tribal cannot spawn the subagent; that is model-initiated. Its whole job here
 is to emit the text.
 
 ```bash
-git lineage continue 01HQZX8K9V2M3N4P5Q6R7S8T9U --brief
+git lineage fork 01HQZX8K9V2M3N4P5Q6R7S8T9U --brief
 ```
 
 The block has three parts:
@@ -489,10 +506,10 @@ Notes:
 
 ## Reopening versus writing one out
 
-`git lineage continue` reopens a session your harness holds:
+`git lineage fork` reopens a session your harness holds:
 
 ```bash
-git lineage continue 01HQZX8K9V2M3N4P5Q6R7S8T9U
+git lineage fork 01HQZX8K9V2M3N4P5Q6R7S8T9U
 ```
 
 ```text
@@ -503,7 +520,7 @@ To reopen it, run this from /home/bob/src/app:
     claude --resume 019f9d91-3f94-48f4-8cbf-663330ac0cee
 
 This is the original session, not a copy: continuing it adds to its history.
-To write it out as a new session of your own instead, add --fork.
+To write it out as a new session of your own instead, add --new.
 ```
 
 Notes:

@@ -86,7 +86,7 @@ pub const VERBS: &[Verb] = &[
 /// entry it is holding anyway.
 pub const CONTINUE_SESSION: Verb = Verb {
     relation: "continue-session",
-    cli: "continue",
+    cli: "fork",
     mcp: "lineage_fork_brief",
     summary: "continue a session rather than only read it",
 };

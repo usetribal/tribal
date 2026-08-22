@@ -25,7 +25,7 @@ Tribal stores AI agent session provenance in your git repository. These guides c
 | [Large content (LFS)](lfs.md) | Transport modes, push, fetch, and status |
 | [After a rebase](rebase.md) | Remap orphaned lineage notes |
 | [Maintenance](maintenance.md) | Doctor, delete, garbage collection, materialize |
-| [Continue a session](continue-a-session.md) | Continue or branch agent conversations |
+| [Fork a session](fork-a-session.md) | Continue or branch agent conversations |
 
 ## Interfaces
 

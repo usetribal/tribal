@@ -1,8 +1,8 @@
-# Continue a session
+# Fork a session
 
 [← Documentation index](README.md) · [VS Code extension](vscode.md) · [Explore](explore.md)
 
-`git lineage continue` carries on an agent session. There are two ways that can
+`git lineage fork` carries on an agent session. There are two ways that can
 happen, and which one applies is a property of the session rather than a choice
 you make:
 
@@ -15,7 +15,7 @@ you make:
 
 Writing one out is what works on a session you did not record yourself. It is
 tried only when reopening is not possible, so the common case stays the cheaper
-one. `--fork` forces it for a session that could have been reopened.
+one. `--new` forces it for a session that could have been reopened.
 
 ## What is supported today
 
@@ -28,11 +28,11 @@ one. `--fork` forces it for a session that could have been reopened.
 ## Usage
 
 ```bash
-git lineage continue <session-id>              # lineage id, prefix, or Claude UUID
-git lineage continue --query "RLS audit"       # search, then pick (--pick N if several)
-git lineage continue                           # interactive picker on a TTY
-git lineage continue <session-id> --fork       # write out even if it could be reopened
-git lineage continue <session-id> --json       # structured preflight for agents
+git lineage fork <session-id>              # lineage id, prefix, or Claude UUID
+git lineage fork --query "RLS audit"       # search, then pick (--pick N if several)
+git lineage fork                           # interactive picker on a TTY
+git lineage fork <session-id> --new        # write out even if it could be reopened
+git lineage fork <session-id> --json       # structured preflight for agents
 ```
 
 `git lineage list` shows **titles first** (from Claude's session summary when
@@ -42,7 +42,7 @@ pass a Claude vendor UUID or a unique lineage id prefix wherever a full id works
 
 Sessions are resolved from lineage's own refs, so one pulled from a teammate
 works exactly as one you imported yourself. Full output and caveats:
-[CLI reference](cli/README.md#continue-a-session).
+[CLI reference](cli/README.md#fork-a-session).
 
 ## Reopening
 
@@ -93,7 +93,7 @@ Install the [VS Code extension](vscode.md) in VS Code or Cursor.
 ### From the session tree
 
 - **View** — opens the session timeline webview.
-- **Resume** and **Fork** both run `git lineage continue` and open its output, so
+- **Resume** and **Fork** both run `git lineage fork` and open its output, so
   you can read whose session it was and what it was about before running the
   command it prints. The command is shown, never run for you: it opens a live
   agent, and which shell that lands in stays your decision.

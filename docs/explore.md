@@ -1,6 +1,6 @@
 # Explore your lineage
 
-[← Documentation index](README.md) · [Import](import.md) · [Continue a session](continue-a-session.md)
+[← Documentation index](README.md) · [Import](import.md) · [Fork a session](fork-a-session.md)
 
 After import, query sessions by id, commit, file line, or full-text search. Prefer `--json` for scripts and agent tooling.
 
