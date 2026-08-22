@@ -34,7 +34,7 @@ After cloning your application repository:
 git fetch origin refs/lineage/* refs/notes/lineage
 git lineage lfs fetch
 git lineage doctor
-git lineage rebuild-index
+git lineage rebuild index
 ```
 
 Install the CLI (`make setup` or `cargo install --path crates/lineage-cli`) and optionally run `git lineage init` for hooks and agent skills. Init-config is only needed if `refs/lineage/config` was not fetched.

@@ -137,7 +137,7 @@ fn setup_section(
     if let Some(false) = index_schema["has_session_files"].as_bool() {
         warnings.push(
             "search index predates the current schema (missing session_files); \
-             run: git lineage rebuild-index"
+             run: git lineage rebuild index"
                 .into(),
         );
     }
@@ -269,7 +269,7 @@ fn coverage_section(repo: &LineageRepo) -> Result<serde_json::Value> {
     // never repair what it inspects.
     if !index_path.exists() {
         return Ok(serde_json::json!({
-            "error": "no search index (run: git lineage rebuild-index)",
+            "error": "no search index (run: git lineage rebuild index)",
         }));
     }
 

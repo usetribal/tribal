@@ -1,6 +1,6 @@
 # Explore your lineage
 
-[← Documentation index](README.md) · [Import](import.md) · [Resume and fork](resume-and-fork.md)
+[← Documentation index](README.md) · [Import](import.md) · [Continue a session](continue-a-session.md)
 
 After import, query sessions by id, commit, file line, or full-text search. Prefer `--json` for scripts and agent tooling.
 
@@ -47,7 +47,7 @@ JSON `matches` include confidence scores and content previews linking turns to l
 git lineage search "authentication middleware"
 ```
 
-Search uses a local SQLite FTS index (`.git/lineage/index.db`). The index rebuilds automatically when stale, or run `git lineage rebuild-index` explicitly.
+Search uses a local SQLite FTS index (`.git/lineage/index.db`). The index rebuilds automatically when stale, or run `git lineage rebuild index` explicitly.
 
 Search indexes conversation text after policy; private stripped content is not searchable after export-style clearing.
 
@@ -71,7 +71,7 @@ The [VS Code extension](vscode.md) provides a session tree, timeline webview, gu
 
 - Run `git lineage import --agent all --incremental`.
 - Fetch team refs: `git fetch origin refs/lineage/* refs/notes/lineage`.
-- Rebuild index: `git lineage rebuild-index`.
+- Rebuild index: `git lineage rebuild index`.
 - Confirm [agent paths](agent-paths.md) if local import finds zero sessions.
 
 ## Related guides

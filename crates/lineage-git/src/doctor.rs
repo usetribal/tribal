@@ -51,7 +51,7 @@ pub fn run_doctor_refs(repo: &LineageRepo) -> Result<DoctorReport, LineageError>
 
     report.config_ref_ok = inner.find_reference(LINEAGE_CONFIG_REF).is_ok() || {
         report.warnings.push(format!(
-            "config ref {LINEAGE_CONFIG_REF} not found (run: git lineage init-config)"
+            "config ref {LINEAGE_CONFIG_REF} not found (run: git lineage init --config)"
         ));
         true
     };

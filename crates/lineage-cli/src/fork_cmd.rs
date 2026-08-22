@@ -1,12 +1,19 @@
-//! `git lineage fork` — pick up someone else's agent session and continue it in
-//! your own harness.
+//! `git lineage continue` — carry on an agent session, whether or not it started
+//! here.
+//!
+//! One verb, because which of the two ways applies is a property of the session
+//! rather than a decision worth putting to the user: a session the harness still
+//! holds is reopened in place, and any other is written out as a new session
+//! carrying the original's context. The adapter is the oracle — it either
+//! returns an invocation for the session or it does not — so nothing here
+//! inspects agents or ids to choose.
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use chrono::Utc;
 use lineage_adapters::all_adapters;
-use lineage_agent::RenderedTranscript;
+use lineage_agent::{RenderedTranscript, ResumeInvocation};
 use lineage_core::{display_title, files_written, opening_ask, Conversation};
 use lineage_git::{open_repo, persist_conversation, read_conversation, resolve_session};
 
@@ -24,6 +31,8 @@ const FILES_SHOWN: usize = 5;
 #[derive(Debug, Clone, Default)]
 pub struct ForkRequest {
     pub pick: ForkPickOptions,
+    /// Write a new session out even when the harness could reopen this one.
+    pub force_fork: bool,
     pub brief: bool,
     pub json: bool,
     /// Share-link options, meaningful only when the argument is a share URL.
@@ -37,10 +46,10 @@ pub struct ShareOptions {
     pub no_open: bool,
 }
 
-pub fn fork(repo_path: &Path, request: ForkRequest) -> Result<()> {
+pub fn continue_session(repo_path: &Path, request: ForkRequest) -> Result<()> {
     // A share link and a session id cannot be confused: ids are ULIDs, id
     // prefixes, or harness UUIDs, none of which carry a scheme or a slash. So
-    // the argument decides which fork this is, with no flag to remember.
+    // the argument decides which path this takes, with no flag to remember.
     if let Some(url) = request
         .pick
         .session_id
@@ -63,10 +72,56 @@ pub fn fork(repo_path: &Path, request: ForkRequest) -> Result<()> {
             return Ok(());
         }
     }
+
+    // Reopening is tried first and only for a plain continue: --brief writes
+    // nothing by definition, and --fork is the explicit request for a new
+    // session. Any adapter refusal — the harness cannot resume, or this session
+    // carries no vendor id because it came from a teammate — means there is
+    // nothing here to reopen, which is exactly when writing one out is right.
+    if !request.brief && !request.force_fork {
+        if let Some(invocation) = resume_invocation(repo_path, &picked.session_id)? {
+            print_resume(&invocation);
+            return Ok(());
+        }
+    }
+
     if let Some(rendered) = fork_resolved(repo_path, &picked.session_id, request.brief)? {
         print_next_step(&rendered);
     }
     Ok(())
+}
+
+/// The invocation that reopens this session in the harness that produced it, or
+/// `None` when nothing on this machine holds it.
+fn resume_invocation(repo_path: &Path, session_id: &str) -> Result<Option<ResumeInvocation>> {
+    let repo = open_repo(repo_path)?;
+    let id = resolve_session(repo.inner(), session_id).map_err(|error| error.to_string())?;
+    let Some(source) = read_conversation(repo.inner(), &id)? else {
+        return Ok(None);
+    };
+    let adapter = all_adapters(repo.workdir())
+        .into_iter()
+        .find(|(kind, _)| *kind == source.agent)
+        .map(|(_, adapter)| adapter);
+    let Some(adapter) = adapter else {
+        return Ok(None);
+    };
+    Ok(adapter.resume_invocation(&source).ok())
+}
+
+/// The command is adapter-supplied verbatim, and so is whether a directory
+/// matters: a harness that resolves a session globally would make "run this
+/// from …" a false instruction.
+fn print_resume(invocation: &ResumeInvocation) {
+    match &invocation.cwd {
+        Some(cwd) => println!("To reopen it, run this from {}:", cwd.display()),
+        None => println!("To reopen it, run:"),
+    }
+    println!();
+    println!("    {}", invocation.command);
+    println!();
+    println!("This is the original session, not a copy: continuing it adds to its history.");
+    println!("To write it out as a new session of your own instead, add --fork.");
 }
 
 fn should_stop_after_json(request: &ForkRequest, picked: &ForkPickResult) -> bool {

@@ -11,7 +11,6 @@ pub mod init_cmd;
 pub mod progress;
 pub mod pull_cmd;
 pub mod repo_registry;
-pub mod resume_cmd;
 pub mod retrieval_cmd;
 pub mod session_pick;
 pub mod share_cmd;

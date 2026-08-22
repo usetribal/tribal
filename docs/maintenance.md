@@ -18,7 +18,7 @@ Search uses a local SQLite full-text index at `.git/lineage/index.db`. It is reb
 
 ```bash
 # Explicit rebuild
-git lineage rebuild-index
+git lineage rebuild index
 
 # Search also rebuilds when results look stale
 git lineage search "your query"

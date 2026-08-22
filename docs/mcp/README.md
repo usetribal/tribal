@@ -59,7 +59,7 @@ hook.
 |------|-------------|
 | `lineage_fork_brief` | A self-contained context block for `session_id` — whose session it was, what they asked for, the turns that changed code, the traversal verbs, and an empty task slot — for starting a subagent on it |
 
-This is the brief half of `git lineage fork` and **only** that half: it writes
+This is the brief half of `git lineage continue` and **only** that half: it writes
 no transcript and records no fork edge. The CLI's `fork` prints a command for a
 human to run and can write a transcript into the harness's state directory; over
 MCP there is nobody at a terminal to read a printed command, and writing a

@@ -168,7 +168,7 @@ a vendor-specific place, so the adapter produces both and the caller learns neit
 ### Search
 
 1. Query the local SQLite FTS index
-2. On miss or stale index: `git lineage search` auto-rebuilds, or run `git lineage rebuild-index` explicitly
+2. On miss or stale index: `git lineage search` auto-rebuilds, or run `git lineage rebuild index` explicitly
 
 ### Rebase remap
 

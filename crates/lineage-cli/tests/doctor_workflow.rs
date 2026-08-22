@@ -124,7 +124,7 @@ fn stale_index_schema_is_flagged() {
         .as_array()
         .unwrap()
         .iter()
-        .any(|w| w.as_str().unwrap().contains("rebuild-index")));
+        .any(|w| w.as_str().unwrap().contains("rebuild index")));
 }
 
 #[test]
@@ -284,7 +284,7 @@ fn coverage_reports_an_error_rather_than_creating_a_missing_index() {
     assert!(coverage["error"]
         .as_str()
         .unwrap()
-        .contains("rebuild-index"));
+        .contains("rebuild index"));
     // Doctor inspects; it must never repair the very state setup exists to flag.
     assert!(!index_path.exists());
 }

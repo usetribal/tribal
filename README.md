@@ -102,9 +102,9 @@ See [docs/README.md](docs/README.md) for full documentation, [CONTRIBUTING.md](C
 | `git: 'lineage' is not a git command` | Ensure `~/.cargo/bin` is on `PATH`; or use `git-lineage` directly |
 | `discovered 0 … session(s)` | Run `git lineage doctor`; verify [agent paths](docs/agent-paths.md); confirm you are in the repo root |
 | `missing LFS` in doctor | Run `git lineage lfs fetch` after pulling refs from remote |
-| Search returns nothing | Run `git lineage rebuild-index`, or search again (auto-rebuilds on empty results) |
+| Search returns nothing | Run `git lineage rebuild index`, or search again (auto-rebuilds on empty results) |
 | Blame shows no sessions | Run `git lineage import` then commit (or `install-hook`); line objects materialize at link time |
-| Sessions contain secrets | Run `git lineage init-config`; use `export --redact` before sharing; review `refs/lineage/config` excludes |
+| Sessions contain secrets | Run `git lineage init --config`; use `export --redact` before sharing; review `refs/lineage/config` excludes |
 
 Target a different repository path with `--repo /path/to/repo` on any command.
 
@@ -116,7 +116,7 @@ Target a different repository path with `--repo /path/to/repo` on any command.
 [x] Repo config ref (refs/lineage/config) and incremental import
 [x] Pre-commit and post-commit hooks for automatic import and linking
 [x] One-command project setup (make setup)
-[x] Bundled agent skill install (git lineage init-skill)
+[x] Bundled agent skill install (git lineage init --skills)
 [x] Session author attribution (prompted_by_email / prompted_by_name)
 [x] Multi-signal commit mapping, code-only import default, session delete/purge, and git lineage gc
 [x] Image artifacts (content-addressed LFS) and heuristic architecture summaries

@@ -1,6 +1,6 @@
 # VS Code extension
 
-[← Documentation index](README.md) · [CLI reference](cli/README.md) · [Resume and fork](resume-and-fork.md)
+[← Documentation index](README.md) · [CLI reference](cli/README.md) · [Continue a session](continue-a-session.md)
 
 The Tribal extension brings session search, timeline view, gutter blame, and resume/fork into VS Code and Cursor. It shells out to `git lineage` for all repository operations.
 
@@ -46,7 +46,7 @@ Install the generated `.vsix` via **Extensions: Install from VSIX**.
 | Lineage: Refresh Sessions | | Reload session tree |
 | Lineage: View Conversation | | Open timeline for a session |
 | Lineage: Resume Conversation | | Resume Claude/Codex in terminal |
-| Lineage: Fork Conversation | | Run `git lineage fork` and show its output |
+| Lineage: Fork Conversation | | Run `git lineage continue` and show its output |
 | Lineage: Show Lineage for Line | `Cmd+Shift+L` / `Ctrl+Shift+L` | Blame line and open session |
 | Lineage: View Commit | | Show linked `git show` |
 | Lineage: Search Sessions | | Full-text search |

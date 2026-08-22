@@ -1,4 +1,4 @@
-//! `git lineage fork <share-url>` — the receiving half of a share
+//! `git lineage continue <share-url>` — the receiving half of a share
 //! (`specs/share-v0.md`).
 //!
 //! The whole design goal is that a receiver never dead-ends and is never asked

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use chrono::Utc;
 use lineage_cli::{
     commands, context_cmd, digest, doctor_cmd, fork_cmd, hooks_cmd, init_cmd, pull_cmd,
-    repo_registry, resume_cmd, retrieval_cmd, session_pick, share_cmd, skill_cmd,
+    repo_registry, retrieval_cmd, session_pick, share_cmd, skill_cmd,
 };
 use lineage_retrieval::{DEFAULT_AROUND_RADIUS, DEFAULT_TRAVERSAL_LIMIT};
 use std::process::ExitCode;
@@ -11,11 +11,49 @@ use std::process::ExitCode;
 use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 
+/// The command list, grouped. clap 4 has one heading for the whole subcommand
+/// list rather than one per subcommand, so the grouping a 20-command surface
+/// needs has to be written out here. Only the commands worth reaching for
+/// first appear: the rest still run, and `--help` on any of them still works.
+const COMMAND_HELP: &str = "\
+Setup:
+  init          Set up lineage here: config, agent skills, hooks, first import
+
+Sessions:
+  import        Import agent sessions into lineage refs
+  list          List imported sessions
+  show          Show a session
+  continue      Continue a session — reopens yours, writes out anyone else's
+  blame         Show which sessions wrote a line
+  context       Retrieve context by intent, file, or line
+
+Team:
+  login         Sign in to a Lineage server
+  sync          Exchange sessions with the server (push, then pull)
+  push          Send your sessions to the server
+  pull          Bring teammates' sessions down
+  share         Share one session as a link anyone can open
+
+Maintenance:
+  doctor        Check lineage health in this repository
+  rebuild       Rebuild derived state from stored sessions
+  delete        Delete an imported session
+";
+
 #[derive(Parser)]
 #[command(
     name = "git-lineage",
     about = "Git-native provenance for AI coding agents",
-    version
+    version,
+    help_template = "\
+{about}
+
+{usage-heading} {usage}
+{after-help}
+Options:
+{options}",
+    after_help = COMMAND_HELP,
+    disable_help_subcommand = true
 )]
 struct Cli {
     /// Repository path (defaults to current directory)
@@ -39,11 +77,28 @@ enum Commands {
         #[arg(long, default_value_t = doctor_cmd::DEFAULT_ACTIVITY_LIMIT)]
         activity_limit: usize,
     },
-    /// Interactive setup: config, skill, hooks, optional import
+    /// Set up lineage in this repository: config, agent skills, hooks, first import
+    ///
+    /// Run with no flags this is the whole setup, interactively. Each step is
+    /// also addressable on its own — `--config`, `--skills`, `--hooks` — for
+    /// re-running one part without the rest; naming any of them runs only what
+    /// was named. `--uninstall` removes what the hook steps installed.
     Init {
         /// Non-interactive defaults (all skill targets, install hooks, run import)
         #[arg(long)]
         yes: bool,
+        /// Run only the config step: write default refs/lineage/config
+        #[arg(long)]
+        config: bool,
+        /// Run only the skills step: install the bundled agent skills
+        #[arg(long)]
+        skills: bool,
+        /// Run only the hooks step: install the pre-commit and post-commit hooks
+        #[arg(long)]
+        hooks: bool,
+        /// Remove the git hooks and agent-hook wiring that setup installed
+        #[arg(long)]
+        uninstall: bool,
         /// Skill targets: cursor, claude, codex, agents, all, none
         #[arg(long = "target", value_parser = skill_cmd::parse_skill_target)]
         target: Vec<String>,
@@ -56,16 +111,6 @@ enum Commands {
         /// Overwrite existing git hooks
         #[arg(long, alias = "force")]
         force_hooks: bool,
-    },
-    /// Write default refs/lineage/config
-    InitConfig,
-    /// Install bundled agent skills for lineage context retrieval and session sharing
-    InitSkill {
-        /// Targets: cursor, claude, codex, agents (same as codex), all (default: all)
-        #[arg(long = "target", value_parser = skill_cmd::parse_skill_target)]
-        target: Vec<String>,
-        #[arg(long)]
-        force: bool,
     },
     /// Import agent sessions into git lineage refs
     #[command(alias = "ingest")]
@@ -94,16 +139,14 @@ enum Commands {
         #[arg(long)]
         hydrate_images: bool,
     },
-    /// Continue someone else's session in your own agent
+    /// Continue a session in your agent
     ///
-    /// Writes a stored session out as a transcript your own agent can open, so
-    /// you land in a live session carrying their context instead of re-deriving
-    /// it. The session is read from lineage's refs, so a teammate's session
-    /// works the same as one you imported yourself.
-    ///
-    /// The fork is a new session that belongs to you: the original is never
-    /// modified, none of its turns are copied onto yours, and lines you write
-    /// from here are yours, with theirs recorded as the ancestor.
+    /// One verb for both ways a session can be continued, because which one
+    /// applies is a fact about the session, not a choice worth making. A
+    /// session your harness still holds is reopened in place — nothing is
+    /// written and it stays the same session. Any other, a teammate's
+    /// included, is written out as a new session that is yours, carrying their
+    /// context with theirs recorded as the ancestor. Which happened is printed.
     ///
     /// You get their context, not their tools. Tool activity is replayed as
     /// prose, so nothing hands you file handles or checkpoints that no longer
@@ -115,8 +158,6 @@ enum Commands {
     /// each choice is printed. `--no-open` prints the command instead of
     /// running it, and `--into <dir>` overrides where it lands.
     ///
-    /// Claude Code sessions only for now. Given an id, the command prints what
-    /// to run rather than launching the agent for you.
     /// `--brief` does something different: it writes nothing and prints a
     /// self-contained context block — whose session it was, the turns that
     /// carry the intent and the code changes, and the traversal commands — for
@@ -124,7 +165,8 @@ enum Commands {
     /// block ends with a marked slot for the subagent's task. It works for any
     /// stored session, including one pulled from a teammate that this build
     /// cannot write a transcript for.
-    Fork {
+    #[command(name = "continue", alias = "fork", alias = "resume")]
+    Continue {
         /// Session to continue — lineage id, id prefix, harness UUID
         /// (`git lineage list` shows titles and ids), or a share link
         /// (`https://<host>/s/<token>`)
@@ -135,13 +177,16 @@ enum Commands {
         /// Pick the Nth search result (1-based) when --query matches several
         #[arg(long)]
         pick: Option<usize>,
-        /// Print a context block for a subagent instead of writing a transcript
+        /// Write the session out as a new one even if your harness holds it
+        #[arg(long)]
+        fork: bool,
+        /// Print a context block for a subagent instead of continuing the session
         #[arg(long)]
         brief: bool,
         /// Structured output for agents (candidates or resolved session)
         #[arg(long)]
         json: bool,
-        /// Share links: fork into this directory instead of resolving where to land
+        /// Share links: continue into this directory instead of resolving where to land
         #[arg(long)]
         into: Option<PathBuf>,
         /// Share links: Lineage server to fetch from (default: derived from the link)
@@ -151,18 +196,6 @@ enum Commands {
         #[arg(long)]
         no_open: bool,
     },
-    /// Reopen one of your own sessions in the agent that produced it
-    ///
-    /// Prints the command that reopens a session your harness still holds. This
-    /// is the original session continued, not a copy — nothing is written and no
-    /// new session is recorded.
-    ///
-    /// Use `fork` instead for a session that is not on this machine, such as a
-    /// teammate's: there is nothing here to reopen, so it has to be written out.
-    Resume {
-        /// Session to reopen (`git lineage list` shows what is here)
-        session_id: String,
-    },
     /// Show lineage for a file line
     Blame {
         /// Path with optional :line suffix (e.g. src/main.rs:42)
@@ -170,14 +203,8 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
-    /// Install git hooks for automatic lineage import
-    InstallHook {
-        #[arg(long)]
-        force: bool,
-    },
-    /// Remove lineage git hooks
-    UninstallHook,
     /// Internal hook commands (called by git hooks)
+    #[command(hide = true)]
     Hook {
         #[command(subcommand)]
         action: HookAction,
@@ -188,6 +215,7 @@ enum Commands {
         action: ContextAction,
     },
     /// Export sessions (optionally redacted)
+    #[command(hide = true)]
     Export {
         #[arg(long)]
         redact: bool,
@@ -201,6 +229,24 @@ enum Commands {
         server: Option<String>,
     },
     /// Push redacted sessions to a Lineage server
+    #[command(name = "push")]
+    Push {
+        /// Server base URL; defaults to production or the server stored by `login`
+        #[arg(long)]
+        server: Option<String>,
+        /// Bearer token; falls back to LINEAGE_TOKEN, then the stored login
+        #[arg(long)]
+        token: Option<String>,
+        /// Git remote whose URL identifies the repo to the server
+        #[arg(long, default_value = "origin")]
+        remote: String,
+    },
+    /// Exchange sessions with a Lineage server: push, then pull
+    ///
+    /// The two directions are not mirror images — a push merges into an
+    /// authority, a pull merges into a local cache — so they stay separately
+    /// addressable as `push` and `pull`. This runs both, in the order that
+    /// leaves your work on the server before teammates' work arrives here.
     Sync {
         /// Server base URL; defaults to production or the server stored by `login`
         #[arg(long)]
@@ -214,7 +260,7 @@ enum Commands {
     },
     /// Share one session as a link anyone can open without an account
     ///
-    /// Pushes the session you are in to the Lineage server the same way `sync`
+    /// Pushes the session you are in to the Lineage server the same way `push`
     /// does — same redaction, and a private session is refused rather than
     /// stripped — then mints a link pinned at the turns it has now. Continuing
     /// the session afterwards does not change what the link shows.
@@ -254,7 +300,8 @@ enum Commands {
         #[arg(long)]
         dry_run: bool,
     },
-    /// Search indexed sessions
+    /// Search indexed sessions (superseded by `context query`)
+    #[command(hide = true)]
     Search { query: String },
     /// Rebuild derived state (links, line objects, index) from stored sessions
     Rebuild {
@@ -265,15 +312,14 @@ enum Commands {
         #[arg(long)]
         embed: bool,
     },
-    /// Deprecated alias for `rebuild index`
-    #[command(hide = true)]
-    RebuildIndex,
     /// Link a session to a commit
+    #[command(hide = true)]
     Link {
         session_id: String,
         commit_sha: String,
     },
     /// Materialize line objects for sessions at a commit
+    #[command(hide = true)]
     Materialize {
         #[arg(long)]
         commit: Option<String>,
@@ -281,8 +327,10 @@ enum Commands {
         session: Option<String>,
     },
     /// Remap lineage after rebase (re-materialize at HEAD)
+    #[command(hide = true)]
     Remap,
     /// Git LFS object transport for large session content
+    #[command(hide = true)]
     Lfs {
         #[command(subcommand)]
         action: LfsAction,
@@ -294,6 +342,7 @@ enum Commands {
         purge_blobs: bool,
     },
     /// Purge orphan line objects and unreferenced LFS blobs
+    #[command(hide = true)]
     Gc,
 }
 
@@ -499,6 +548,10 @@ fn main() -> ExitCode {
             no_skill,
             no_import,
             force_hooks,
+            config,
+            skills,
+            hooks,
+            uninstall,
         } => init_cmd::init(
             &repo_path,
             init_cmd::InitOptions {
@@ -507,10 +560,14 @@ fn main() -> ExitCode {
                 no_skill,
                 no_import,
                 force_hooks,
+                steps: init_cmd::Steps {
+                    config,
+                    skills,
+                    hooks,
+                    uninstall,
+                },
             },
         ),
-        Commands::InitConfig => commands::init_config(&repo_path),
-        Commands::InitSkill { target, force } => skill_cmd::init_skill(&repo_path, &target, force),
         Commands::Import {
             agent,
             since,
@@ -529,16 +586,17 @@ fn main() -> ExitCode {
             json,
             hydrate_images,
         } => commands::show(&repo_path, &session_id, json, hydrate_images),
-        Commands::Fork {
+        Commands::Continue {
             session_id,
             query,
             pick,
+            fork,
             brief,
             json,
             into,
             server,
             no_open,
-        } => fork_cmd::fork(
+        } => fork_cmd::continue_session(
             &repo_path,
             fork_cmd::ForkRequest {
                 pick: session_pick::ForkPickOptions {
@@ -546,6 +604,7 @@ fn main() -> ExitCode {
                     query,
                     pick,
                 },
+                force_fork: fork,
                 brief,
                 json,
                 share: fork_cmd::ShareOptions {
@@ -555,10 +614,7 @@ fn main() -> ExitCode {
                 },
             },
         ),
-        Commands::Resume { session_id } => resume_cmd::resume(&repo_path, &session_id),
         Commands::Blame { target, json } => commands::blame(&repo_path, &target, json),
-        Commands::InstallHook { force } => hooks_cmd::install_hook(&repo_path, force),
-        Commands::UninstallHook => hooks_cmd::uninstall_hook(&repo_path),
         Commands::Hook { action } => match action {
             HookAction::PostCommit => hooks_cmd::post_commit(&repo_path),
         },
@@ -664,11 +720,26 @@ fn main() -> ExitCode {
         },
         Commands::Export { redact, format } => commands::export(&repo_path, redact, &format),
         Commands::Login { server } => commands::login(server.as_deref()),
-        Commands::Sync {
+        Commands::Push {
             server,
             token,
             remote,
         } => commands::sync(&repo_path, server.as_deref(), token.as_deref(), &remote),
+        Commands::Sync {
+            server,
+            token,
+            remote,
+        } => commands::sync(&repo_path, server.as_deref(), token.as_deref(), &remote).and_then(
+            |()| {
+                pull_cmd::pull(
+                    &repo_path,
+                    server.as_deref(),
+                    token.as_deref(),
+                    &remote,
+                    false,
+                )
+            },
+        ),
         Commands::Share {
             server,
             token,
@@ -703,7 +774,6 @@ fn main() -> ExitCode {
             Some(RebuildTarget::Index { embed }) => commands::rebuild_index(&repo_path, embed),
             Some(RebuildTarget::Embeddings) => commands::rebuild_embeddings(&repo_path),
         },
-        Commands::RebuildIndex => commands::rebuild_index(&repo_path, false),
         Commands::Link {
             session_id,
             commit_sha,

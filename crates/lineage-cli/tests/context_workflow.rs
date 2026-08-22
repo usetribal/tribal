@@ -302,7 +302,7 @@ fn session_start_hook_emits_the_verb_vocabulary() {
     // whereas this fires every session. The `--brief` half is named too, because
     // the capability is the pair.
     assert!(
-        context.contains("git lineage fork"),
+        context.contains(lineage_retrieval::CONTINUE_SESSION.cli),
         "vocabulary omits continuation: {context}"
     );
     assert!(

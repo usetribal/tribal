@@ -24,6 +24,24 @@ pub struct InitOptions {
     pub no_skill: bool,
     pub no_import: bool,
     pub force_hooks: bool,
+    pub steps: Steps,
+}
+
+/// Which individual setup steps were named. All false means the full setup —
+/// the flags select a subset rather than adding one, so a new step becomes a
+/// field here and nothing else has to learn about it.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Steps {
+    pub config: bool,
+    pub skills: bool,
+    pub hooks: bool,
+    pub uninstall: bool,
+}
+
+impl Steps {
+    fn any(&self) -> bool {
+        self.config || self.skills || self.hooks || self.uninstall
+    }
 }
 
 /// Map interactive menu selection to `init-skill` target strings.
@@ -78,6 +96,9 @@ fn skill_targets_for_init(options: &InitOptions) -> Option<Vec<String>> {
 }
 
 pub fn init(repo_path: &Path, options: InitOptions) -> Result<()> {
+    if options.steps.any() {
+        return run_steps(repo_path, &options);
+    }
     if options.yes {
         run_non_interactive(repo_path, &options)
     } else if !stdin_is_tty() {
@@ -88,6 +109,31 @@ pub fn init(repo_path: &Path, options: InitOptions) -> Result<()> {
     } else {
         run_interactive(repo_path, &options)
     }
+}
+
+/// Run only the named steps. Each is the same call the full setup makes, so a
+/// step cannot behave differently depending on how it was reached.
+fn run_steps(repo_path: &Path, options: &InitOptions) -> Result<()> {
+    if options.steps.uninstall {
+        hooks_cmd::uninstall_hook(repo_path)?;
+        let removed = context_cmd::uninstall_claude_agent_hook(repo_path)?;
+        println!(
+            "context hook {}",
+            if removed { "removed" } else { "not present" }
+        );
+        return Ok(());
+    }
+    if options.steps.config {
+        commands::init_config(repo_path)?;
+    }
+    if options.steps.skills {
+        let targets = skill_targets_for_init(options).unwrap_or_else(|| vec!["all".into()]);
+        skill_cmd::init_skill(repo_path, &targets, true)?;
+    }
+    if options.steps.hooks {
+        install_hooks_with_retry(repo_path, options.force_hooks, false)?;
+    }
+    Ok(())
 }
 
 fn run_non_interactive(repo_path: &Path, options: &InitOptions) -> Result<()> {
@@ -381,9 +427,9 @@ fn print_footer() {
             "Done",
             "git lineage list",
             "git lineage blame <file>:<line>",
-            "git lineage search \"<query>\"",
+            "git lineage context query \"<question>\"",
         ],
-        36,
+        40,
     );
     println!();
 }

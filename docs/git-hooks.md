@@ -7,9 +7,9 @@ Tribal can install two git hooks that keep imported sessions current and linked 
 ## Install and remove
 
 ```bash
-git lineage install-hook
-git lineage install-hook --force   # overwrite existing hook files
-git lineage uninstall-hook
+git lineage init --hooks
+git lineage init --hooks --force   # overwrite existing hook files
+git lineage init --uninstall
 ```
 
 `git lineage init` offers hook installation in the setup wizard. Use `--force-hooks` / `--force` on init to replace existing hook scripts.
@@ -32,13 +32,13 @@ Import failures on pre-commit log to stderr but **do not block** the commit by d
 
 ## Contributor repos vs application repos
 
-The Tribal **monorepo** uses separate contributor hooks (format + lint) via `make install-hooks` and `core.hooksPath .githooks`. Application repositories use lineage import hooks from `git lineage install-hook`.
+The Tribal **monorepo** uses separate contributor hooks (format + lint) via `make install-hooks` and `core.hooksPath .githooks`. Application repositories use lineage import hooks from `git lineage init --hooks`.
 
 Do not assume both hook systems on the same repo without merging scripts manually.
 
 ## VS Code
 
-**Lineage: Install Git Hooks** from the command palette runs `git lineage install-hook`.
+**Lineage: Install Git Hooks** from the command palette runs `git lineage init --hooks`.
 
 ## When hooks are not enough
 

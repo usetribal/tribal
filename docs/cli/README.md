@@ -27,7 +27,7 @@ git lineage --repo /path/to/repo <command>
 git lineage init                    # interactive wizard
 git lineage init --yes              # non-interactive defaults
 git lineage init --no-import        # skip first import
-git lineage init-config             # write default refs/lineage/config only
+git lineage init --config             # write default refs/lineage/config only
 ```
 
 ### Agent skills
@@ -35,10 +35,10 @@ git lineage init-config             # write default refs/lineage/config only
 Two bundled skills: `lineage` teaches agents to use lineage features (search, blame, share, rebase, resume), and `share` teaches them to turn the current session into a link. Installed during init or manually:
 
 ```bash
-git lineage init-skill
-git lineage init-skill --target cursor
-git lineage init-skill --target claude --target codex
-git lineage init-skill --target all --force
+git lineage init --skills
+git lineage init --skills --target cursor
+git lineage init --skills --target claude --target codex
+git lineage init --skills --target all --force
 ```
 
 | Target | Install path |
@@ -59,9 +59,11 @@ Re-run with `--force` after upgrading the CLI to refresh skill content.
 | Command | Description |
 |---------|-------------|
 | `git lineage doctor [--json] [--section NAME] [--activity-limit N]` | Six-section health report (setup, capture, materialization, coverage, links, activity); see `specs/diagnostics-v0.md` |
-| `git lineage init [options]` | Interactive setup: config, skill, hooks, optional import |
-| `git lineage init-config` | Write default `refs/lineage/config` |
-| `git lineage init-skill [options]` | Install bundled agent skill |
+| `git lineage init [options]` | Interactive setup: config, agent skills, hooks, optional import |
+| `git lineage init --config` | Write default `refs/lineage/config` |
+| `git lineage init --skills [options]` | Install the bundled agent skills |
+| `git lineage init --hooks [--force-hooks]` | Install the pre-commit and post-commit hooks |
+| `git lineage init --uninstall` | Remove the hooks and agent-hook wiring that setup installed |
 
 ### Import
 
@@ -80,12 +82,12 @@ See [Import](../import.md).
 | `git lineage list [--commit SHA] [--json]` | List sessions or sessions at commit |
 | `git lineage show <id> [--json] [--hydrate-images]` | Show conversation |
 | `git lineage blame <path>[:line] [--json]` | Tribal for a file line |
-| `git lineage fork [<session-id>] [--query <text>] [--pick N] [--json]` | Continue someone else's session — search or pick when id omitted (see [Fork a session](#fork-a-session)) |
-| `git lineage fork <share-url> [--into DIR] [--no-open] [--server URL]` | Fork a session from a share link — clones the repo if needed and opens the harness (see [Fork a session](#fork-a-session)) |
-| `git lineage fork <session-id> --brief` | Print a context block for starting a subagent on that session; writes nothing (see [Brief a subagent](#brief-a-subagent-on-a-session)) |
-| `git lineage search <query>` | Full-text search (auto-rebuilds stale index) |
+| `git lineage continue [<session-id>] [--query <text>] [--pick N] [--fork] [--json]` | Continue a session: reopens one this machine holds, writes out any other. `--fork` writes one out even when it could be reopened (see [Continue a session](#continue-a-session)) |
+| `git lineage continue <share-url> [--into DIR] [--no-open] [--server URL]` | Continue a session from a share link — clones the repo if needed and opens the harness (see [Continue a session](#continue-a-session)) |
+| `git lineage continue <session-id> --brief` | Print a context block for starting a subagent on that session; writes nothing (see [Brief a subagent](#brief-a-subagent-on-a-session)) |
+| `git lineage search <query>` | Full-text search (auto-rebuilds stale index). Superseded by `git lineage context query`, which ranks and returns follow-up commands |
 | `git lineage rebuild [--embed]` | Rebuild all derived state (links, line objects, index) from stored sessions; `--embed` also runs the dense-embedding backfill |
-| `git lineage rebuild index` | Rebuild only the search index (`rebuild-index` is a deprecated alias) |
+| `git lineage rebuild index` | Rebuild only the search index |
 | `git lineage rebuild embeddings` | Rebuild only the dense embeddings — the semantic backfill (shows a per-session progress bar) |
 | `git lineage export [--redact] [--format json\|jsonl]` | Export sessions |
 
@@ -116,7 +118,7 @@ See [LFS](../lfs.md).
 | Command | Description |
 |---------|-------------|
 | `git lineage context hook claude` | Agent-hook endpoint (Claude Code PostToolUse on stdin); emits injection JSON or nothing |
-| `git lineage context hook claude-session-start` | Agent-hook endpoint (Claude Code SessionStart); emits the traversal vocabulary and the continuation capability (`fork`, `fork --brief`) once per session |
+| `git lineage context hook claude-session-start` | Agent-hook endpoint (Claude Code SessionStart); emits the traversal vocabulary and the continuation capability (`continue`, `continue --brief`) once per session |
 | `git lineage context log [--limit N]` | Show recorded context injections, newest last |
 | `git lineage context install [--user]` | Wire the context hook per-repo or user-level (all repos) |
 | `git lineage context uninstall [--user]` | Remove lineage context-hook wiring |
@@ -145,7 +147,7 @@ assert neither surface can gain or lose a verb without the other. MCP agents
 discover them from `tools/list`; CLI sessions learn them from the `SessionStart`
 hook that `context install` wires.
 
-The `SessionStart` vocabulary also names `git lineage fork` and `fork --brief`,
+The `SessionStart` vocabulary also names `git lineage continue` and `fork --brief`,
 so a CLI session knows a session can be *continued* and not only read. That
 capability is registered alongside the verbs (`lineage-retrieval::CONTINUE_SESSION`)
 and reaches MCP as `lineage_fork_brief`, under the same paired tests — but it is
@@ -185,7 +187,8 @@ injections), so read it from `.git/lineage/events.jsonl` directly.
 | Command | Description |
 |---------|-------------|
 | `git lineage login [--server URL]` | Sign in to a Tribal server (browser device flow; defaults to production) |
-| `git lineage sync [--server URL] [--token TOKEN] [--remote origin]` | Push redacted sessions to a Tribal server |
+| `git lineage push [--server URL] [--token TOKEN] [--remote origin]` | Push redacted sessions to a Tribal server |
+| `git lineage sync [--server URL] [--token TOKEN] [--remote origin]` | Push, then pull — both directions in one command |
 | `git lineage pull [--server URL] [--token TOKEN] [--remote origin] [--dry-run]` | Pull teammates' sessions down from a Tribal server (see [Pull teammates' sessions](#pull-teammates-sessions)) |
 | `git lineage share [--session ID] [--server URL] [--token TOKEN] [--remote origin] [--no-open]` | Share one session as a link anyone can open (see [Share a session as a link](#share-a-session-as-a-link)) |
 
@@ -221,8 +224,8 @@ then the stored login. Implements
 
 | Command | Description |
 |---------|-------------|
-| `git lineage install-hook [--force]` | Install pre-commit and post-commit hooks |
-| `git lineage uninstall-hook` | Remove lineage hooks |
+| `git lineage init --hooks [--force]` | Install pre-commit and post-commit hooks |
+| `git lineage init --uninstall` | Remove lineage hooks |
 
 See [Git hooks](../git-hooks.md).
 
@@ -257,7 +260,7 @@ Wrote 3 session(s):
 Pull never deletes: sessions the server did not mention are untouched,
 and turns you already had were kept as they were.
 
-`git lineage list` shows them; `git lineage fork <id>` continues one.
+`git lineage list` shows them; `git lineage continue <id>` continues one.
 ```
 
 `--dry-run` reports what would arrive and writes nothing. `--server`, `--token`,
@@ -353,12 +356,22 @@ Notes:
 - A session pulled from a server is not shareable from here — the server that
   holds it is the one to share it from.
 
-## Fork a session
+## Continue a session
 
-`git lineage fork <session-id>` picks up a teammate's agent session and hands you
-a native, resumable one carrying their context.
+`git lineage continue <session-id>` carries on an agent session. Which of the two
+ways that happens is a property of the session, not a choice you make:
 
-`git lineage fork <share-url>` does the same from a share link — no account, no
+- A session **your harness still holds** is reopened in place. Nothing is
+  written, and it stays the same session — continuing it adds to its history.
+- **Any other** — a teammate's, or one pulled from a server — is written out as
+  a new session that is yours, carrying their context with theirs recorded as
+  the ancestor. `--fork` forces this even for a session that could be reopened.
+
+Which one happened is printed. Claude Code and Codex can be reopened; Cursor
+declines by name, because the id lineage records comes from its IDE store and
+`cursor-agent --resume` reads a separate CLI store.
+
+`git lineage continue <share-url>` does the same from a share link — no account, no
 `git lineage init`, no prior setup. It fetches the shared session, works out
 where to land it (the current checkout if its remote matches, the most recently
 used matching checkout it has seen, or a fresh clone into `./<name>` — printed,
@@ -384,7 +397,7 @@ and who ran it, newest first:
 Then fork it:
 
 ```bash
-git lineage fork 01HQZX8K9V2M3N4P5Q6R7S8T9U
+git lineage continue 01HQZX8K9V2M3N4P5Q6R7S8T9U
 ```
 
 ```text
@@ -419,14 +432,14 @@ Notes:
   after the fork are attributed to you; the source session is an ancestor, never
   a co-author.
 - Claude Code only for now. Codex and Cursor sessions decline by name — see
-  [Resume and fork](../resume-and-fork.md) for why each is not supported yet.
+  [Continue a session](../continue-a-session.md) for why each is not supported yet.
 - A session with nothing replayable (all system turns, or content redacted away
   at import) is refused here rather than written out as an empty transcript the
   harness would later reject as "session not found".
 
 ## Brief a subagent on a session
 
-`git lineage fork <session-id> --brief` writes nothing. It prints a
+`git lineage continue <session-id> --brief` writes nothing. It prints a
 self-contained context block for handing to a **subagent** — one the calling
 agent spawns with its own tool — so someone else's session can be investigated
 without loading it into the current window.
@@ -435,7 +448,7 @@ Tribal cannot spawn the subagent; that is model-initiated. Its whole job here
 is to emit the text.
 
 ```bash
-git lineage fork 01HQZX8K9V2M3N4P5Q6R7S8T9U --brief
+git lineage continue 01HQZX8K9V2M3N4P5Q6R7S8T9U --brief
 ```
 
 The block has three parts:
@@ -474,14 +487,12 @@ Notes:
   continuing it are different capabilities, so `--brief` does not inherit
   fork's requirement of a renderable transcript.
 
-## Resume a session
+## Reopening versus writing one out
 
-`git lineage resume <session-id>` reopens one of *your own* sessions in the agent
-that produced it. Where fork writes a new session out of stored turns, resume
-writes nothing at all — it names a session your harness still holds:
+`git lineage continue` reopens a session your harness holds:
 
 ```bash
-git lineage resume 01HQZX8K9V2M3N4P5Q6R7S8T9U
+git lineage continue 01HQZX8K9V2M3N4P5Q6R7S8T9U
 ```
 
 ```text
@@ -492,18 +503,15 @@ To reopen it, run this from /home/bob/src/app:
     claude --resume 019f9d91-3f94-48f4-8cbf-663330ac0cee
 
 This is the original session, not a copy: continuing it adds to its history.
-To continue someone else's work as your own instead, use `git lineage fork`.
+To write it out as a new session of your own instead, add --fork.
 ```
 
 Notes:
 
-- The command is printed, not run — same reasoning as fork.
-- **Use `fork` for a session that is not on this machine.** A teammate's session
-  carries no vendor id here, so there is nothing to reopen; resume says so and
-  points at fork.
-- Claude Code and Codex resume; Cursor declines by name, because the id lineage
-  records comes from its IDE store and `cursor-agent --resume` reads a separate
-  CLI store. See [Resume and fork](../resume-and-fork.md).
+- The command is printed, not run: it opens an interactive agent, which is a
+  thing to choose rather than have happen.
+- A teammate's session carries no vendor id here, so there is nothing to reopen.
+  That is not an error — it is exactly the case that gets written out instead.
 - Whether a directory matters is the harness's business: Claude derives a project
   key from the launch directory, so its output names one; Codex resolves by id
   from anywhere, so its output does not.

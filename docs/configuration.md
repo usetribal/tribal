@@ -2,7 +2,7 @@
 
 [← Documentation index](README.md) · [Privacy and policy](privacy.md) · [Import](import.md)
 
-Tribal stores repository settings in a git ref: `refs/lineage/config`. The ref holds a JSON document (`lineage-config-v0`) that controls import behavior, privacy, blob storage, and commit linking. It is written during `git lineage init` or `git lineage init-config`.
+Tribal stores repository settings in a git ref: `refs/lineage/config`. The ref holds a JSON document (`lineage-config-v0`) that controls import behavior, privacy, blob storage, and commit linking. It is written during `git lineage init` or `git lineage init --config`.
 
 Configuration travels with the repository when you push `refs/lineage/*`. Teammates receive the same policy after fetch.
 

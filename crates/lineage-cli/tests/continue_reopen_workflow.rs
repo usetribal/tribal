@@ -1,5 +1,9 @@
-//! `git lineage resume` end to end: resolve from lineage refs, ask the adapter
-//! for the invocation, print it — and write nothing.
+//! `git lineage continue` end to end, on the reopen half: a session this machine
+//! holds is resolved from lineage refs, the adapter is asked for the invocation,
+//! and it is printed — writing nothing.
+//!
+//! The fall-through half (no invocation available, so the session is written out
+//! instead) is covered in `fork_workflow.rs`.
 //!
 //! Run through the built binary rather than the library, matching
 //! `fork_workflow.rs`: the adapters read `$HOME`, and a child process is the only
@@ -70,7 +74,7 @@ fn seed_session(
 
 fn run_resume(dir: &Path, home: &Path, session_id: &str) -> Output {
     Command::new(env!("CARGO_BIN_EXE_git-lineage"))
-        .args(["--repo", dir.to_str().unwrap(), "resume", session_id])
+        .args(["--repo", dir.to_str().unwrap(), "continue", session_id])
         .env("HOME", home)
         .output()
         .unwrap()
@@ -79,7 +83,7 @@ fn run_resume(dir: &Path, home: &Path, session_id: &str) -> Output {
 fn stdout_of(output: &Output) -> String {
     assert!(
         output.status.success(),
-        "resume failed: {}",
+        "continue failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
     String::from_utf8(output.stdout.clone()).unwrap()
@@ -134,9 +138,9 @@ fn resume_prints_the_adapter_command_for_the_stored_vendor_id() {
     );
 }
 
-/// The distinction from `fork` that justifies a separate verb: resume reopens
-/// what is already here. A transcript on disk or a new session in the refs would
-/// mean it had quietly forked instead.
+/// The property that makes reopening worth preferring: it continues the session
+/// that is already here. A transcript on disk or a new session in the refs would
+/// mean it had written one out instead.
 #[test]
 fn resume_writes_no_transcript_and_records_no_new_session() {
     let dir = init_repo();
@@ -167,8 +171,8 @@ fn resume_writes_no_transcript_and_records_no_new_session() {
     );
 }
 
-/// Codex can be reopened even though it cannot be forked, so resume must not be
-/// gated on the transcript-writing capability.
+/// Codex can be reopened even though no transcript can be written for it, so the
+/// reopen path must not be gated on the transcript-writing capability.
 #[test]
 fn a_codex_session_resumes_even_though_it_cannot_be_forked() {
     let dir = init_repo();
@@ -194,10 +198,10 @@ fn a_codex_session_resumes_even_though_it_cannot_be_forked() {
     );
 }
 
-/// A user who cannot tell which agent refused cannot tell whether to try a
-/// different session or a different tool.
+/// An agent that cannot reopen a session is not a dead end under `continue`: the
+/// session is written out instead, which is the whole reason the two verbs merged.
 #[test]
-fn an_agent_that_cannot_be_reopened_refuses_by_name() {
+fn an_agent_that_cannot_be_reopened_falls_through_to_writing_one_out() {
     let dir = init_repo();
     let home = tempfile::tempdir().unwrap();
     commands::init_config(dir.path()).unwrap();
@@ -209,17 +213,18 @@ fn an_agent_that_cannot_be_reopened_refuses_by_name() {
     );
 
     let output = run_resume(dir.path(), home.path(), conv.id.as_str());
+    let stderr = String::from_utf8(output.stderr.clone()).unwrap();
+    // Cursor cannot reopen and cannot be written out either, so this still
+    // fails — but by naming the write path it fell through to, not the reopen.
     assert!(!output.status.success());
-    let stderr = String::from_utf8(output.stderr).unwrap();
     assert!(stderr.contains("cursor"), "{stderr}");
-    assert!(stderr.contains("unsupported"), "{stderr}");
 }
 
-/// A teammate's session has no vendor id here, so there is nothing on this
-/// machine to reopen. That is a different failure from an unsupported agent, and
-/// it has a different answer: fork it.
+/// A teammate's session has no vendor id here, so there is nothing to reopen.
+/// Under `continue` that is not an error the user has to act on: it is exactly
+/// the case that gets written out as a new session carrying their context.
 #[test]
-fn a_session_with_no_vendor_id_points_at_fork() {
+fn a_session_with_no_vendor_id_is_written_out_instead() {
     let dir = init_repo();
     let home = tempfile::tempdir().unwrap();
     commands::init_config(dir.path()).unwrap();
@@ -237,11 +242,15 @@ fn a_session_with_no_vendor_id_points_at_fork() {
     });
     persist_conversation(repo.inner(), &conv).unwrap();
 
-    let output = run_resume(dir.path(), home.path(), conv.id.as_str());
-    assert!(!output.status.success());
-    let stderr = String::from_utf8(output.stderr).unwrap();
-    assert!(stderr.contains("git lineage fork"), "{stderr}");
-    assert!(stderr.contains("claude"), "{stderr}");
+    let stdout = stdout_of(&run_resume(dir.path(), home.path(), conv.id.as_str()));
+
+    // Written out, not reopened: a new session of the user's own, and a
+    // transcript their harness can open.
+    assert!(stdout.contains("Recorded fork"), "{stdout}");
+    assert!(
+        !claude_transcripts(home.path()).is_empty(),
+        "the session should have been written out: {stdout}"
+    );
 }
 
 #[test]

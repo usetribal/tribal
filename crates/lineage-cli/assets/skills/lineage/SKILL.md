@@ -19,12 +19,12 @@ Tribal stores **AI agent session provenance** in git (`refs/lineage/*`, `refs/no
 - Before editing unfamiliar code: linked sessions, blame, architecture summary
 - After `git rebase` / `git rebase -i`: orphaned lineage notes
 - Sharing context with teammates or reviewing what would leave the repo
-- Resuming or forking a prior agent session (Claude Code, Codex; VS Code extension)
+- Continuing a prior agent session (Claude Code, Codex; VS Code extension)
 
 ## Retrieve context (prefer `--json`)
 
 ```bash
-git lineage search "authentication middleware"
+git lineage context query "authentication middleware"
 git lineage list --json
 git lineage list --commit <sha> --json
 git lineage show <session-id> --json
@@ -32,7 +32,7 @@ git lineage blame path/to/file.rs:42 --json
 git lineage export --redact --format jsonl
 ```
 
-**Workflow:** search by topic, then blame for a specific line, then `show` the best session. Cite `session_id` and turn content. Do not invent history if lineage returns nothing.
+**Workflow:** query by topic, then blame for a specific line, then `show` the best session. Cite `session_id` and turn content. Do not invent history if lineage returns nothing.
 
 Session JSON may include `metadata.architecture_summary`, `prompted_by_email`, `prompted_by_name`, `vendor_session_id`, `parent_session_id`, and `git_branch`.
 
@@ -71,29 +71,29 @@ Uses patch-id metadata on git notes to match rewritten commits, then re-material
 
 ## Hooks and ongoing import
 
-If `git lineage install-hook` is active:
+If `git lineage init --hooks` is active:
 
 - **pre-commit:** incremental import (`--no-link-head --incremental`)
 - **post-commit:** link recent sessions to the new commit
 
 Manual refresh: `git lineage import --agent all --incremental` (alias: `ingest`)
 
-## Resume and fork sessions
+## Continue sessions
 
-**Fork** continues a stored session in your own agent — including a teammate's,
+`git lineage continue` carries on a stored session — including a teammate's,
 since it resolves from lineage's refs rather than a local transcript file:
 
 ```bash
-git lineage fork <session-id>            # writes the transcript, prints what to run
-git lineage fork <session-id> --brief    # context block for a subagent
+git lineage continue <session-id>            # reopens yours, writes out anyone else's
+git lineage continue <session-id> --fork     # write out even if it could be reopened
+git lineage continue <session-id> --brief    # context block for a subagent
 ```
 
-It mints a new session that belongs to you, leaves the original untouched, and
-records the source as an ancestor. Tool activity is replayed as prose, so you get
-their context but no replayable tool handles. Claude Code sessions only.
-
-**Resume** reopens a session already on this machine by its `vendor_session_id`:
-`claude --resume <id>` or `codex resume <id>`.
+A session this machine already holds is reopened as itself: nothing is written,
+and continuing it adds to its history. Any other is written out as a new session
+that belongs to you, leaving the original untouched and recording it as an
+ancestor. Tool activity is replayed as prose, so you get their context but no
+replayable tool handles. Writing out is Claude Code only.
 
 The VS Code / Cursor extension offers both from the session tree and from hover.
 
@@ -105,7 +105,7 @@ store from the Cursor IDE transcripts lineage imports.
 | Command | Use when |
 |---------|----------|
 | `git lineage doctor` | Verify config, refs, LFS integrity |
-| `git lineage rebuild-index` | Search returns nothing / stale index |
+| `git lineage rebuild index` | Search returns nothing / stale index |
 | `git lineage materialize` | Rebuild line objects at a commit |
 | `git lineage delete <id> [--purge-blobs]` | Remove a session from the repo |
 | `git lineage gc` | Purge orphan line objects and unreferenced LFS blobs |

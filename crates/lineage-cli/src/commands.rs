@@ -901,7 +901,7 @@ pub fn index_persisted_sessions_best_effort(repo: &LineageRepo, session_ids: &[L
     if let Err(error) = index_persisted_sessions(repo, session_ids) {
         eprintln!(
             "warning: session saved but not added to the search index ({error}); \
-             run `git lineage rebuild-index` to make it searchable"
+             run `git lineage rebuild index` to make it searchable"
         );
     }
 }

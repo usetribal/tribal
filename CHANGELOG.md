@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The command surface is grouped and much smaller.** `git lineage help` listed 25 commands flat, most of which are repair verbs or internal endpoints nobody reaches for first. It now shows 16 under four headings — Setup, Sessions, Team, Maintenance — written out in a help template because clap 4 has one heading for the whole subcommand list rather than one per subcommand. Nothing was removed from the CLI: `export`, `materialize`, `link`, `remap`, `lfs`, `gc`, `search`, and the internal `hook` endpoint all still run exactly as before, they are just hidden from the default listing. `--help` on any of them still works, which is what makes hiding them safe rather than a capability cut
+
+- **`fork` and `resume` are one command, `continue`.** The two were a real distinction — resume reopens a session the harness already holds and writes nothing, fork writes a stored session out as a new one — but it was a distinction the user had to get right before knowing which case they were in, and getting it wrong produced an error whose only content was the name of the other command. `continue` derives it instead: the adapter is asked for a resume invocation, and a session it cannot name is one there is nothing here to reopen, which is exactly when writing it out is correct. Both old names remain as aliases. `--fork` forces writing one out for a session that could have been reopened, which is the only case a user still has to choose. This is why `resume_cmd` is gone rather than wrapped: the fall-through *is* the old error branch, so merging deleted the branch rather than adding a layer above it
+
+- **`init` owns the whole setup, including its steps.** `init-config`, `init-skill`, `install-hook`, and `uninstall-hook` were four top-level commands for things that are steps of `init` — the "three inits" problem. They are now `init --config`, `init --skills`, `init --hooks`, and `init --uninstall`, each running the same call the full setup makes, so a step cannot behave differently depending on how it was reached. Naming any step runs only what was named; naming none is the full interactive setup, unchanged
+
+- **`sync` now does both directions; `push` is the one-way half.** `sync` pushed only, which left the pull half of multiplayer needing a second command nobody had a reason to know about. `sync` is now push-then-pull, and the push-only behaviour keeps its own name as `push`. The two stay separately addressable because they are not mirror images — a push merges into an authority, a pull merges into a local cache — so a one-directional run stays possible and the asymmetry stays visible
+
+- `git lineage search` is superseded by `git lineage context query`, which ranks results, reports match strength, and prints the traversal commands for following one up. `search` still runs, hidden
+
+### Fixed
+
+- `git lineage doctor` suggested `git lineage rebuild-index`, an alias that has been deprecated for a release. It now names `git lineage rebuild index`
+
 ## [0.3.0] - 2026-08-22
 
 ### Added

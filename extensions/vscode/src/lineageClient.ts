@@ -58,7 +58,7 @@ export class LineageClient {
     }
 
     async initConfig(): Promise<string> {
-        return this.run(["init-config"]);
+        return this.run(["init", "--config"]);
     }
 
     async listSessions(): Promise<SessionSummary[]> {
@@ -117,15 +117,15 @@ export class LineageClient {
     }
 
     async fork(id: string): Promise<string> {
-        return this.run(["fork", id]);
+        return this.run(["continue", "--fork", id]);
     }
 
     async resume(id: string): Promise<string> {
-        return this.run(["resume", id]);
+        return this.run(["continue", id]);
     }
 
     async installHook(): Promise<string> {
-        return this.run(["install-hook"]);
+        return this.run(["init", "--hooks"]);
     }
 
     async deleteSession(id: string, purgeBlobs = false): Promise<string> {

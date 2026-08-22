@@ -183,9 +183,10 @@ fn render_vocabulary(continuation: Continuation) -> String {
 /// in the first place.
 const FORK_CAPABILITY: &str = "\
 Sessions can also be continued rather than only read:
-  git lineage fork <session>            write it out as a session your agent can open
-  git lineage fork <session> --brief    print a context block instead of writing anything
-`fork` prints the command to resume the session yourself. `--brief` writes nothing
+  git lineage continue <session>          carry on a session in your agent
+  git lineage continue <session> --brief  print a context block instead of continuing it
+A session this machine holds is reopened as itself; any other is written out as a
+new session carrying its context. `--brief` writes nothing
 and prints a self-contained block — whose session it was, what they asked for, the
 turns that changed code, and the traversal commands above — for starting a subagent
 on that session while leaving this session's context untouched. The block ends with
