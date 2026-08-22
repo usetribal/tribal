@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `git lineage login` now works for an account that has never opened the web app. Signing in for the first time takes a second browser approval, which grants the server a one-off read of the organizations you belong to; it derives your workspaces from that and discards the access. The step exists because the identity provider's device flow cannot request that permission, and it is skipped entirely for anyone who already has a workspace, so a returning login is unchanged at one approval. A login whose account has no workspaces takes the same path, which is what makes a revoked membership recoverable without opening a browser tab you did not ask for
+
 ### Changed
 
 - The default server is now `https://api.usetribal.io/api`, following the hosted service onto its own domain. It applies only when `--server` is omitted **and** no prior login stored a default, so a machine that has run `git lineage login` against any server keeps reaching that one and needs no action. A build older than this release points at a host that no longer answers: re-run `login` with an explicit `--server`, or upgrade. Share links carry their own origin and are unaffected, as is any URL passed explicitly

@@ -594,47 +594,136 @@ pub fn export(repo_path: &Path, redact: bool, format: &str) -> Result<()> {
     Ok(())
 }
 
+/// Prints an approval prompt and waits, polling `poll` until it returns a value.
+///
+/// Both approvals in a login share this shape — same deadline, same backoff, same
+/// expiry message — so they share the loop; only the prompt and the poll differ.
+fn await_approval<T>(
+    prompt: &str,
+    url: &str,
+    entry_url: &str,
+    user_code: &str,
+    expires_in: u64,
+    interval: u64,
+    mut poll: impl FnMut() -> Result<Option<PollStep<T>>>,
+) -> Result<T> {
+    println!("{prompt}");
+    println!();
+    println!("  {url}");
+    println!();
+    // A prefilled URL can still fail (a browser that drops the query, a code the
+    // page asks to retype), so the bare entry point stays visible as a fallback.
+    if entry_url == url {
+        println!("and confirm code {user_code}.");
+    } else {
+        println!("and confirm code {user_code} (or enter it at {entry_url}).");
+    }
+    println!("Waiting for approval…");
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(expires_in);
+    let mut interval = interval;
+    loop {
+        match poll()? {
+            Some(PollStep::Done(value)) => return Ok(value),
+            // OAuth device-flow rule: back off by 5s when told to slow down.
+            Some(PollStep::SlowDown) => interval += 5,
+            None => {}
+        }
+        if std::time::Instant::now() >= deadline {
+            return Err("approval request expired before it was granted: run login again".into());
+        }
+        std::thread::sleep(std::time::Duration::from_secs(interval));
+    }
+}
+
+enum PollStep<T> {
+    Done(T),
+    SlowDown,
+}
+
 /// Runs the device login against a Tribal server: prints the verification URL
 /// and code, polls until the browser approval completes the login server-side,
 /// and stores the returned session handle (the durable credential — the JWT it
 /// mints is short-lived and re-minted per command).
+///
+/// A first-time user needs a second approval. The identity provider's device flow
+/// cannot request the organization scope that membership derivation needs, so the
+/// server asks for a separate grant against the forge and the login continues
+/// through it. Returning users never see this step.
 pub fn login(server: Option<&str>) -> Result<()> {
     let server = auth::resolve_server(server)?;
     let start = auth::device_start(&server)?;
-    println!("To sign in, open this URL in a browser:");
-    println!();
-    println!("  {}", start.verification_uri_complete);
-    println!();
-    println!(
-        "and confirm code {} (or enter it at {}).",
-        start.user_code, start.verification_uri
-    );
-    println!("Waiting for approval…");
 
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(start.expires_in);
-    let mut interval = start.interval;
-    loop {
-        match auth::device_poll(&server, &start.device_code)? {
+    let outcome = await_approval(
+        "To sign in, open this URL in a browser:",
+        &start.verification_uri_complete,
+        &start.verification_uri,
+        &start.user_code,
+        start.expires_in,
+        start.interval,
+        || match auth::device_poll(&server, &start.device_code)? {
             auth::DevicePollResponse::Pending { slow_down } => {
-                if slow_down {
-                    // OAuth device-flow rule: back off by 5s when told to slow down.
-                    interval += 5;
-                }
+                Ok(slow_down.then_some(PollStep::SlowDown))
             }
+            auth::DevicePollResponse::TrustGrantRequired { trust_grant_handle } => Ok(Some(
+                PollStep::Done(LoginOutcome::TrustGrant(trust_grant_handle)),
+            )),
             auth::DevicePollResponse::Complete { session_handle, .. } => {
-                auth::store_login(&server, session_handle)?;
-                println!(
-                    "Logged in. Credentials stored in {}.",
-                    auth::credentials_path()?.display()
-                );
-                return Ok(());
+                Ok(Some(PollStep::Done(LoginOutcome::Session(session_handle))))
             }
+        },
+    )?;
+
+    let session_handle = match outcome {
+        LoginOutcome::Session(handle) => handle,
+        LoginOutcome::TrustGrant(handle) => {
+            grant_organization_access(&server, &handle)?;
+            handle
         }
-        if std::time::Instant::now() >= deadline {
-            return Err("sign-in request expired before it was approved: run login again".into());
-        }
-        std::thread::sleep(std::time::Duration::from_secs(interval));
-    }
+    };
+
+    auth::store_login(&server, session_handle)?;
+    println!(
+        "Logged in. Credentials stored in {}.",
+        auth::credentials_path()?.display()
+    );
+    Ok(())
+}
+
+enum LoginOutcome {
+    Session(String),
+    TrustGrant(String),
+}
+
+/// Second approval of a first-time login: grants the server a one-off read of the
+/// user's organizations so it can derive their workspaces. The server discards
+/// that access once derivation is done.
+fn grant_organization_access(server: &str, trust_grant_handle: &str) -> Result<()> {
+    let start = auth::trust_grant_start(server)?;
+
+    println!();
+    let tenant_count = await_approval(
+        "One more step. To find your organizations, open this URL:",
+        &start.verification_uri,
+        &start.verification_uri,
+        &start.user_code,
+        start.expires_in,
+        start.interval,
+        || match auth::trust_grant_poll(server, trust_grant_handle, &start.device_code)? {
+            auth::TrustGrantPollResponse::Pending { slow_down } => {
+                Ok(slow_down.then_some(PollStep::SlowDown))
+            }
+            auth::TrustGrantPollResponse::Complete { tenant_count } => {
+                Ok(Some(PollStep::Done(tenant_count)))
+            }
+        },
+    )?;
+
+    println!(
+        "Found {tenant_count} workspace{}.",
+        if tenant_count == 1 { "" } else { "s" }
+    );
+    Ok(())
 }
 
 // Explicit flag / LINEAGE_TOKEN bypass the stored login entirely (CI, scripts);

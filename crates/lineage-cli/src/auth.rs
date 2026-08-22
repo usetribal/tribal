@@ -54,12 +54,37 @@ pub struct DeviceStartResponse {
 pub enum DevicePollResponse {
     #[serde(rename = "pending", rename_all = "camelCase")]
     Pending { slow_down: bool },
+    /// The identity is established but carries no organization membership yet,
+    /// so the server cannot issue a usable token. Membership needs a GitHub read
+    /// that the identity provider's device flow cannot request, which is what the
+    /// trust grant below supplies.
+    #[serde(rename = "trust_grant_required", rename_all = "camelCase")]
+    TrustGrantRequired { trust_grant_handle: String },
     #[serde(rename = "complete", rename_all = "camelCase")]
     Complete {
         access_token: String,
         expires_in: u64,
         session_handle: String,
     },
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrustGrantStartResponse {
+    pub device_code: String,
+    pub user_code: String,
+    pub verification_uri: String,
+    pub expires_in: u64,
+    pub interval: u64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum TrustGrantPollResponse {
+    #[serde(rename = "pending", rename_all = "camelCase")]
+    Pending { slow_down: bool },
+    #[serde(rename = "complete", rename_all = "camelCase")]
+    Complete { tenant_count: u64 },
 }
 
 #[derive(Debug, Deserialize)]
@@ -141,6 +166,43 @@ pub fn device_poll(server: &str, device_code: &str) -> Result<DevicePollResponse
                 )
             }
             other => format!("sign-in poll failed: {other}"),
+        })?;
+    Ok(response.into_json()?)
+}
+
+pub fn trust_grant_start(server: &str) -> Result<TrustGrantStartResponse> {
+    let url = format!("{}/auth/cli/trust-grant", normalize_server(server));
+    let response = ureq::post(&url)
+        .timeout(HTTP_TIMEOUT)
+        .call()
+        .map_err(|e| match e {
+            ureq::Error::Status(status, response) => format!(
+                "organization access request failed (HTTP {status}): {}",
+                server_message(response)
+            ),
+            other => format!("organization access request failed: {other}"),
+        })?;
+    Ok(response.into_json()?)
+}
+
+pub fn trust_grant_poll(
+    server: &str,
+    trust_grant_handle: &str,
+    device_code: &str,
+) -> Result<TrustGrantPollResponse> {
+    let url = format!("{}/auth/cli/trust-grant/poll", normalize_server(server));
+    let response = ureq::post(&url)
+        .timeout(HTTP_TIMEOUT)
+        .send_json(serde_json::json!({
+            "trustGrantHandle": trust_grant_handle,
+            "deviceCode": device_code,
+        }))
+        .map_err(|e| match e {
+            ureq::Error::Status(status, response) => format!(
+                "organization access failed (HTTP {status}): {}",
+                server_message(response)
+            ),
+            other => format!("organization access poll failed: {other}"),
         })?;
     Ok(response.into_json()?)
 }

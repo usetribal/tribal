@@ -193,10 +193,15 @@ injections), so read it from `.git/lineage/events.jsonl` directly.
 stores an opaque session handle in `~/.config/lineage/credentials.json` (0600;
 `XDG_CONFIG_HOME` respected, `LINEAGE_CONFIG_DIR` overrides). The handle is the
 durable credential — short-lived access tokens are minted from it per command,
-and the identity-provider refresh token never leaves the server. Signing in to
-the server's web app once beforehand is required (the server maps the login to
-an existing account). If a stored login expires or is revoked, the next sync
-says to run `login` again.
+and the identity-provider refresh token never leaves the server.
+
+Signing in for the first time takes **two browser approvals**: the first proves
+who you are, and the second lets the server read which organizations you belong
+to, so it can work out your workspaces. The second approval is a separate step
+because the identity provider's device flow cannot ask for that permission. The
+server uses that access once and discards it. Returning logins take one approval.
+
+If a stored login expires or is revoked, the next sync says to run `login` again.
 
 `sync` redacts and drops private sessions before anything crosses the wire,
 assembles a `sync-batch-v0` (conversations with embedded turns, line objects,
