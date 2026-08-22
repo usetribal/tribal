@@ -7,9 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-22
+
+### Added
+
+- **A command that needs a Lineage server signs you in when you are not.** `sync`, `push`, `pull`, and `share` previously failed with "not logged in: run `git lineage login`", which is a command telling you the command to run instead of running it. They now start the sign-in and carry on. An expired or revoked session takes the same path — from where the user is standing it is the same situation, and the 401 that says so is now a typed error rather than a string, so the resolver can act on it. Precedence is unchanged and still a contract with scripts: an explicit `--token` and `LINEAGE_TOKEN` bypass the stored login entirely, and neither consults nor starts one. Signing in requires a terminal; off one the old error stands, because the device flow would otherwise block until its code expired waiting for a browser approval nobody is there to give. The sign-in lives in the **one** function that resolves a token, so a Team command added later inherits it without anyone maintaining a list of which commands need auth — a test fails the build if any module outside `auth.rs` reads credentials for itself. That guard has teeth: `sync` and `pull` had already drifted into byte-identical copies of the resolution order, and this collapses them
+
+- `git lineage --discover` prints the whole command surface as JSON: every command including the hidden ones, each with its help group, aliases, options (flag versus value-taking, required, repeatable, positional), and nested subcommands. Written for an agent deciding what to call, where `--help` answers what a person should reach for first. It is walked from the parser itself rather than maintained beside it, so it cannot drift from what the binary accepts — a test runs `--help` on every command the surface reports, which is what makes that guarantee real. Needs no repository
+
 ### Changed
 
-- **The command surface is grouped and much smaller.** `git lineage help` listed 25 commands flat, most of which are repair verbs or internal endpoints nobody reaches for first. It now shows 16 under four headings — Setup, Sessions, Team, Maintenance — written out in a help template because clap 4 has one heading for the whole subcommand list rather than one per subcommand. Nothing was removed from the CLI: `export`, `materialize`, `link`, `remap`, `lfs`, `gc`, `search`, and the internal `hook` endpoint all still run exactly as before, they are just hidden from the default listing. `--help` on any of them still works, which is what makes hiding them safe rather than a capability cut
+- **The command surface is grouped and much smaller.** `git lineage help` listed 25 commands flat, most of which are repair verbs or internal endpoints nobody reaches for first. It now shows 13 under four headings — Setup, Sessions, Team, Maintenance — written out in a help template because clap 4 has one heading for the whole subcommand list rather than one per subcommand. Nothing was removed from the CLI: `export`, `materialize`, `link`, `remap`, `lfs`, `gc`, `search`, and the internal `hook` endpoint all still run exactly as before, they are just hidden from the default listing. `--help` on any of them still works, which is what makes hiding them safe rather than a capability cut
 
 - **`fork` and `resume` are one command, `fork`.** The two were a real distinction — resume reopens a session the harness already holds and writes nothing, fork writes a stored session out as a new one — but it was a distinction the user had to get right before knowing which case they were in, and getting it wrong produced an error whose only content was the name of the other command. `fork` derives it instead: the adapter is asked for a resume invocation, and a session it cannot name is one there is nothing here to reopen, which is exactly when writing it out is correct. `continue` and `resume` remain as aliases. `--new` forces writing one out for a session that could have been reopened, which is the only case a user still has to choose. This is why `resume_cmd` is gone rather than wrapped: the fall-through *is* the old error branch, so merging deleted the branch rather than adding a layer above it
 
@@ -20,12 +28,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `git lineage delete` is hidden. It removes a session from this repository only, so it does not stop a session that has been synced or shared from reaching anyone — which is what "delete" is taken to mean. It still runs; the name is reserved for the version that means what it says
 
 - `git lineage search` is superseded by `git lineage context query`, which ranks results, reports match strength, and prints the traversal commands for following one up. `search` still runs, hidden
-
-### Added
-
-- **A command that needs a Lineage server signs you in when you are not.** `sync`, `push`, `pull`, and `share` previously failed with "not logged in: run `git lineage login`", which is a command telling you the command to run instead of running it. They now start the sign-in and carry on. An expired or revoked session takes the same path — from where the user is standing it is the same situation, and the 401 that says so is now a typed error rather than a string, so the resolver can act on it. Precedence is unchanged and still a contract with scripts: an explicit `--token` and `LINEAGE_TOKEN` bypass the stored login entirely, and neither consults nor starts one. Signing in requires a terminal; off one the old error stands, because the device flow would otherwise block until its code expired waiting for a browser approval nobody is there to give. The sign-in lives in the **one** function that resolves a token, so a Team command added later inherits it without anyone maintaining a list of which commands need auth — a test fails the build if any module outside `auth.rs` reads credentials for itself. That guard has teeth: `sync` and `pull` had already drifted into byte-identical copies of the resolution order, and this collapses them
-
-- `git lineage --discover` prints the whole command surface as JSON: every command including the hidden ones, each with its help group, aliases, options (flag versus value-taking, required, repeatable, positional), and nested subcommands. Written for an agent deciding what to call, where `--help` answers what a person should reach for first. It is walked from the parser itself rather than maintained beside it, so it cannot drift from what the binary accepts — a test runs `--help` on every command the surface reports, which is what makes that guarantee real. Needs no repository
 
 ### Fixed
 
@@ -303,7 +305,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Schema specifications v0 (conversation, line-object, git-notes)
 - CI workflow (test, clippy, fmt)
 
-[Unreleased]: https://github.com/usetribal/tribal/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/usetribal/tribal/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/usetribal/tribal/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/usetribal/tribal/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/usetribal/tribal/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/usetribal/tribal/releases/tag/v0.1.0
