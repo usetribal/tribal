@@ -285,7 +285,7 @@ pub struct ShareRequest {
 
 pub fn share(repo_path: &Path, request: &ShareRequest) -> Result<()> {
     let server = auth::resolve_server(request.server.as_deref())?;
-    let token = crate::commands::resolve_sync_token(&server, request.token.as_deref())?;
+    let token = auth::resolve_token(&server, request.token.as_deref())?;
     let transport = HttpTransport::new(&server, &token);
     let response = run_share(repo_path, &transport, request)?;
 

@@ -205,9 +205,18 @@ injections), so read it from `.git/lineage/events.jsonl` directly.
 | `git lineage push [--server URL] [--token TOKEN] [--remote origin]` | Push only — the one-way half of `sync` |
 | `git lineage pull [--server URL] [--token TOKEN] [--remote origin] [--dry-run]` | Pull only — the other half (see [Pull teammates' sessions](#pull-teammates-sessions)) |
 
+| `git lineage share [--session ID] [--server URL] [--token TOKEN] [--remote origin] [--no-open]` | Share one session as a link anyone can open (see [Share a session as a link](#share-a-session-as-a-link)) |
+
 `sync` is the one to reach for; `push` and `pull` stay addressable for a
 one-directional run and are hidden from `git lineage -h`.
-| `git lineage share [--session ID] [--server URL] [--token TOKEN] [--remote origin] [--no-open]` | Share one session as a link anyone can open (see [Share a session as a link](#share-a-session-as-a-link)) |
+
+**You do not have to run `login` first.** Any command that talks to a server
+resolves its token the same way — explicit `--token`, then `LINEAGE_TOKEN`, then
+the stored login — and if none of those yields one, it signs you in and carries
+on. That covers a login that expired or was revoked, which is the same situation
+from where you are standing. Signing in needs a terminal, so off one (CI, a
+hook, a pipe) the command fails with the message naming the fix rather than
+blocking on a browser approval nobody can give.
 
 `login` prints a verification URL and code, waits for the browser approval, and
 stores an opaque session handle in `~/.config/lineage/credentials.json` (0600;

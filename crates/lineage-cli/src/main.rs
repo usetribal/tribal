@@ -289,7 +289,8 @@ enum Commands {
         /// Server base URL; defaults to production or the server stored by `login`
         #[arg(long)]
         server: Option<String>,
-        /// Bearer token; falls back to LINEAGE_TOKEN, then the stored login
+        /// Bearer token; falls back to LINEAGE_TOKEN, then the stored login,
+        /// then signs in when a terminal is attached
         #[arg(long)]
         token: Option<String>,
         /// Git remote whose URL identifies the repo to the server
@@ -306,7 +307,8 @@ enum Commands {
         /// Server base URL; defaults to production or the server stored by `login`
         #[arg(long)]
         server: Option<String>,
-        /// Bearer token; falls back to LINEAGE_TOKEN, then the stored login
+        /// Bearer token; falls back to LINEAGE_TOKEN, then the stored login,
+        /// then signs in when a terminal is attached
         #[arg(long)]
         token: Option<String>,
         /// Git remote whose URL identifies the repo to the server
@@ -323,7 +325,8 @@ enum Commands {
         /// Server base URL; defaults to production or the server stored by `login`
         #[arg(long)]
         server: Option<String>,
-        /// Bearer token; falls back to LINEAGE_TOKEN, then the stored login
+        /// Bearer token; falls back to LINEAGE_TOKEN, then the stored login,
+        /// then signs in when a terminal is attached
         #[arg(long)]
         token: Option<String>,
         /// Git remote whose URL identifies the repo to the server
@@ -346,7 +349,8 @@ enum Commands {
         /// Server base URL; defaults to production or the server stored by `login`
         #[arg(long)]
         server: Option<String>,
-        /// Bearer token; falls back to LINEAGE_TOKEN, then the stored login
+        /// Bearer token; falls back to LINEAGE_TOKEN, then the stored login,
+        /// then signs in when a terminal is attached
         #[arg(long)]
         token: Option<String>,
         /// Git remote whose URL identifies the repo to the server

@@ -726,28 +726,6 @@ fn grant_organization_access(server: &str, trust_grant_handle: &str) -> Result<(
     Ok(())
 }
 
-// Explicit flag / LINEAGE_TOKEN bypass the stored login entirely (CI, scripts);
-// otherwise the stored session handle is exchanged for a fresh 15-minute JWT,
-// which comfortably outlives a sync run — no mid-run refresh needed.
-//
-// Shared with `share`, which pushes through the same transport and must resolve
-// its token the same way — a second precedence order would be a second thing to
-// get wrong.
-pub(crate) fn resolve_sync_token(server: &str, token: Option<&str>) -> Result<String> {
-    let explicit = token
-        .map(str::to_string)
-        .filter(|t| !t.is_empty())
-        .or_else(|| {
-            std::env::var("LINEAGE_TOKEN")
-                .ok()
-                .filter(|t| !t.is_empty())
-        });
-    match explicit {
-        Some(token) => Ok(token),
-        None => auth::access_token_for(server),
-    }
-}
-
 pub fn sync(
     repo_path: &Path,
     server: Option<&str>,
@@ -757,7 +735,7 @@ pub fn sync(
     let repo = open_repo(repo_path)?;
     let inner = repo.inner();
     let server = auth::resolve_server(server)?;
-    let token = resolve_sync_token(&server, token)?;
+    let token = auth::resolve_token(&server, token)?;
 
     // Redact and drop private sessions before anything crosses the wire — the
     // same guarantee the export path provides (sync-protocol-v0 "Privacy").

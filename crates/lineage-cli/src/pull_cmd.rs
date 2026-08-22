@@ -378,7 +378,7 @@ pub fn pull(
 ) -> Result<()> {
     let repo = open_repo(repo_path)?;
     let server = auth::resolve_server(server)?;
-    let token = resolve_pull_token(&server, token)?;
+    let token = auth::resolve_token(&server, token)?;
 
     let binding = resolve_repo_binding(repo.inner(), remote)?;
     let transport = HttpTransport::new(&server, &token);
@@ -516,23 +516,6 @@ fn pull_origin_for(server: &str) -> PullOrigin {
         tenant: None,
         pulled_at: Utc::now(),
         lineage_version: env!("CARGO_PKG_VERSION").to_string(),
-    }
-}
-
-/// Same resolution order as `sync`: explicit flag, then `LINEAGE_TOKEN`, then
-/// the stored login.
-fn resolve_pull_token(server: &str, token: Option<&str>) -> Result<String> {
-    let explicit = token
-        .map(str::to_string)
-        .filter(|t| !t.is_empty())
-        .or_else(|| {
-            std::env::var("LINEAGE_TOKEN")
-                .ok()
-                .filter(|t| !t.is_empty())
-        });
-    match explicit {
-        Some(token) => Ok(token),
-        None => auth::access_token_for(server),
     }
 }
 

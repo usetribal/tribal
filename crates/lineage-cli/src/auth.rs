@@ -7,6 +7,7 @@
 
 use std::collections::BTreeMap;
 use std::fs;
+use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -212,19 +213,19 @@ pub fn exchange(server: &str, session_handle: &str) -> Result<ExchangeResponse> 
     let response = ureq::post(&url)
         .timeout(HTTP_TIMEOUT)
         .send_json(serde_json::json!({ "sessionHandle": session_handle }))
-        .map_err(|e| match e {
-            // The server 401s exactly when the stored session is dead (expired,
-            // revoked, or tampered) — the recovery is always a fresh login.
-            ureq::Error::Status(401, _) => {
-                "stored login is no longer valid: run `git lineage login`".to_string()
-            }
-            ureq::Error::Status(status, response) => {
-                format!(
+        .map_err(|e| -> Box<dyn std::error::Error> {
+            match e {
+                // The server 401s exactly when the stored session is dead
+                // (expired, revoked, or tampered) — the recovery is always a
+                // fresh login, so this is typed for the resolver to act on.
+                ureq::Error::Status(401, _) => Box::new(SessionRejected),
+                ureq::Error::Status(status, response) => format!(
                     "token exchange failed (HTTP {status}): {}",
                     server_message(response)
                 )
+                .into(),
+                other => format!("token exchange failed: {other}").into(),
             }
-            other => format!("token exchange failed: {other}"),
         })?;
     Ok(response.into_json()?)
 }
@@ -241,14 +242,119 @@ pub fn resolve_server(flag: Option<&str>) -> Result<String> {
 }
 
 /// Exchanges the stored session handle for a fresh short-lived access token.
+///
+/// [`NotAuthenticated`] rather than a plain error for the two states a sign-in
+/// resolves — no stored login, and a stored login the server no longer accepts —
+/// so [`resolve_token`] can act on them and every other failure still surfaces
+/// as itself.
 pub fn access_token_for(server: &str) -> Result<String> {
     let server = normalize_server(server);
     let credentials = load_credentials()?;
-    let stored = credentials
-        .servers
-        .get(&server)
-        .ok_or_else(|| format!("not logged in to {server}: run `git lineage login`"))?;
-    Ok(exchange(&server, &stored.session_handle)?.access_token)
+    let Some(stored) = credentials.servers.get(&server) else {
+        return Err(NotAuthenticated::new(&server).into());
+    };
+    match exchange(&server, &stored.session_handle) {
+        Ok(response) => Ok(response.access_token),
+        Err(error) if error.is::<SessionRejected>() => Err(NotAuthenticated::new(&server).into()),
+        Err(error) => Err(error),
+    }
+}
+
+/// The server rejected the stored session handle: expired, revoked, or tampered.
+/// A distinct type because it is the one exchange failure a fresh login fixes.
+#[derive(Debug)]
+pub struct SessionRejected;
+
+impl std::fmt::Display for SessionRejected {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "stored login is no longer valid")
+    }
+}
+
+impl std::error::Error for SessionRejected {}
+
+/// No usable credential for this server. Carries the server so a caller that
+/// cannot sign in — no TTY — can still name it in the error a user reads.
+#[derive(Debug)]
+pub struct NotAuthenticated {
+    pub server: String,
+}
+
+impl NotAuthenticated {
+    fn new(server: &str) -> Self {
+        Self {
+            server: server.to_string(),
+        }
+    }
+}
+
+impl std::fmt::Display for NotAuthenticated {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "not logged in to {}: run `git lineage login`",
+            self.server
+        )
+    }
+}
+
+impl std::error::Error for NotAuthenticated {}
+
+/// The token every command that talks to a Lineage server uses.
+///
+/// One resolver rather than one per command: the precedence is a contract with
+/// scripts (an explicit `--token` and `LINEAGE_TOKEN` bypass the stored login
+/// entirely, for CI), and a second copy of it is a second thing to get wrong —
+/// which had already happened once, between `sync` and `pull`.
+///
+/// It is also the only place a sign-in can start, and that is deliberate: a new
+/// command needs a token, the only way to get one is here, so it inherits the
+/// sign-in without anyone maintaining a list of which commands need auth.
+///
+/// `sign_in` runs only when nothing is stored or the server rejected what was,
+/// and only on a terminal — see [`resolve_token_with`].
+pub fn resolve_token(server: &str, token: Option<&str>) -> Result<String> {
+    resolve_token_with(server, token, std::io::stdin().is_terminal(), |server| {
+        crate::commands::login(Some(server))
+    })
+}
+
+/// [`resolve_token`] with its two ambient inputs injected: whether a sign-in can
+/// be run interactively, and what running one does.
+pub fn resolve_token_with(
+    server: &str,
+    token: Option<&str>,
+    interactive: bool,
+    sign_in: impl FnOnce(&str) -> Result<()>,
+) -> Result<String> {
+    let explicit = token
+        .map(str::to_string)
+        .filter(|t| !t.is_empty())
+        .or_else(|| {
+            std::env::var("LINEAGE_TOKEN")
+                .ok()
+                .filter(|t| !t.is_empty())
+        });
+    if let Some(token) = explicit {
+        return Ok(token);
+    }
+
+    let error = match access_token_for(server) {
+        Ok(token) => return Ok(token),
+        Err(error) => error,
+    };
+    if !error.is::<NotAuthenticated>() {
+        return Err(error);
+    }
+    // Off a terminal there is nobody to approve the browser step, so the device
+    // flow would block until its code expired. Failing with the message that
+    // names the fix is the better answer for a script.
+    if !interactive {
+        return Err(error);
+    }
+
+    sign_in(server)?;
+    access_token_for(server)
 }
 
 pub fn store_login(server: &str, session_handle: String) -> Result<()> {
