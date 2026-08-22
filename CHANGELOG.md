@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-22
+
 ### Added
 
 - `git lineage login` now works for an account that has never opened the web app. Signing in for the first time takes a second browser approval, which grants the server a one-off read of the organizations you belong to; it derives your workspaces from that and discards the access. The step exists because the identity provider's device flow cannot request that permission, and it is skipped entirely for anyone who already has a workspace, so a returning login is unchanged at one approval. A login whose account has no workspaces takes the same path, which is what makes a revoked membership recoverable without opening a browser tab you did not ask for
@@ -277,6 +279,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Schema specifications v0 (conversation, line-object, git-notes)
 - CI workflow (test, clippy, fmt)
 
-[Unreleased]: https://github.com/usetribal/tribal/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/usetribal/tribal/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/usetribal/tribal/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/usetribal/tribal/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/usetribal/tribal/releases/tag/v0.1.0
