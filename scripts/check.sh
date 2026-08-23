@@ -10,6 +10,9 @@ cargo fmt --all -- --check
 echo "==> clippy"
 cargo clippy --workspace --all-targets -- -D warnings
 
+echo "==> CLI presentation"
+./scripts/check-cli-ui.sh
+
 echo "==> test"
 cargo test --workspace
 

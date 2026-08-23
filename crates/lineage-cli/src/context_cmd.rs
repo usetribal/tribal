@@ -13,6 +13,7 @@ use sha2::{Digest, Sha256};
 
 use crate::digest::{render_digest, select, turn_handle, Trigger};
 use crate::events::{EventLog, Outcome};
+use crate::ui;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -242,7 +243,7 @@ pub fn print_log(repo_path: &Path, limit: usize) -> Result<()> {
         .filter(|e| e["op"] == "context_hook" && e["outcome"] == "ok")
         .collect();
     if injections.is_empty() {
-        println!("no context injections recorded");
+        ui::empty("no context injections recorded");
         return Ok(());
     }
 
@@ -258,13 +259,13 @@ pub fn print_log(repo_path: &Path, limit: usize) -> Result<()> {
                     .join(", ")
             })
             .unwrap_or_default();
-        println!(
+        ui::indent(format!(
             "{}  {}  [{}]  sessions: {}",
-            entry["ts"].as_str().unwrap_or("?"),
-            detail["file_path"].as_str().unwrap_or("?"),
-            detail["strength"].as_str().unwrap_or("?"),
+            ui::dim(entry["ts"].as_str().unwrap_or("?")),
+            ui::accent(detail["file_path"].as_str().unwrap_or("?")),
+            ui::dim(detail["strength"].as_str().unwrap_or("?")),
             sessions,
-        );
+        ));
     }
     Ok(())
 }
@@ -290,29 +291,29 @@ pub fn chain(repo_path: &Path, target: &str) -> Result<()> {
     // starts from (`line_history` takes no repo, so it cannot blame).
     let anchor = lineage_git::resolve_anchor(repo.inner(), &head, &file_path, line)?;
     let Some((anchor_commit, anchor_line)) = anchor else {
-        println!(
+        ui::heading(&format!(
             "Temporal chain for {file_path}:{line} (HEAD={})",
             short(&head)
-        );
-        println!("no chain (line has no blame at HEAD)");
+        ));
+        ui::empty("no chain (line has no blame at HEAD)");
         return Ok(());
     };
 
     let index = LineageIndex::open(repo.git_dir().join("lineage").join("index.db"))?;
     let hops = index.line_history(&file_path, anchor_line, &anchor_commit)?;
 
-    println!(
+    ui::heading(&format!(
         "Temporal chain for {file_path}:{line} (HEAD={})",
         short(&head)
-    );
+    ));
     if hops.is_empty() {
-        println!("no chain (line not on indexed lineage history)");
+        ui::empty("no chain (line not on indexed lineage history)");
         return Ok(());
     }
     for (i, hop) in hops.iter().enumerate() {
         print_hop(i + 1, hop);
     }
-    println!("Chain length: {} hops", hops.len());
+    ui::kv("Hops", hops.len());
     Ok(())
 }
 
@@ -328,17 +329,17 @@ fn print_hop(hop_num: usize, hop: &lineage_search::Hop) {
             format!("DARK({})", hop.hop_kind),
         ),
     };
-    println!(
-        "{:<4} {:<10} {:<11} {:<28} {:<32} {:<14} {}:{}",
-        hop_num,
-        &hop.commit_sha[..hop.commit_sha.len().min(8)],
+    ui::indent(format!(
+        "{} {:<10} {:<11} {} {} {:<14} {}:{}",
+        ui::rank_label(hop_num),
+        ui::dim(&hop.commit_sha[..hop.commit_sha.len().min(8)]),
         date,
-        session,
-        turn,
+        ui::accent(format!("{session:<28}")),
+        ui::dim(format!("{turn:<32}")),
         conf,
         hop.file_path,
         hop.start_line,
-    );
+    ));
 }
 
 fn short(sha: &str) -> &str {

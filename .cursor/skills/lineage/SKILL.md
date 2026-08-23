@@ -1,7 +1,7 @@
 ---
 name: lineage
 description: >-
-  Retrieves and manages engineering context from git-lineage: AI agent
+  Retrieves and manages engineering context from tribal: AI agent
   conversations, line-level provenance, team sharing, rebase recovery, and
   session resume/fork. Use when answering why code exists, finding past
   decisions, onboarding, before risky edits, after rebase, or when sharing
@@ -10,7 +10,7 @@ description: >-
 
 # Tribal agent skill
 
-Tribal stores **AI agent session provenance** in git (`refs/lineage/*`, `refs/notes/lineage`). Setup is handled by `git lineage init` (humans run that once). **Your job is to query, interpret, and advise on lineage data.**
+Tribal stores **AI agent session provenance** in git (`refs/lineage/*`, `refs/notes/lineage`). Setup is handled by `tribal init` (humans run that once). **Your job is to query, interpret, and advise on lineage data.**
 
 ## When to use lineage
 
@@ -19,20 +19,20 @@ Tribal stores **AI agent session provenance** in git (`refs/lineage/*`, `refs/no
 - Before editing unfamiliar code: linked sessions, blame, architecture summary
 - After `git rebase` / `git rebase -i`: orphaned lineage notes
 - Sharing context with teammates or reviewing what would leave the repo
-- Resuming or forking a prior agent session (Claude Code, Codex; VS Code extension)
+- Continuing a prior agent session (Claude Code, Codex; VS Code extension)
 
 ## Retrieve context (prefer `--json`)
 
 ```bash
-git lineage search "authentication middleware"
-git lineage list --json
-git lineage list --commit <sha> --json
-git lineage show <session-id> --json
-git lineage blame path/to/file.rs:42 --json
-git lineage export --redact --format jsonl
+tribal context query "authentication middleware"
+tribal list --json
+tribal list --commit <sha> --json
+tribal show <session-id> --json
+tribal blame path/to/file.rs:42 --json
+tribal export --redact --format jsonl
 ```
 
-**Workflow:** search by topic, then blame for a specific line, then `show` the best session. Cite `session_id` and turn content. Do not invent history if lineage returns nothing.
+**Workflow:** query by topic, then blame for a specific line, then `show` the best session. Cite `session_id` and turn content. Do not invent history if lineage returns nothing.
 
 Session JSON may include `metadata.architecture_summary`, `prompted_by_email`, `prompted_by_name`, `vendor_session_id`, `parent_session_id`, and `git_branch`.
 
@@ -45,7 +45,7 @@ Combines `git blame` with lineage notes at the introducing commit. JSON `matches
 Tribal refs travel with the repo:
 
 ```bash
-git lineage lfs push
+tribal lfs push
 git push origin refs/lineage/* refs/notes/lineage
 ```
 
@@ -53,47 +53,47 @@ Teammates on a fresh clone:
 
 ```bash
 git fetch origin refs/lineage/* refs/notes/lineage
-git lineage lfs fetch
-git lineage doctor
+tribal lfs fetch
+tribal doctor
 ```
 
-Before sharing publicly: `git lineage export --redact --format jsonl` and review output. Policy and excludes live in `refs/lineage/config`.
+Before sharing publicly: `tribal export --redact --format jsonl` and review output. Policy and excludes live in `refs/lineage/config`.
 
 ## After a rebase
 
 Rewritten SHAs orphan lineage notes. Recovery:
 
 ```bash
-git lineage remap
+tribal remap
 ```
 
-Uses patch-id metadata on git notes to match rewritten commits, then re-materializes line objects. Run after interactive rebase or history rewrite; verify with `git lineage list --commit <new-sha>`.
+Uses patch-id metadata on git notes to match rewritten commits, then re-materializes line objects. Run after interactive rebase or history rewrite; verify with `tribal list --commit <new-sha>`.
 
 ## Hooks and ongoing import
 
-If `git lineage install-hook` is active:
+If `tribal init --hooks` is active:
 
 - **pre-commit:** incremental import (`--no-link-head --incremental`)
 - **post-commit:** link recent sessions to the new commit
 
-Manual refresh: `git lineage import --agent all --incremental` (alias: `ingest`)
+Manual refresh: `tribal import --agent all --incremental` (alias: `ingest`)
 
-## Resume and fork sessions
+## Continue sessions
 
-**Fork** continues a stored session in your own agent — including a teammate's,
+`tribal fork` carries on a stored session — including a teammate's,
 since it resolves from lineage's refs rather than a local transcript file:
 
 ```bash
-git lineage fork <session-id>            # writes the transcript, prints what to run
-git lineage fork <session-id> --brief    # context block for a subagent
+tribal fork <session-id>            # reopens yours, writes out anyone else's
+tribal fork <session-id> --new      # write out even if it could be reopened
+tribal fork <session-id> --brief    # context block for a subagent
 ```
 
-It mints a new session that belongs to you, leaves the original untouched, and
-records the source as an ancestor. Tool activity is replayed as prose, so you get
-their context but no replayable tool handles. Claude Code sessions only.
-
-**Resume** reopens a session already on this machine by its `vendor_session_id`:
-`claude --resume <id>` or `codex resume <id>`.
+A session this machine already holds is reopened as itself: nothing is written,
+and continuing it adds to its history. Any other is written out as a new session
+that belongs to you, leaving the original untouched and recording it as an
+ancestor. Tool activity is replayed as prose, so you get their context but no
+replayable tool handles. Writing out is Claude Code only.
 
 The VS Code / Cursor extension offers both from the session tree and from hover.
 
@@ -104,12 +104,12 @@ store from the Cursor IDE transcripts lineage imports.
 
 | Command | Use when |
 |---------|----------|
-| `git lineage doctor` | Verify config, refs, LFS integrity |
-| `git lineage rebuild-index` | Search returns nothing / stale index |
-| `git lineage materialize` | Rebuild line objects at a commit |
-| `git lineage delete <id> [--purge-blobs]` | Remove a session from the repo |
-| `git lineage gc` | Purge orphan line objects and unreferenced LFS blobs |
-| `git lineage remap` | After rebase |
+| `tribal doctor` | Verify config, refs, LFS integrity |
+| `tribal rebuild index` | Search returns nothing / stale index |
+| `tribal materialize` | Rebuild line objects at a commit |
+| `tribal delete <id> [--purge-blobs]` | Remove a session from the repo |
+| `tribal gc` | Purge orphan line objects and unreferenced LFS blobs |
+| `tribal remap` | After rebase |
 
 ## MCP (optional)
 
@@ -124,7 +124,7 @@ If `lineage-mcp` is configured, prefer MCP tools (`lineage_list_sessions`, `line
 
 ## If nothing is found
 
-- `git lineage import --agent all --incremental`
+- `tribal import --agent all --incremental`
 - Confirm [agent paths](https://github.com/usetribal/tribal/blob/main/docs/agent-paths.md) for Cursor / Claude / Codex
 - Teammates may need `git fetch origin refs/lineage/* refs/notes/lineage`
 - Fall back to `git log` and code comments; lineage augments git, it does not replace it

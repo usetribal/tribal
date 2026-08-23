@@ -12,7 +12,9 @@ tribal list --json
 tribal list --commit <sha> --json
 ```
 
-Human output shows session ids, agents, and summary metadata. JSON includes prompter fields, branch, linked commits, and timestamps.
+Human output is one aligned row per session: title first, then id, turn count,
+date, agent, model, and author. JSON includes prompter fields, branch, linked
+commits, and timestamps.
 
 ## Show a conversation
 

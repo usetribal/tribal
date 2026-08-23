@@ -412,12 +412,12 @@ that publishes nothing falls back to rewriting `app.<domain>` to `api.<domain>`,
 which is why a deployment serving its API under a path prefix needs either the
 document or `--server`.
 
-Find one with `tribal list`, which shows id, date, turn count, agent, model,
-and who ran it, newest first:
+Find one with `tribal list`, which shows title first, then id, turn count, date,
+agent, model, and who ran it, newest first. Columns align across the list:
 
 ```text
-01HQZX8K9V2M3N4P5Q6R7S8T9U  2026-07-26     8 turns  claude  claude-sonnet-4  Alice Chen
-01HQZW1A2B3C4D5E6F7G8H9J0K  2026-07-25    41 turns  claude  claude-opus-4    Bob Reyes  (fork)
+the login endpoint accepts an empty password   01HQZX8K9V2M3N4P5Q6R7S8T9U   8 turns  2026-07-26  claude  Alice Chen
+Share-link fork                                01HQZW1A2B3C4D5E6F7G8H9J0K  41 turns  2026-07-25  claude  Bob Reyes  (fork)
 ```
 
 Then fork it:

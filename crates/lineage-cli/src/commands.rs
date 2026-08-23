@@ -5,7 +5,8 @@ use chrono::{DateTime, Utc};
 use lineage_adapters::all_adapters;
 use lineage_core::{
     conversation_modified_code, derive_session_id, display_title, generate_architecture_summary,
-    AgentKind, CommitMappingMode, LastImportState, LineageId, LineageRepoConfig, SOURCE_MTIME_KEY,
+    humanize_text, id_prefix, AgentKind, CommitMappingMode, LastImportState, LineageId,
+    LineageRepoConfig, SOURCE_MTIME_KEY,
 };
 use lineage_git::{
     assemble_batch, best_commit_for_conversation, blame_with_lineage, chunk_batch, delete_session,
@@ -24,6 +25,7 @@ use lineage_search::{LineageIndex, SearchHit};
 use crate::auth;
 use crate::events::{EventLog, Outcome};
 use crate::migrate;
+use crate::ui::{self, ScanRow};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -41,8 +43,8 @@ fn init_config_impl(repo_path: &Path, verbose: bool) -> Result<()> {
     write_repo_config(repo.inner(), &config)?;
     ensure_gitattributes(repo.inner())?;
     if verbose {
-        println!("wrote default config to refs/lineage/config");
-        println!("ensured .gitattributes for .lineage/media/** LFS pointers");
+        ui::action("wrote default config to refs/lineage/config");
+        ui::action("ensured .gitattributes for .lineage/media/** LFS pointers");
     }
     Ok(())
 }
@@ -104,7 +106,11 @@ pub fn import(
         }
         let sessions = adapter.discover()?;
         discovered.insert(kind.as_str().to_string(), sessions.len());
-        println!("discovered {} {} session(s)", sessions.len(), kind.as_str());
+        ui::action(format!(
+            "discovered {} {} session(s)",
+            sessions.len(),
+            kind.as_str()
+        ));
         for session in sessions {
             if let Some(since_dt) = since_dt {
                 if session.started_at.map(|t| t < since_dt).unwrap_or(false) {
@@ -213,13 +219,13 @@ pub fn import(
     write_last_import(inner, &LastImportState::new(imported_ids))?;
 
     let line_objects: usize = results.iter().map(|r| r.line_objects_written).sum();
-    println!(
+    ui::action(format!(
         "imported {} session(s), {} line object(s), {} skipped, {} error(s)",
         results.len(),
         line_objects,
         skipped,
         errors
-    );
+    ));
     EventLog::for_git_dir(&lineage_repo.git_dir()).append(
         Utc::now(),
         "import",
@@ -235,9 +241,9 @@ pub fn import(
         }),
     );
     for r in results {
-        println!(
-            "  {} (blob {}, {} line objects)",
-            r.session_id, r.blob_oid, r.line_objects_written
+        ui::row(
+            &r.session_id,
+            format!("{} line objects", r.line_objects_written),
         );
     }
     Ok(())
@@ -326,11 +332,11 @@ pub fn list(repo_path: &Path, commit: Option<&str>, json: bool) -> Result<()> {
                 commit_sha: sha.to_string(),
                 session_ids: ids.iter().map(|id| id.to_string()).collect(),
             };
-            println!("{}", serde_json::to_string_pretty(&summary)?);
+            ui::json(&summary)?;
         } else {
-            for id in ids {
-                println!("{id}");
-            }
+            let mut summaries = collect_summaries_from_ids(inner, ids)?;
+            summaries.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+            print_session_list(&summaries, "no sessions linked to this commit");
         }
         return Ok(());
     }
@@ -344,13 +350,20 @@ pub fn list(repo_path: &Path, commit: Option<&str>, json: bool) -> Result<()> {
     summaries.sort_by(|a, b| b.started_at.cmp(&a.started_at));
 
     if json {
-        println!("{}", serde_json::to_string_pretty(&summaries)?);
+        ui::json(&summaries)?;
     } else {
-        for s in &summaries {
-            println!("{}", list_row(s));
-        }
+        print_session_list(&summaries, "no sessions — run tribal import");
     }
     Ok(())
+}
+
+fn print_session_list(summaries: &[SessionSummary], empty: &str) {
+    if summaries.is_empty() {
+        ui::empty(empty);
+        return;
+    }
+    let rows: Vec<ScanRow> = summaries.iter().map(ScanRow::from).collect();
+    ui::print_scan_rows(&rows);
 }
 
 pub fn collect_session_summaries(repo_path: &Path) -> Result<Vec<SessionSummary>> {
@@ -410,36 +423,34 @@ fn summary_from_conversation(conv: &lineage_core::Conversation) -> SessionSummar
     }
 }
 
-/// One row a person can choose from. The title is what makes a list of 100
-/// sessions navigable; the id stays visible for copy/paste and fork hints.
-pub(crate) fn list_row(s: &SessionSummary) -> String {
-    let model = s.model.as_deref().unwrap_or("—");
-    let mut row = format!(
-        "{}  {}  {:>4} turns  {}  {}  {}",
-        s.title,
-        s.id,
-        s.turns,
-        list_day(&s.started_at),
-        s.agent,
-        model
-    );
-    if let Some(who) = s
-        .prompted_by_name
-        .as_deref()
-        .or(s.prompted_by_email.as_deref())
-    {
-        row.push_str(&format!("  {who}"));
+impl From<&SessionSummary> for ScanRow {
+    fn from(s: &SessionSummary) -> Self {
+        ScanRow {
+            title: s.title.clone(),
+            id: id_prefix(&s.id),
+            turns: s.turns,
+            day: ui::day(&s.started_at).to_string(),
+            agent: s.agent.clone(),
+            model: s.model.clone().unwrap_or_else(|| "—".into()),
+            who: s
+                .prompted_by_name
+                .clone()
+                .or_else(|| s.prompted_by_email.clone()),
+            tag: s.is_fork.then(|| "(fork)".into()),
+        }
     }
-    if s.is_fork {
-        row.push_str("  (fork)");
-    }
-    row
 }
 
-/// `started_at` is stored RFC 3339. Show the date only: the time of day almost
-/// never distinguishes two sessions, and the full stamp crowds out the author.
-fn list_day(started_at: &str) -> &str {
-    started_at.split('T').next().unwrap_or(started_at)
+/// One row a person can choose from. The title is what makes a list of 100
+/// sessions navigable; the id stays visible for copy/paste and fork hints.
+/// Test helper: production prints through `list_rows` so columns share widths.
+#[cfg(test)]
+pub(crate) fn list_row(s: &SessionSummary) -> String {
+    ui::format_scan_row(&ScanRow::from(s))
+}
+
+pub(crate) fn list_rows(summaries: &[SessionSummary]) -> Vec<String> {
+    ui::format_scan_rows(&summaries.iter().map(ScanRow::from).collect::<Vec<_>>())
 }
 
 pub fn show(repo_path: &Path, session_hint: &str, json: bool, hydrate_images: bool) -> Result<()> {
@@ -453,72 +464,106 @@ pub fn show(repo_path: &Path, session_hint: &str, json: bool, hydrate_images: bo
     }
 
     if json {
-        println!("{}", conv.to_json()?);
+        ui::raw_line(conv.to_json()?);
     } else {
-        println!("Session: {}", display_title(&conv));
-        println!("Id:      {}", conv.id);
-        println!("Agent:   {}", conv.agent.as_str());
-        println!("Started: {}", conv.started_at);
-        println!("Turns:   {}", conv.turns.len());
-        if conv.private {
-            println!("Private: true");
-        }
-        if let Some(origin) = &conv.fork_origin {
-            println!(
-                "Forked:  from session {} on {}",
-                origin.source_session_id,
-                origin.forked_at.format("%Y-%m-%d")
-            );
-        }
-        if let Some(model) = conv.primary_model() {
-            println!("Model:   {model}");
-        }
-        if let Some(summary) = conv
-            .metadata
-            .get("session_summary")
-            .and_then(|v| v.as_str())
-            .or_else(|| {
-                conv.metadata
-                    .get("architecture_summary")
-                    .and_then(|v| v.as_str())
-            })
-        {
-            println!("\nSummary:\n{summary}");
-        }
-        let models = conv.models_used();
-        if models.len() > 1 {
-            println!("Models:  {}", models.join(", "));
-        }
-        let meta_keys = [
-            PROMPTED_BY_EMAIL,
-            PROMPTED_BY_NAME,
-            "claude_code_version",
-            "git_branch",
-            "codex_cli_version",
-            "codex_originator",
-            "cursor_session_id",
-            "claude_session_id",
-            "codex_session_id",
-        ];
-        for key in meta_keys {
-            if let Some(value) = conv.metadata.get(key).and_then(|v| v.as_str()) {
-                println!("{key}: {value}");
-            }
-        }
-        for (i, turn) in conv.turns.iter().enumerate() {
-            let preview: String = turn.content.chars().take(120).collect();
-            let model = turn
-                .model
-                .as_deref()
-                .map(|m| format!(" ({m})"))
-                .unwrap_or_default();
-            println!("\n[{i}] {:?}{model}: {preview}", turn.role);
-            if !turn.tool_calls.is_empty() {
-                println!("    tools: {}", turn.tool_calls.len());
-            }
-        }
+        print_session(&conv);
     }
     Ok(())
+}
+
+fn print_session(conv: &lineage_core::Conversation) {
+    ui::heading(&display_title(conv));
+    ui::kv("Id", &conv.id);
+    ui::kv("Agent", conv.agent.as_str());
+    ui::kv("Started", ui::human_date(conv.started_at));
+    ui::kv("Turns", conv.turns.len());
+    if conv.private {
+        ui::kv("Private", "yes");
+    }
+    if let Some(origin) = &conv.fork_origin {
+        ui::kv(
+            "Forked",
+            format!(
+                "from {} on {}",
+                origin.source_session_id,
+                origin.forked_at.format("%-d %b %Y")
+            ),
+        );
+    }
+    if let Some(model) = conv.primary_model() {
+        ui::kv("Model", model);
+    }
+    let author = conv
+        .metadata
+        .get(PROMPTED_BY_NAME)
+        .and_then(|v| v.as_str())
+        .or_else(|| {
+            conv.metadata
+                .get(PROMPTED_BY_EMAIL)
+                .and_then(|v| v.as_str())
+        });
+    if let Some(author) = author {
+        ui::kv("Author", author);
+    }
+    let models = conv.models_used();
+    if models.len() > 1 {
+        ui::kv("Models", models.join(", "));
+    }
+    for (key, label) in [
+        ("git_branch", "Branch"),
+        ("claude_code_version", "Claude"),
+        ("codex_cli_version", "Codex"),
+        ("codex_originator", "Origin"),
+        ("cursor_session_id", "Vendor id"),
+        ("claude_session_id", "Vendor id"),
+        ("codex_session_id", "Vendor id"),
+    ] {
+        if let Some(value) = conv.metadata.get(key).and_then(|v| v.as_str()) {
+            ui::kv(label, value);
+        }
+    }
+    if let Some(summary) = conv
+        .metadata
+        .get("session_summary")
+        .and_then(|v| v.as_str())
+        .or_else(|| {
+            conv.metadata
+                .get("architecture_summary")
+                .and_then(|v| v.as_str())
+        })
+    {
+        ui::blank();
+        ui::section("Summary");
+        for line in summary.lines() {
+            ui::indent(line);
+        }
+    }
+    if conv.turns.is_empty() {
+        return;
+    }
+    ui::blank();
+    ui::section("Turns");
+    for (i, turn) in conv.turns.iter().enumerate() {
+        let preview = turn_preview(turn);
+        ui::turn(i, turn.role, turn.model.as_deref(), &preview);
+        if !turn.tool_calls.is_empty() {
+            ui::indent(format!("        {} tools", turn.tool_calls.len()));
+        }
+    }
+}
+
+fn turn_preview(turn: &lineage_core::Turn) -> String {
+    let cleaned = humanize_text(&turn.content);
+    if cleaned.is_empty() && !turn.tool_calls.is_empty() {
+        return turn
+            .tool_calls
+            .iter()
+            .map(|call| call.name.as_str())
+            .take(3)
+            .collect::<Vec<_>>()
+            .join(", ");
+    }
+    cleaned.chars().take(120).collect()
 }
 
 pub fn blame(repo_path: &Path, target: &str, json: bool) -> Result<()> {
@@ -529,33 +574,44 @@ pub fn blame(repo_path: &Path, target: &str, json: bool) -> Result<()> {
     let result = blame_with_lineage(repo.inner(), rel, line)?;
 
     if json {
-        println!("{}", serde_json::to_string_pretty(&result)?);
+        ui::json(&result)?;
         return Ok(());
     }
 
-    println!("{}:{} ", path, result.line);
-    println!("commit: {}", result.commit_sha);
-    println!("sessions: {}", result.sessions.len());
+    ui::heading(&format!("{}:{}", path, result.line));
+    ui::kv("Commit", &result.commit_sha);
+    ui::kv("Sessions", result.sessions.len());
     for id in &result.sessions {
-        println!("  - {id}");
+        ui::indent(ui::accent(id.as_str()));
     }
-    for obj in &result.line_objects {
-        println!(
-            "  line {}:{} turn {} ({:?})",
-            obj.line_range[0], obj.line_range[1], obj.turn_id, obj.confidence
-        );
+    if !result.line_objects.is_empty() {
+        ui::blank();
+        ui::section("Line objects");
+        for obj in &result.line_objects {
+            ui::row(
+                format!("{}:{}", obj.line_range[0], obj.line_range[1]),
+                format!(
+                    "turn {}  ({})",
+                    obj.turn_id,
+                    ui::confidence_label(obj.confidence)
+                ),
+            );
+        }
     }
     if !result.matches.is_empty() {
-        println!("matches:");
+        ui::blank();
+        ui::section("Matches");
         for m in &result.matches {
             let range = m
                 .line_range
                 .map(|r| format!("{}:{}", r[0], r[1]))
                 .unwrap_or_else(|| "?".into());
-            println!(
-                "  turn {} lines {range} ({:?}): {}",
-                m.turn_id, m.confidence, m.content_preview
-            );
+            ui::indent(format!(
+                "{}  lines {range}  ({})  {}",
+                ui::accent(format!("turn {}", m.turn_id)),
+                ui::confidence_label(m.confidence),
+                m.content_preview
+            ));
         }
     }
     Ok(())
@@ -584,10 +640,10 @@ pub fn export(repo_path: &Path, redact: bool, format: &str) -> Result<()> {
     }
 
     match format {
-        "json" => println!("{}", serde_json::to_string_pretty(&out)?),
+        "json" => ui::json(&out)?,
         "jsonl" => {
             for conv in out {
-                println!("{}", serde_json::to_string(&conv)?);
+                ui::jsonl(&conv)?;
             }
         }
         other => return Err(format!("unsupported format: {other}").into()),
@@ -608,18 +664,18 @@ fn await_approval<T>(
     interval: u64,
     mut poll: impl FnMut() -> Result<Option<PollStep<T>>>,
 ) -> Result<T> {
-    println!("{prompt}");
-    println!();
-    println!("  {url}");
-    println!();
+    ui::action(prompt);
+    ui::hero(url);
     // A prefilled URL can still fail (a browser that drops the query, a code the
     // page asks to retype), so the bare entry point stays visible as a fallback.
     if entry_url == url {
-        println!("and confirm code {user_code}.");
+        ui::action(format!("and confirm code {user_code}."));
     } else {
-        println!("and confirm code {user_code} (or enter it at {entry_url}).");
+        ui::action(format!(
+            "and confirm code {user_code} (or enter it at {entry_url})."
+        ));
     }
-    println!("Waiting for approval…");
+    ui::action("Waiting for approval…");
 
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(expires_in);
     let mut interval = interval;
@@ -684,10 +740,10 @@ pub fn login(server: Option<&str>) -> Result<()> {
     };
 
     auth::store_login(&server, session_handle)?;
-    println!(
+    ui::action(format!(
         "Logged in. Credentials stored in {}.",
         auth::credentials_path()?.display()
-    );
+    ));
     Ok(())
 }
 
@@ -702,7 +758,7 @@ enum LoginOutcome {
 fn grant_organization_access(server: &str, trust_grant_handle: &str) -> Result<()> {
     let start = auth::trust_grant_start(server)?;
 
-    println!();
+    ui::blank();
     let tenant_count = await_approval(
         "One more step. To find your organizations, open this URL:",
         &start.verification_uri,
@@ -720,10 +776,10 @@ fn grant_organization_access(server: &str, trust_grant_handle: &str) -> Result<(
         },
     )?;
 
-    println!(
+    ui::action(format!(
         "Found {tenant_count} workspace{}.",
         if tenant_count == 1 { "" } else { "s" }
-    );
+    ));
     Ok(())
 }
 
@@ -757,21 +813,21 @@ pub fn sync(
 
     let batch = assemble_batch(inner, remote, conversations)?;
     let chunk_count = chunk_batch(&batch, SYNC_CONVERSATIONS_PER_CHUNK).len();
-    println!(
+    ui::action(format!(
         "syncing {} conversation(s), {} line object(s), {} commit link(s), {} blob(s) to {server} in {chunk_count} chunk(s)",
         batch.conversations.len(),
         batch.line_objects.len(),
         batch.session_commit_links.len(),
         batch.blobs.len()
-    );
+    ));
 
     let outcome = sync_push_with_progress(inner, &server, &token, &batch, |done, total| {
         if total > 1 {
-            println!("  chunk {done}/{total}");
+            ui::indent(format!("chunk {done}/{total}"));
         }
     })?;
     let report = &outcome.report;
-    println!(
+    ui::action(format!(
         "synced to repo {} ({} accepted, {} noop, {} rejected, {} pending, {} blob(s) uploaded)",
         report.repo_id,
         report.accepted,
@@ -779,7 +835,7 @@ pub fn sync(
         report.rejected,
         report.pending,
         report.blobs_uploaded
-    );
+    ));
     EventLog::for_git_dir(&repo.git_dir()).append(
         Utc::now(),
         "sync",
@@ -818,7 +874,7 @@ pub fn search(repo_path: &Path, query: &str) -> Result<()> {
         let _ = index.rebuild(repo.inner());
         let hits = index.search(query, 20)?;
         if hits.is_empty() {
-            println!("no results for '{query}'");
+            ui::empty(&format!("no results for '{query}'"));
             return Ok(());
         }
         print_hits(repo.inner(), &hits);
@@ -829,16 +885,20 @@ pub fn search(repo_path: &Path, query: &str) -> Result<()> {
 }
 
 fn print_hits(inner: &git2::Repository, hits: &[SearchHit]) {
+    ui::heading(&format!("{} hit(s)", hits.len()));
     for hit in hits {
         let title = read_conversation(inner, &LineageId::from(hit.session_id.as_str()))
             .ok()
             .flatten()
             .map(|conv| display_title(&conv))
             .unwrap_or_else(|| hit.session_id.clone());
-        println!(
-            "{}  {}  score={:.2}  {}",
-            title, hit.session_id, hit.score, hit.snippet
-        );
+        ui::indent(format!(
+            "{}  {}  {}  {}",
+            ui::accent(&title),
+            ui::dim(&hit.session_id),
+            ui::dim(format!("score={:.2}", hit.score)),
+            hit.snippet
+        ));
     }
 }
 
@@ -904,9 +964,9 @@ pub fn rebuild_index(repo_path: &Path, embed: bool) -> Result<()> {
     let embedded = if embed { run_embed_pass(repo_path)? } else { 0 };
 
     if embedded > 0 {
-        println!("index rebuilt ({embedded} session(s) embedded)");
+        ui::action(format!("index rebuilt ({embedded} session(s) embedded)"));
     } else {
-        println!("index rebuilt");
+        ui::action("index rebuilt");
     }
     EventLog::for_git_dir(&repo.git_dir()).append(
         Utc::now(),
@@ -933,9 +993,11 @@ fn run_embed_pass(repo_path: &Path) -> Result<usize> {
 pub fn rebuild_embeddings(repo_path: &Path) -> Result<()> {
     let embedded = run_embed_pass(repo_path)?;
     if embedded > 0 {
-        println!("embeddings rebuilt ({embedded} session(s) embedded)");
+        ui::action(format!(
+            "embeddings rebuilt ({embedded} session(s) embedded)"
+        ));
     } else {
-        println!("embeddings up to date (0 session(s) embedded)");
+        ui::action("embeddings up to date (0 session(s) embedded)");
     }
     let repo = open_repo(repo_path)?;
     EventLog::for_git_dir(&repo.git_dir()).append(
@@ -956,7 +1018,9 @@ pub fn link(repo_path: &Path, session_id: &str, commit_sha: &str) -> Result<()> 
     // it goes stale until the next rebuild.
     LineageIndex::open(repo.git_dir().join("lineage").join("index.db"))?
         .link_session_commit(session_id, commit_sha)?;
-    println!("linked {session_id} -> {commit_sha} ({lines} line object(s))");
+    ui::action(format!(
+        "linked {session_id} -> {commit_sha} ({lines} line object(s))"
+    ));
     EventLog::for_git_dir(&repo.git_dir()).append(
         Utc::now(),
         "link",
@@ -996,11 +1060,14 @@ pub fn materialize(repo_path: &Path, commit: Option<&str>, session: Option<&str>
     let mut sessions = Vec::new();
     for id in session_ids {
         let count = materialize_session_at_commit(inner, &id, &commit_sha)?;
-        println!("materialized {count} line object(s) for {id} @ {commit_sha}");
+        ui::row(
+            &id,
+            format!("materialized {count} line object(s) @ {commit_sha}"),
+        );
         sessions.push(serde_json::json!({ "session_id": id.as_str(), "line_objects": count }));
         total += count;
     }
-    println!("done ({total} line object(s))");
+    ui::action(format!("done ({total} line object(s))"));
     EventLog::for_git_dir(&repo.git_dir()).append(
         Utc::now(),
         "materialize",
@@ -1013,28 +1080,28 @@ pub fn materialize(repo_path: &Path, commit: Option<&str>, session: Option<&str>
 pub fn remap(repo_path: &Path) -> Result<()> {
     let repo = open_repo(repo_path)?;
     let report = remap_orphaned_commits(repo.inner())?;
-    println!(
+    ui::action(format!(
         "remapped {} orphan commit(s) ({} patch-id match(es)), {} session(s), {} line object(s)",
         report.remapped_commits,
         report.patch_id_matches,
         report.rematerialized_sessions,
         report.line_objects_updated
-    );
+    ));
     Ok(())
 }
 
 pub fn lfs_status_cmd(repo_path: &Path) -> Result<()> {
     let repo = open_repo(repo_path)?;
     let report = lfs_status(repo.inner())?;
-    println!("LFS status");
-    println!("  referenced:      {}", report.referenced);
-    println!("  present local:   {}", report.present_local);
-    println!("  transport refs:  {}", report.transport_refs);
-    println!("  git-lfs CLI:     {}", report.git_lfs_available);
+    ui::heading("LFS status");
+    ui::kv_width("referenced", report.referenced, 14);
+    ui::kv_width("present local", report.present_local, 14);
+    ui::kv_width("transport refs", report.transport_refs, 14);
+    ui::kv_width("git-lfs CLI", report.git_lfs_available, 14);
     if !report.missing_local.is_empty() {
-        println!("  missing local:   {}", report.missing_local.len());
+        ui::kv_width("missing local", report.missing_local.len(), 14);
         for b in report.missing_local.iter().take(10) {
-            println!("    - {b}");
+            ui::indent(format!("- {}", ui::dim(b)));
         }
     }
     Ok(())
@@ -1044,10 +1111,10 @@ pub fn lfs_push_cmd(repo_path: &Path, remote: Option<&str>) -> Result<()> {
     let repo = open_repo(repo_path)?;
     let remote = remote.unwrap_or("origin");
     let report = lfs_push(repo.inner(), remote)?;
-    println!(
+    ui::action(format!(
         "pushed LFS objects to {remote} via {} ({} uploaded, {} skipped)",
         report.method, report.uploaded, report.skipped
-    );
+    ));
     Ok(())
 }
 
@@ -1055,10 +1122,10 @@ pub fn delete_session_cmd(repo_path: &Path, session_id: &str, purge_blobs: bool)
     let repo = open_repo(repo_path)?;
     let id = LineageId::from(session_id);
     let report = delete_session(repo.inner(), &id, purge_blobs)?;
-    println!(
+    ui::action(format!(
         "deleted session {} ({} note(s) updated, {} line object(s) removed, {} blob(s) purged)",
         report.session_id, report.notes_updated, report.line_objects_deleted, report.blobs_purged
-    );
+    ));
     let index = LineageIndex::open(repo.git_dir().join("lineage").join("index.db"))?;
     let _ = index.rebuild(repo.inner());
     Ok(())
@@ -1067,10 +1134,10 @@ pub fn delete_session_cmd(repo_path: &Path, session_id: &str, purge_blobs: bool)
 pub fn gc_cmd(repo_path: &Path) -> Result<()> {
     let repo = open_repo(repo_path)?;
     let report = purge_orphans(repo.inner())?;
-    println!(
+    ui::action(format!(
         "purged {} orphan line object(s), {} unreferenced blob(s), {} transport ref(s)",
         report.line_objects_purged, report.blobs_purged, report.transport_refs_purged
-    );
+    ));
     Ok(())
 }
 
@@ -1078,10 +1145,10 @@ pub fn lfs_fetch_cmd(repo_path: &Path, remote: Option<&str>) -> Result<()> {
     let repo = open_repo(repo_path)?;
     let remote = remote.unwrap_or("origin");
     let report = lfs_fetch(repo.inner(), remote)?;
-    println!(
+    ui::action(format!(
         "fetched LFS objects from {remote} via {} ({} downloaded, {} skipped)",
         report.method, report.downloaded, report.skipped
-    );
+    ));
     Ok(())
 }
 
@@ -1171,7 +1238,7 @@ pub fn rebuild(repo_path: &Path, embed: bool) -> Result<()> {
     // Dense index pass is opt-in (--embed): a full re-embed can take minutes.
     let sessions_embedded = if embed { run_embed_pass(repo_path)? } else { 0 };
 
-    println!(
+    ui::action(format!(
         "rebuilt derived state: {} commit(s) scanned, {} link(s) written ({} manual replayed), {} line object(s), index: {} session(s){}",
         report.commits_scanned,
         report.links_written,
@@ -1183,11 +1250,11 @@ pub fn rebuild(repo_path: &Path, embed: bool) -> Result<()> {
         } else {
             String::new()
         },
-    );
-    println!(
+    ));
+    ui::action(format!(
         "wiped {} note(s) and {} line-object ref(s); manual links predating the event log are not recoverable",
         report.notes_deleted, report.line_object_refs_deleted,
-    );
+    ));
 
     log.append(
         Utc::now(),
@@ -1222,19 +1289,19 @@ pub fn upgrade(repo_path: &Path, dry_run: bool) -> Result<()> {
     if dry_run {
         let pending = migrate::pending(&context)?;
         if pending.is_empty() {
-            println!("up to date");
+            ui::action("up to date");
             return Ok(());
         }
-        println!("would run:");
+        ui::action("would run:");
         for (migration, step) in pending {
-            println!("  {migration}  {step}");
+            ui::row(migration, step);
         }
         return Ok(());
     }
 
     let reports = migrate::apply_pending(&context)?;
     if reports.is_empty() {
-        println!("up to date");
+        ui::action("up to date");
         return Ok(());
     }
 
@@ -1243,7 +1310,12 @@ pub fn upgrade(repo_path: &Path, dry_run: bool) -> Result<()> {
             migrate::Outcome::Applied(detail) => ("applied", detail),
             migrate::Outcome::Skipped(detail) => ("skipped", detail),
         };
-        println!("  {verb}  {}  {}", report.step, detail);
+        let verb = if verb == "applied" {
+            ui::ok(verb)
+        } else {
+            ui::dim(verb)
+        };
+        ui::indent(format!("{verb}  {}  {}", report.step, detail));
     }
     Ok(())
 }
@@ -1300,5 +1372,32 @@ mod tests {
         let mut s = summary();
         s.is_fork = true;
         assert!(list_row(&s).contains("(fork)"));
+    }
+
+    #[test]
+    fn a_short_and_a_long_title_share_a_column_so_the_date_lines_up() {
+        let short = summary();
+        let mut long = summary();
+        long.title = "A much longer session title than the first one can hold".into();
+        long.id = "01LONG".into();
+        let rows = list_rows(&[short, long]);
+        let day_at: Vec<usize> = rows
+            .iter()
+            .map(|line| {
+                let bytes = line.find("2026-07-26").expect(line);
+                line[..bytes].chars().count()
+            })
+            .collect();
+        assert_eq!(day_at[0], day_at[1], "{rows:?}");
+        assert!(rows[1].contains('…'), "{}", rows[1]);
+    }
+
+    #[test]
+    fn a_row_shortens_the_id_so_the_title_gets_the_width() {
+        let mut s = summary();
+        s.id = "6a1a60a912b8eee6df7f9b661c".into();
+        let row = list_row(&s);
+        assert!(row.contains("6a1a60a9…"), "{row}");
+        assert!(!row.contains("6a1a60a912b8eee6df7f9b661c"), "{row}");
     }
 }

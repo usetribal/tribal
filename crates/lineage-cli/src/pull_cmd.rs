@@ -44,6 +44,7 @@ use serde::{Deserialize, Serialize};
 use crate::auth;
 use crate::commands::index_persisted_sessions_best_effort;
 use crate::events::{EventLog, Outcome};
+use crate::ui;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -523,45 +524,48 @@ fn pull_origin_for(server: &str) -> PullOrigin {
 /// what changed here, and what is still true of the local copy.
 fn print_report(report: &PullReport, server: &str, dry_run: bool) {
     if report.wanted == 0 {
-        println!("Already up to date with {server}.");
+        ui::action(format!("Already up to date with {server}."));
         return;
     }
 
-    println!(
+    ui::action(format!(
         "{server} has {} conversation(s) this repository is missing or behind on{}.",
         report.wanted,
         describe_reasons(&report.reasons)
-    );
+    ));
 
     if report.written.is_empty() {
-        println!("Nothing changed locally — every one of them was already here in full.");
+        ui::action("Nothing changed locally — every one of them was already here in full.");
         return;
     }
 
     let verb = if dry_run { "Would write" } else { "Wrote" };
-    println!("{verb} {} session(s):", report.written.len());
+    ui::action(format!("{verb} {} session(s):", report.written.len()));
     for id in report.written.iter().take(CONVERSATIONS_SHOWN) {
-        println!("    {id}");
+        ui::indent(ui::accent(id));
     }
     if report.written.len() > CONVERSATIONS_SHOWN {
-        println!("    +{} more", report.written.len() - CONVERSATIONS_SHOWN);
+        ui::indent(ui::dim(format!(
+            "+{} more",
+            report.written.len() - CONVERSATIONS_SHOWN
+        )));
     }
     if report.unchanged > 0 {
-        println!(
+        ui::action(format!(
             "{} were already here in full and were left alone.",
             report.unchanged
-        );
+        ));
     }
-    println!();
+    ui::blank();
 
     if dry_run {
-        println!("Nothing was written (--dry-run).");
+        ui::action("Nothing was written (--dry-run).");
         return;
     }
-    println!("Pull never deletes: sessions the server did not mention are untouched,");
-    println!("and turns you already had were kept as they were.");
-    println!();
-    println!("`tribal list` shows them; `tribal fork <id>` continues one.");
+    ui::action("Pull never deletes: sessions the server did not mention are untouched,");
+    ui::action("and turns you already had were kept as they were.");
+    ui::blank();
+    ui::action("`tribal list` shows them; `tribal fork <id>` continues one.");
 }
 
 fn describe_reasons(reasons: &BTreeMap<String, usize>) -> String {

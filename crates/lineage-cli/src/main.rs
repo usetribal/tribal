@@ -1,9 +1,11 @@
+#![deny(clippy::print_stdout, clippy::use_debug)]
+
 use std::path::PathBuf;
 
 use chrono::Utc;
 use lineage_cli::{
     commands, context_cmd, digest, doctor_cmd, fork_cmd, hooks_cmd, init_cmd, migrate, pull_cmd,
-    repo_registry, retrieval_cmd, session_pick, share_cmd, skill_cmd, update_check,
+    repo_registry, retrieval_cmd, session_pick, share_cmd, skill_cmd, ui, update_check,
 };
 use lineage_retrieval::{DEFAULT_AROUND_RADIUS, DEFAULT_TRAVERSAL_LIMIT};
 use std::process::ExitCode;
@@ -72,10 +74,11 @@ fn command_help() -> String {
         if index > 0 {
             out.push('\n');
         }
-        out.push_str(group);
-        out.push_str(":\n");
+        out.push_str(&ui::accent(format!("{group}:")));
+        out.push('\n');
         for (name, summary) in *commands {
-            out.push_str(&format!("  {name:<12}  {summary}\n"));
+            let name_col = format!("{name:<12}");
+            out.push_str(&format!("  {}  {summary}\n", ui::ok(&name_col)));
         }
     }
     out.push('\n');
@@ -97,11 +100,9 @@ fn group_of(command: &str) -> &'static str {
 #[derive(Parser)]
 #[command(
     name = "tribal",
-    about = "Git-native provenance for AI coding agents",
+    about = "Provenance for every agent session",
     version,
     help_template = "\
-{about}
-
 {usage-heading} {usage}
 {after-help}Options:
 {options}",
@@ -616,7 +617,23 @@ fn options_of(command: &clap::Command) -> Vec<serde_json::Value> {
 /// The parser with the grouped command list attached. `after_help` is built at
 /// runtime from [`COMMAND_GROUPS`], so it cannot be a derive attribute.
 fn cli_command() -> clap::Command {
-    <Cli as clap::CommandFactory>::command().after_help(command_help())
+    <Cli as clap::CommandFactory>::command()
+        .after_help(command_help())
+        .styles(cli_styles())
+}
+
+fn cli_styles() -> clap::builder::styling::Styles {
+    use clap::builder::styling::{AnsiColor, Effects, Styles};
+    Styles::styled()
+        .header(AnsiColor::BrightCyan.on_default() | Effects::BOLD)
+        .usage(AnsiColor::BrightCyan.on_default() | Effects::BOLD)
+        .literal(AnsiColor::BrightGreen.on_default())
+        .placeholder(AnsiColor::BrightCyan.on_default())
+}
+
+/// `tribal -h` / `tribal --help`, not `tribal list -h`.
+fn is_root_help() -> bool {
+    std::env::args().skip(1).all(|arg| arg.starts_with('-'))
 }
 
 fn parse_agent(s: &str) -> Result<String, String> {
@@ -666,18 +683,24 @@ fn main() -> ExitCode {
             Ok(cli) => cli,
             Err(error) => error.exit(),
         },
-        Err(error) => error.exit(),
+        Err(error) => {
+            if error.kind() == clap::error::ErrorKind::DisplayHelp && is_root_help() {
+                ui::banner();
+            }
+            error.exit();
+        }
     };
 
     if cli.discover {
         let surface = discover(&cli_command());
-        println!("{}", serde_json::to_string_pretty(&surface).unwrap());
+        ui::json(&surface).expect("discover surface is serializable");
         return ExitCode::SUCCESS;
     }
 
     // Only --discover may omit a subcommand; anything else with none is the
     // bare invocation, which should print help rather than silently succeed.
     let Some(command) = cli.command else {
+        ui::banner();
         let _ = cli_command().print_help();
         return ExitCode::FAILURE;
     };
@@ -810,7 +833,7 @@ fn main() -> ExitCode {
                         .map(|d| d.as_secs() as i64)
                         .unwrap_or(0);
                     if let Some(output) = endpoint(&repo_path, &input, now_unix) {
-                        println!("{output}");
+                        ui::raw_line(output);
                     }
                 }
                 Ok(())
@@ -823,14 +846,14 @@ fn main() -> ExitCode {
                     context_cmd::install_claude_agent_hook(&repo_path)
                 };
                 installed.map(|fresh| {
-                    println!(
+                    ui::action(format!(
                         "context hook {}",
                         if fresh {
                             "installed"
                         } else {
                             "already present"
                         }
-                    );
+                    ));
                 })
             }
             ContextAction::Uninstall { user } => {
@@ -840,10 +863,10 @@ fn main() -> ExitCode {
                     context_cmd::uninstall_claude_agent_hook(&repo_path)
                 };
                 removed.map(|did| {
-                    println!(
+                    ui::action(format!(
                         "context hook {}",
                         if did { "removed" } else { "not present" }
-                    );
+                    ));
                 })
             }
             ContextAction::Salience => retrieval_cmd::salience_report(&repo_path),
@@ -996,13 +1019,13 @@ fn auto_upgrade(repo_path: &std::path::Path) {
     let migrate::AutoUpgrade::Upgraded { from, to, reports } = outcome else {
         return;
     };
-    println!("upgrading from v{from} to v{to}...");
+    ui::action(format!("upgrading from v{from} to v{to}..."));
     for report in &reports {
         // Only what actually changed: a run of "nothing to do" steps is the
         // common case on a version bump that carried no migration, and printing
         // it would make every upgrade look like it did work.
         if let migrate::Outcome::Applied(detail) = &report.outcome {
-            println!("  {}  {detail}", report.step);
+            ui::row(report.step, detail);
         }
     }
 }
@@ -1019,6 +1042,6 @@ fn print_update_notice() {
         return;
     }
     if let Some(notice) = update_check::notice(env!("CARGO_PKG_VERSION"), Utc::now()) {
-        println!("{notice}");
+        ui::action(notice);
     }
 }

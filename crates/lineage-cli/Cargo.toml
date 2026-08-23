@@ -1,6 +1,6 @@
 [package]
 name = "lineage-cli"
-description = "git-lineage command-line tool for AI agent provenance"
+description = "tribal command-line tool for AI agent provenance"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -40,6 +40,9 @@ ureq = { workspace = true }
 tracing-subscriber = { workspace = true }
 inquire = { workspace = true }
 indicatif = { workspace = true }
+anstyle = { workspace = true }
+anstream = { workspace = true }
+image = { workspace = true }
 git2 = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]

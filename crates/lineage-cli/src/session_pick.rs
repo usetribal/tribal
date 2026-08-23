@@ -10,6 +10,7 @@ use lineage_search::{LineageIndex, SearchHit};
 
 use crate::commands;
 use crate::init_cmd::inquire_render_config;
+use crate::ui;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -72,14 +73,14 @@ pub fn pick_fork_session(repo_path: &Path, options: &ForkPickOptions) -> Result<
         if summaries.is_empty() {
             return Err("no sessions in this repository — import or pull one first".into());
         }
-        let labels: Vec<String> = summaries.iter().map(commands::list_row).collect();
-        println!("Choose a session to fork:");
-        let selected = Select::new("", labels)
+        let labels = commands::list_rows(&summaries);
+        ui::action("Choose a session to fork:");
+        let selected = Select::new("", labels.clone())
             .with_render_config(inquire_render_config())
             .prompt()?;
-        let index = summaries
+        let index = labels
             .iter()
-            .position(|summary| commands::list_row(summary) == selected)
+            .position(|label| label == &selected)
             .ok_or_else(|| format!("unknown selection: {selected}"))?;
         let chosen = &summaries[index];
         return Ok(ForkPickResult {
@@ -168,20 +169,16 @@ pub fn print_candidates(views: &[ForkCandidateView]) {
             .score
             .map(|value| format!("  score={value:.2}"))
             .unwrap_or_default();
-        println!(
-            "  {}. {}  {}  {} turns  {}{}",
-            view.index,
-            view.title,
-            view.id,
+        ui::indent(format!(
+            "{} {}  {}  {} turns  {}{}",
+            ui::rank_label(view.index),
+            ui::accent(&view.title),
+            ui::dim(&view.id),
             view.turns,
-            list_day(&view.started_at),
-            score
-        );
+            ui::day(&view.started_at),
+            ui::dim(&score)
+        ));
     }
-}
-
-fn list_day(started_at: &str) -> &str {
-    started_at.split('T').next().unwrap_or(started_at)
 }
 
 fn format_resolve_error(error: ResolveError) -> Box<dyn std::error::Error> {

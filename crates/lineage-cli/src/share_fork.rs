@@ -28,6 +28,7 @@ use serde::{Deserialize, Serialize};
 use crate::commands::index_persisted_sessions_best_effort;
 use crate::pull_cmd::{merge_pulled, PulledConversation};
 use crate::repo_registry;
+use crate::ui;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -323,7 +324,7 @@ pub fn resolve_landing(repo: &ShareRepo, context: &LandingContext<'_>) -> Result
 
     if repo_registry::origin_url(context.cwd).as_deref() == Some(&repo.normalized_remote_url) {
         let workdir = open_repo(context.cwd)?.workdir().to_path_buf();
-        println!("Using this repository: {}", workdir.display());
+        ui::action(format!("Using this repository: {}", workdir.display()));
         return Ok(Landed {
             path: workdir,
             how: Landing::CurrentRepo,
@@ -331,7 +332,11 @@ pub fn resolve_landing(repo: &ShareRepo, context: &LandingContext<'_>) -> Result
     }
 
     if let Some(path) = (context.lookup)(&repo.normalized_remote_url) {
-        println!("Using your checkout of {}: {}", repo.name, path.display());
+        ui::action(format!(
+            "Using your checkout of {}: {}",
+            repo.name,
+            path.display()
+        ));
         return Ok(Landed {
             path,
             how: Landing::Registry,
@@ -340,7 +345,7 @@ pub fn resolve_landing(repo: &ShareRepo, context: &LandingContext<'_>) -> Result
 
     let destination = clone_destination(repo, context);
     let url = clone_url(&repo.normalized_remote_url);
-    println!("Cloning {url} into {}", destination.display());
+    ui::action(format!("Cloning {url} into {}", destination.display()));
     (context.clone)(&url, &destination).map_err(|error| {
         format!(
             "could not clone {} into {}: {error}. \
@@ -369,10 +374,10 @@ fn land_into(into: &Path) -> Result<Landed> {
     } else {
         ""
     };
-    println!("Forking into {}{initialized}", into.display());
-    println!(
+    ui::action(format!("Forking into {}{initialized}", into.display()));
+    ui::action(
         "Note: --into was given, so this may not be a checkout of the shared repository — \
-         file paths the session mentions may not exist here."
+         file paths the session mentions may not exist here.",
     );
     Ok(Landed {
         path: into.to_path_buf(),
@@ -547,10 +552,10 @@ pub fn run_share_fork(
     launch: &dyn Fn(&str, &Path) -> bool,
 ) -> Result<ShareForkOutcome> {
     let share = transport.fetch(&link.token)?;
-    println!(
+    ui::action(format!(
         "Shared session from {} ({} turn(s))",
         share.repo.name, share.turn_count
-    );
+    ));
 
     let landed = resolve_landing(&share.repo, context)?;
     let session_id = persist_shared(&landed.path, &share, &link.server)?;
@@ -589,18 +594,17 @@ fn open_session(
     if launch(&rendered.resume_command, &rendered.resume_cwd) {
         return Opened::Launched;
     }
-    println!("Could not start the agent here — the session is forked and waiting.");
+    ui::action("Could not start the agent here — the session is forked and waiting.");
     print_how_to_continue(rendered);
     Opened::LaunchFailed
 }
 
 fn print_how_to_continue(rendered: &RenderedTranscript) {
-    println!(
+    ui::action(format!(
         "To continue it, run this from {}:",
         rendered.resume_cwd.display()
-    );
-    println!();
-    println!("    {}", rendered.resume_command);
+    ));
+    ui::hero(&rendered.resume_command);
 }
 
 /// True when the harness ran at all. Its own exit status is the receiver's

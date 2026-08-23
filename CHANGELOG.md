@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Root `tribal` / `--help` and interactive `init` show the Tribal mark.** Thresholded from the product PNG and printed as nearest-neighbour half-blocks so the interlocking edges stay hard. The title sits in a collar under the mark (`Provenance for every agent session`). Hidden off a TTY and under `NO_COLOR`.
+- **Every human command uses the same colour language.** Action lines are bold; ids, dates, and secondary columns are dim; search / blame / doctor / chain / init wizard highlight the part you scan first. `--help` headings and command names match. Piped output and `NO_COLOR` stay plain.
+
+### Changed
+
+- **Human-facing CLI output is now aligned and consistent.** `list` prints title-first columns that line up across a mixed-length list; `show` uses labeled fields and `user`/`assistant` rather than Rust Debug dumps; doctor, blame, context verbs, and action reports share the same heading / key-value / indent chrome. Colour (bright cyan + dim) appears only on a TTY and respects `NO_COLOR`. `--json`, `--discover`, `context hook`, and `fork --brief` are unchanged.
+
 ## [0.5.1] - 2026-08-23
 
 ### Added

@@ -30,6 +30,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth;
 use crate::events::{EventLog, Outcome};
+use crate::ui;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -289,13 +290,11 @@ pub fn share(repo_path: &Path, request: &ShareRequest) -> Result<()> {
     let transport = HttpTransport::new(&server, &token);
     let response = run_share(repo_path, &transport, request)?;
 
-    println!();
-    println!("    {}", response.url);
-    println!();
-    println!(
+    ui::hero(&response.url);
+    ui::action(format!(
         "Pinned at {} turn(s): continuing this session does not change what the link shows.",
         response.turn_count
-    );
+    ));
 
     if !request.no_open {
         open_in_browser(&response.url);
@@ -327,10 +326,10 @@ pub fn run_share(
         )
         .into());
     }
-    println!(
+    ui::action(format!(
         "sharing session {conversation_id} ({} turn(s))",
         batch.conversations[0].turns.len()
-    );
+    ));
     transport.push(&repo, &batch)?;
 
     let response = transport.create(&ShareCreateRequest {
@@ -361,7 +360,7 @@ fn open_in_browser(url: &str) {
     if launch(program, args, url) {
         return;
     }
-    println!("Could not open a browser here — the link above is the share.");
+    ui::action("Could not open a browser here — the link above is the share.");
 }
 
 /// Split out so the failure path is testable without a PATH that has no opener:

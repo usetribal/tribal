@@ -1,3 +1,7 @@
+//! Interactive `init` wizard. Box-drawing `println!` is wizard chrome only —
+//! non-wizard lines go through [`crate::ui`].
+#![allow(clippy::print_stdout)]
+
 use std::io::{self, IsTerminal};
 use std::path::Path;
 
@@ -6,6 +10,7 @@ use inquire::ui::{Color, RenderConfig, StyleSheet, Styled};
 use inquire::{Confirm, MultiSelect};
 
 use crate::events::{EventLog, Outcome};
+use crate::ui;
 use crate::{commands, context_cmd, hooks_cmd, skill_cmd};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -117,10 +122,10 @@ fn run_steps(repo_path: &Path, options: &InitOptions) -> Result<()> {
     if options.steps.uninstall {
         hooks_cmd::uninstall_hook(repo_path)?;
         let removed = context_cmd::uninstall_claude_agent_hook(repo_path)?;
-        println!(
+        ui::action(format!(
             "context hook {}",
             if removed { "removed" } else { "not present" }
-        );
+        ));
         return Ok(());
     }
     if options.steps.config {
@@ -137,25 +142,25 @@ fn run_steps(repo_path: &Path, options: &InitOptions) -> Result<()> {
 }
 
 fn run_non_interactive(repo_path: &Path, options: &InitOptions) -> Result<()> {
-    println!("Lineage setup");
-    println!("Repository: {}", repo_path.display());
-    println!();
+    ui::heading("Lineage setup");
+    ui::kv("Repository", repo_path.display());
+    ui::blank();
 
     commands::init_config(repo_path)?;
     let skill_targets = skill_targets_for_init(options);
     match skill_targets {
-        None => println!("agent skills: skipped"),
+        None => ui::action("agent skills: skipped"),
         Some(ref targets) => skill_cmd::init_skill(repo_path, targets, true)?,
     }
     let hooks_installed = install_hooks_with_retry(repo_path, options.force_hooks, false)?;
     install_claude_agent_hook_for_targets(repo_path, skill_targets.as_deref(), false)?;
     if !options.no_import {
-        println!("running: tribal import --agent all --incremental");
+        ui::action("running: tribal import --agent all --incremental");
         commands::import(repo_path, &["all".into()], None, true, true)?;
     } else {
-        println!("initial import: skipped");
+        ui::action("initial import: skipped");
     }
-    println!();
+    ui::blank();
     print_footer();
     log_init_event(
         repo_path,
@@ -386,6 +391,7 @@ fn confirm_prompt(message: &str, default_yes: bool) -> Result<bool> {
 }
 
 fn print_header(repo_path: &Path) {
+    ui::banner();
     let repo_line = format!("Repository: {}", repo_path.display());
     println!();
     draw_box(&["Lineage setup", repo_line.as_str()], 36);
@@ -400,25 +406,36 @@ fn draw_box(lines: &[&str], min_width: usize) {
         .max()
         .unwrap_or(0)
         .max(min_width);
-    let border = "─".repeat(content_width + 3);
+    let rule = "─".repeat(content_width + 3);
 
-    println!("╭{border}╮");
-    for line in lines {
-        println!("│  {:<content_width$} │", line);
+    println!("{}", ui::dim(format!("╭{rule}╮")));
+    for (index, line) in lines.iter().enumerate() {
+        let padded = format!("{line:<content_width$}");
+        let body = if index == 0 {
+            ui::accent(&padded)
+        } else {
+            padded
+        };
+        println!("{}  {body} {}", ui::dim("│"), ui::dim("│"));
     }
-    println!("╰{border}╯");
+    println!("{}", ui::dim(format!("╰{rule}╯")));
 }
 
 fn step_heading(title: &str, detail: Option<&str>) {
-    println!("│ {title}");
+    println!("{} {}", ui::dim("│"), ui::accent(title));
     if let Some(detail) = detail {
-        println!("│   {detail}");
+        println!("{}   {}", ui::dim("│"), ui::dim(detail));
     }
 }
 
 fn step_item(more_follows: bool, message: impl AsRef<str>) {
     let branch = if more_follows { "├" } else { "└" };
-    println!("{branch}─ ✓ {}", message.as_ref());
+    println!(
+        "{} {} {}",
+        ui::dim(format!("{branch}─")),
+        ui::ok("✓"),
+        message.as_ref()
+    );
 }
 
 fn print_footer() {

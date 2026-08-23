@@ -14,7 +14,7 @@ description: >-
 | File | Role |
 |------|------|
 | `src/extension.ts` | Activation, command registration |
-| `src/lineageClient.ts` | Shells out to `git lineage` / `git-lineage` |
+| `src/lineageClient.ts` | Shells out to `tribal` |
 | `src/sessionsProvider.ts` | Activity bar tree |
 | `src/sessionPanel.ts` | Session timeline webview |
 | `src/lineageDecorator.ts` | Gutter decorations |
@@ -36,12 +36,12 @@ From repo root: `make vscode` or `make vscode-lint`.
 
 ## Local dev (F5)
 
-1. Run `./scripts/setup.sh` (builds `target/debug/git-lineage`)
+1. Run `./scripts/setup.sh` (builds `target/debug/tribal`)
 2. Open **lineage repo root** in VS Code/Cursor
 3. Press **F5** — uses `.vscode/launch.json`:
    - `--extensionDevelopmentPath=extensions/vscode`
    - Opens this repository as the workspace
-4. `lineage.cliPath` in `.vscode/settings.json` → `target/debug/git-lineage`
+4. `lineage.cliPath` in `.vscode/settings.json` → `target/debug/tribal`
 
 ## Adding a command
 

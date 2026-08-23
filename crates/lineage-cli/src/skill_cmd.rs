@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use chrono::Utc;
 
 use crate::events::{EventLog, Outcome};
+use crate::ui;
 
 /// Every bundled skill, as (directory name, `SKILL.md` contents). Each is
 /// installed into every selected target, so adding one here is the whole change.
@@ -137,7 +138,7 @@ fn init_skill_impl(repo_path: &Path, targets: &[String], force: bool, verbose: b
     }
 
     if verbose {
-        println!("installing lineage agent skills:");
+        ui::action("installing lineage agent skills:");
     }
     for target in &resolved {
         for (skill, contents) in BUNDLED_SKILLS {
@@ -147,12 +148,12 @@ fn init_skill_impl(repo_path: &Path, targets: &[String], force: bool, verbose: b
             }
             fs::write(&path, contents)?;
             if verbose {
-                println!("  {}: {}", path.display(), target.doc_hint());
+                ui::row(path.display(), target.doc_hint());
             }
         }
     }
     if verbose {
-        println!("Agents can use lineage to search sessions, blame lines, show conversations, and share a session as a link.");
+        ui::action("Agents can use lineage to search sessions, blame lines, show conversations, and share a session as a link.");
     }
 
     if let Some(log) = EventLog::for_repo_path(repo_path) {

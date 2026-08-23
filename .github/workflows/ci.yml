@@ -31,6 +31,8 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: CLI presentation lint
+        run: ./scripts/check-cli-ui.sh
 
   # Linux only, deliberately. macOS runners bill at roughly ten times the Linux
   # rate, and running them on every push and every Dependabot pull request cost

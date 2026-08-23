@@ -28,7 +28,7 @@ CI also runs: Linux + macOS tests, `cargo doc`, typos, VS Code `npm run check`.
 ## Security before public push
 
 ```bash
-git lineage export --redact --format jsonl > /tmp/review.jsonl
+tribal export --redact --format jsonl > /tmp/review.jsonl
 # Review for leaked secrets/conversation content
 ```
 
@@ -37,7 +37,7 @@ Verify `refs/lineage/config` redaction and private-session patterns.
 ## Sharing lineage refs
 
 ```bash
-git lineage lfs push
+tribal lfs push
 git push origin refs/lineage/* refs/notes/lineage
 ```
 

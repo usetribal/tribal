@@ -1,4 +1,4 @@
-.PHONY: help setup fmt clippy test coverage doc autofix check msrv vscode vscode-lint vscode-fmt md-lint typos pre-commit install-hooks
+.PHONY: help setup fmt clippy cli-ui test coverage doc autofix check msrv vscode vscode-lint vscode-fmt md-lint typos pre-commit install-hooks
 
 # Optional setup flags (e.g. make setup REPO=/path/to/app IMPORT=1 WITH_MCP=1 FORCE_HOOKS=1)
 REPO ?=
@@ -28,6 +28,7 @@ help:
 	@echo "Developer targets:"
 	@echo "  make fmt          - rustfmt (write)"
 	@echo "  make clippy       - clippy with -D warnings"
+	@echo "  make cli-ui       - CLI presentation lint (println! / colour crates)"
 	@echo "  make test         - cargo test --workspace"
 	@echo "  make coverage     - llvm-cov gate (>=80% lines)"
 	@echo "  make doc          - cargo doc --workspace"
@@ -49,6 +50,9 @@ fmt:
 
 clippy:
 	cargo clippy --workspace --all-targets -- -D warnings
+
+cli-ui:
+	./scripts/check-cli-ui.sh
 
 test:
 	cargo test --workspace

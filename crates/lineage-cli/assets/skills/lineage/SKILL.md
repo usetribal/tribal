@@ -1,7 +1,7 @@
 ---
 name: lineage
 description: >-
-  Retrieves and manages engineering context from git-lineage: AI agent
+  Retrieves and manages engineering context from tribal: AI agent
   conversations, line-level provenance, team sharing, rebase recovery, and
   session resume/fork. Use when answering why code exists, finding past
   decisions, onboarding, before risky edits, after rebase, or when sharing

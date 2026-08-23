@@ -17,12 +17,13 @@ use lineage_retrieval::{
     fused_salient_turn_plan, line_anchored_temporal_plan, line_objects_of_turn, route,
     search_within_sessions, sessions_for_commit, turn_neighbourhood, DenseRetriever, Evidence,
     FtsRetriever, FusedRetriever, IntentQuery, IntentRetriever, LineRef, Plan, PlanResult,
-    Retrieval, RouteDecision, StageTiming,
+    Retrieval, RouteDecision, StageTiming, Strength,
 };
 use lineage_search::LineageIndex;
 
 use crate::digest::{affordances_for, turn_handle};
 use crate::events::{EventLog, Outcome};
+use crate::ui;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -37,6 +38,17 @@ pub enum Leg {
     Lexical,
     Dense,
     Fused,
+}
+
+impl Leg {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Default => "auto",
+            Self::Lexical => "lexical",
+            Self::Dense => "dense",
+            Self::Fused => "fused",
+        }
+    }
 }
 
 /// Wall budget threaded through the plan runner, matching the hook's default
@@ -208,11 +220,12 @@ fn print_route(decision: &RouteDecision) {
         .as_deref()
         .map(|a| format!(" (anchor {a})"))
         .unwrap_or_default();
-    println!(
-        "  route: {}{anchor}  signals: {}",
-        decision.plan.as_str(),
-        decision.signals.join("+"),
-    );
+    ui::indent(format!(
+        "{} {}{anchor}  signals: {}",
+        ui::dim("route:"),
+        ui::accent(decision.plan.as_str()),
+        ui::dim(decision.signals.join("+")),
+    ));
 }
 
 /// The line-anchored temporal plan: `--file <path>[:<line>]`. One live blame
@@ -290,9 +303,13 @@ fn print_plan_result(query: &str, leg: Leg, plan: &PlanResult, timing: bool) {
 }
 
 fn print_timings(timings: &[StageTiming]) {
-    println!("  timing:");
+    ui::indent(ui::dim("timing:"));
     for t in timings {
-        println!("    {:<24} {} ms", t.name, t.elapsed_ms);
+        ui::indent(format!(
+            "  {} {}",
+            ui::dim(format!("{:<24}", t.name)),
+            ui::accent(format!("{} ms", t.elapsed_ms))
+        ));
     }
 }
 
@@ -306,24 +323,23 @@ fn print_retrieval_with_affordances(
     retrieval: &Retrieval,
     anchor_file: Option<&str>,
 ) {
-    println!(
-        "query: {text:?}  leg: {leg:?}  strength: {:?}",
-        retrieval.strength
-    );
+    ui::kv("Query", text);
+    ui::kv("Leg", leg.as_str());
+    ui::kv("Strength", strength_name(retrieval.strength));
     if retrieval.evidence.is_empty() {
-        println!("  (no matches — honest nothing)");
+        ui::empty("no matches — honest nothing");
         return;
     }
     for (rank, e) in retrieval.evidence.iter().enumerate() {
-        println!("  {}. [{:?}] {}", rank + 1, e.strength, e.attribution,);
-        // The summary is multi-line; indent it so the ranked list stays readable.
-        for line in e.summary.lines() {
-            println!("       {line}");
+        if rank > 0 {
+            ui::blank();
         }
+        ui::ranked_hit(rank + 1, strength_name(e.strength), &e.attribution);
+        print_summary_lines(&e.summary);
         print_affordances(e, anchor_file);
     }
     if retrieval.truncated {
-        println!("  (truncated on budget)");
+        ui::empty("truncated on budget");
     }
 }
 
@@ -331,7 +347,7 @@ fn print_retrieval_with_affordances(
 /// adjacent to this evidence (spec: Verbatim-turn digest — affordance pointers).
 fn print_affordances(evidence: &Evidence, anchor_file: Option<&str>) {
     for cmd in affordances_for(evidence, anchor_file) {
-        println!("       → {cmd}");
+        ui::affordance(cmd);
     }
 }
 
@@ -380,20 +396,21 @@ pub fn produced_by(repo_path: &Path, turn_id: &str, limit: usize) -> Result<()> 
     // still a traversal the agent chose to make.
     log_traversal(&repo, "produced-by", turn_id, produced.len());
 
-    println!("produced-by {turn_id}");
+    ui::heading(&format!("produced-by {turn_id}"));
     if produced.is_empty() {
-        println!("  (no code attributed to this turn — honest nothing)");
+        ui::empty("no code attributed to this turn — honest nothing");
         return Ok(());
     }
     for line in &produced {
-        println!(
-            "  {}:{}-{}  {}  [{:?}]",
-            line.anchor.file_path,
-            line.line_range[0],
-            line.line_range[1],
-            short(&line.anchor.commit_sha),
-            line.confidence,
-        );
+        ui::indent(format!(
+            "{}  {}  [{}]",
+            ui::accent(format!(
+                "{}:{}-{}",
+                line.anchor.file_path, line.line_range[0], line.line_range[1]
+            )),
+            ui::dim(short(&line.anchor.commit_sha)),
+            ui::confidence_label(line.confidence),
+        ));
     }
     Ok(())
 }
@@ -418,13 +435,13 @@ pub fn sessions_for_commit_cmd(repo_path: &Path, commit_sha: &str, limit: usize)
         sessions.get().len(),
     );
 
-    println!("sessions-for-commit {}", short(&full_sha));
+    ui::heading(&format!("sessions-for-commit {}", short(&full_sha)));
     if sessions.get().is_empty() {
-        println!("  (no sessions linked to this commit — honest nothing)");
+        ui::empty("no sessions linked to this commit — honest nothing");
         return Ok(());
     }
     for session in sessions.get() {
-        println!("  {}  {}", session.session_id, session.attribution);
+        ui::row(&session.session_id, &session.attribution);
     }
     Ok(())
 }
@@ -432,22 +449,43 @@ pub fn sessions_for_commit_cmd(repo_path: &Path, commit_sha: &str, limit: usize)
 /// The shared rendering for the two text-returning verbs: a `session#turn`
 /// handle per entry so the agent can address what it found, then the turn's own
 /// words.
+fn print_summary_lines(summary: &str) {
+    for line in summary.lines() {
+        let clean = lineage_core::humanize_text(line);
+        if clean.is_empty() {
+            continue;
+        }
+        ui::indent(format!("     {clean}"));
+    }
+}
+
 fn print_turn_evidence(header: &str, evidence: &[Evidence]) {
-    println!("{header}");
+    ui::heading(header);
     if evidence.is_empty() {
-        println!("  (no matches — honest nothing)");
+        ui::empty("no matches — honest nothing");
         return;
     }
     for entry in evidence {
-        println!("  {}  {}", turn_handle(entry), entry.attribution);
-        for line in entry.summary.lines() {
-            println!("       {line}");
-        }
+        ui::indent(format!(
+            "{}  {}",
+            ui::accent(turn_handle(entry)),
+            ui::dim(&entry.attribution)
+        ));
+        print_summary_lines(&entry.summary);
     }
 }
 
 fn short(sha: &str) -> &str {
     &sha[..sha.len().min(9)]
+}
+
+fn strength_name(strength: Strength) -> &'static str {
+    match strength {
+        Strength::None => "none",
+        Strength::Low => "low",
+        Strength::Medium => "medium",
+        Strength::High => "high",
+    }
 }
 
 /// Per-corpus breakdown of the v0 salience rules: how many turns land in each
@@ -497,29 +535,35 @@ pub fn salience_report(repo_path: &Path) -> Result<()> {
     }
 
     if total_turns == 0 {
-        println!("no indexed sessions — run `tribal import` first");
+        ui::empty("no indexed sessions — run `tribal import` first");
         return Ok(());
     }
 
-    println!(
+    ui::heading(&format!(
         "salience breakdown: {} session(s), {} turn(s), {:.0}% indexed",
         indexed_fractions.len(),
         total_turns,
         indexed_turns as f64 * 100.0 / total_turns as f64,
-    );
+    ));
     for (class, (count, is_indexed)) in &counts {
-        println!(
-            "  {class:<12} {count:>7}  ({:>5.1}%)  indexed {}",
+        let indexed = if *is_indexed {
+            ui::ok("yes")
+        } else {
+            ui::caution("no")
+        };
+        ui::indent(format!(
+            "{} {:>7}  ({:>5.1}%)  indexed {indexed}",
+            ui::accent(format!("{class:<12}")),
+            count,
             *count as f64 * 100.0 / total_turns as f64,
-            if *is_indexed { "yes" } else { "no" },
-        );
+        ));
     }
     indexed_fractions.sort_by(f64::total_cmp);
     let median = indexed_fractions[indexed_fractions.len() / 2];
-    println!(
-        "  median session keeps {:.0}% of turns indexed",
+    ui::indent(format!(
+        "median session keeps {:.0}% of turns indexed",
         median * 100.0
-    );
+    ));
     Ok(())
 }
 

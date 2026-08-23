@@ -41,7 +41,7 @@ description: >-
 
 ## Repo config (`refs/lineage/config`)
 
-Config schema changes live in `lineage-git` config types + `README.md` or `docs/ARCHITECTURE.md` as appropriate. Defaults via `git lineage init` or `git lineage init-config`.
+Config schema changes live in `lineage-git` config types + `README.md` or `docs/ARCHITECTURE.md` as appropriate. Defaults via `tribal init` or `tribal init --config`.
 
 ## Changelog
 

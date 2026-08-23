@@ -9,7 +9,7 @@ Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for crate boundaries and impor
 **Prerequisites:** Rust 1.86+ (MSRV), Git 2.20+, Node.js 20+ for extension work.
 
 ```bash
-make setup                   # build CLI, compile extension, git lineage init in this repo
+make setup                   # build CLI, compile extension, tribal init in this repo
 make setup WITH_MCP=1        # also install lineage-mcp
 make setup IMPORT=1          # run initial import after setup
 ```
@@ -80,17 +80,20 @@ make msrv                    # verify Rust 1.86 MSRV
 
 ## Developing the CLI
 
-**Crate:** `crates/lineage-cli` · **Binary:** `git-lineage` (invoked as `git lineage`)
+**Crate:** `crates/lineage-cli` · **Binary:** `tribal`
 
 | File | Role |
 |------|------|
 | `src/main.rs` | `clap` commands and dispatch |
 | `src/commands.rs` | Subcommand handlers |
+| `src/ui.rs` | Human-facing stdout — commands print through this, not `println!` |
 | `src/init_cmd.rs` | Interactive `init` wizard |
 | `src/skill_cmd.rs` | `init-skill` (bundled skill install) |
 | `src/hooks_cmd.rs` | Hook install/uninstall |
 | `assets/hooks/` | Pre-commit / post-commit hook scripts |
 | `assets/skills/` | Bundled end-user skills — `lineage/`, `share/` (installed by `init-skill`) |
+
+Human output uses `ui` (scan list / detail / action / empty). `--json`, `--discover`, hook JSON, and `fork --brief` stay machine-shaped via `ui::json` / `ui::raw`. Enforced by clippy (`print_stdout`, `use_debug`) and `./scripts/check-cli-ui.sh`. Detail: `lineage-cli-command` skill.
 
 ```bash
 cargo test -p lineage-cli
@@ -120,7 +123,7 @@ Tools: `lineage_list_sessions`, `lineage_get_session`, `lineage_blame_line`, `li
 
 ## Developing the VS Code extension
 
-**Path:** `extensions/vscode/` · shells out to `git lineage` via `src/lineageClient.ts`
+**Path:** `extensions/vscode/` · shells out to `tribal` via `src/lineageClient.ts`
 
 ```bash
 cd extensions/vscode
@@ -130,7 +133,7 @@ npm run compile      # or: make vscode from repo root
 npm run package      # .vsix
 ```
 
-**F5 debug:** open the tribal repo root → **Tribal Extension** in `.vscode/launch.json`. `lineage.cliPath` in `.vscode/settings.json` points at `target/debug/git-lineage` (built by `make setup`).
+**F5 debug:** open the tribal repo root → **Tribal Extension** in `.vscode/launch.json`. `lineage.cliPath` in `.vscode/settings.json` points at `target/debug/tribal` (built by `make setup`).
 
 Key sources: `extension.ts`, `sessionsProvider.ts`, `sessionPanel.ts`, `lineageDecorator.ts`, `lineageHoverProvider.ts`, `agentActions.ts`.
 

@@ -22,6 +22,7 @@ use crate::digest::traversal_vocabulary;
 use crate::events::{EventLog, Outcome};
 use crate::session_pick::{self, ForkPickOptions, ForkPickResult};
 use crate::share_fork;
+use crate::ui;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -67,7 +68,7 @@ pub fn fork_session(repo_path: &Path, request: ForkRequest) -> Result<()> {
 
     let picked = session_pick::pick_fork_session(repo_path, &request.pick)?;
     if request.json {
-        println!("{}", serde_json::to_string_pretty(&picked)?);
+        ui::json(&picked)?;
         if should_stop_after_json(&request, &picked) {
             return Ok(());
         }
@@ -114,14 +115,12 @@ fn resume_invocation(repo_path: &Path, session_id: &str) -> Result<Option<Resume
 /// from …" a false instruction.
 fn print_resume(invocation: &ResumeInvocation) {
     match &invocation.cwd {
-        Some(cwd) => println!("To reopen it, run this from {}:", cwd.display()),
-        None => println!("To reopen it, run:"),
+        Some(cwd) => ui::action(format!("To reopen it, run this from {}:", cwd.display())),
+        None => ui::action("To reopen it, run:"),
     }
-    println!();
-    println!("    {}", invocation.command);
-    println!();
-    println!("This is the original session, not a copy: continuing it adds to its history.");
-    println!("To write it out as a new session of your own instead, add --new.");
+    ui::hero(&invocation.command);
+    ui::action("This is the original session, not a copy: continuing it adds to its history.");
+    ui::action("To write it out as a new session of your own instead, add --new.");
 }
 
 fn should_stop_after_json(request: &ForkRequest, picked: &ForkPickResult) -> bool {
@@ -186,9 +185,12 @@ pub fn fork_resolved(
         }),
     );
 
-    println!("Wrote {}", rendered.path.display());
-    println!("Recorded fork {} (continues {})", fork.id, source.id);
-    println!();
+    ui::action(format!("Wrote {}", rendered.path.display()));
+    ui::action(format!(
+        "Recorded fork {} (continues {})",
+        fork.id, source.id
+    ));
+    ui::blank();
     Ok(Some(rendered))
 }
 
@@ -196,16 +198,14 @@ pub fn fork_resolved(
 /// [`fork_resolved`] because forking a share runs it instead, and printing a
 /// command beside a session that is already open would read as an instruction.
 pub fn print_next_step(rendered: &RenderedTranscript) {
-    println!(
+    ui::action(format!(
         "To continue it, run this from {}:",
         rendered.resume_cwd.display()
-    );
-    println!();
-    println!("    {}", rendered.resume_command);
-    println!();
-    println!("You get their context, not their transcript: tool calls are replayed as prose,");
-    println!(
-        "so the session reads as history rather than handing you handles that no longer exist."
+    ));
+    ui::hero(&rendered.resume_command);
+    ui::action("You get their context, not their transcript: tool calls are replayed as prose,");
+    ui::action(
+        "so the session reads as history rather than handing you handles that no longer exist.",
     );
 }
 
@@ -217,7 +217,7 @@ fn print_brief(repo: &lineage_git::LineageRepo, source: &Conversation) -> Result
         &describe_author(source),
         &traversal_vocabulary(),
     );
-    print!("{block}");
+    ui::raw(&block);
 
     EventLog::for_git_dir(&repo.git_dir()).append(
         Utc::now(),
@@ -255,20 +255,20 @@ fn write_transcript(rendered: &RenderedTranscript) -> Result<()> {
 }
 
 fn print_provenance(source: &Conversation) {
-    println!("{}", describe_author(source));
-    println!("  {}", describe_shape(source));
-    println!("  Title:   {}", display_title(source));
+    ui::heading(&describe_author(source));
+    ui::indent(describe_shape(source));
+    ui::kv("Title", display_title(source));
 
     if let Some(topic) = opening_ask(source, TOPIC_MAX_CHARS) {
-        println!("  Asked for: {topic}");
+        ui::kv("Asked for", topic);
     }
     if let Some(files) = describe_files(source) {
-        println!("  Changed:   {files}");
+        ui::kv("Changed", files);
     }
     if !source.commit_shas.is_empty() {
-        println!("  Commits:   {}", short_shas(&source.commit_shas));
+        ui::kv("Commits", short_shas(&source.commit_shas));
     }
-    println!();
+    ui::blank();
 }
 
 fn describe_author(source: &Conversation) -> String {

@@ -15,6 +15,7 @@ use lineage_git::{
 
 use crate::context_cmd;
 use crate::events::EventLog;
+use crate::ui;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -48,7 +49,7 @@ pub fn run(repo_path: &Path, args: &DoctorArgs) -> Result<()> {
 
     let report = doctor_report_sections(repo_path, &args.sections, args.activity_limit)?;
     if args.json {
-        println!("{}", serde_json::to_string_pretty(&report)?);
+        ui::json(&report)?;
         return Ok(());
     }
     render_text(&report);
@@ -368,42 +369,57 @@ fn canonical(path: &Path) -> String {
 }
 
 fn render_text(report: &serde_json::Value) {
-    println!("Lineage doctor");
+    ui::heading("Lineage doctor");
 
     if let Some(setup) = report.get("setup") {
-        println!("setup");
-        println!("  git-lineage:     {}", str_of(&setup["binary_version"]));
-        println!("  git repo:        {}", setup["is_git_repo"]);
-        println!("  notes ref:       {}", setup["notes_ref_ok"]);
-        println!("  index ref:       {}", setup["index_ref_ok"]);
-        println!("  config ref:      {}", setup["config_ref_ok"]);
-        println!(
-            "  index schema:    session_files={} index_meta={} generation={}",
-            setup["index_schema"]["has_session_files"],
-            setup["index_schema"]["has_index_meta"],
-            setup["index_schema"]["generation"]
+        ui::blank();
+        ui::section("setup");
+        ui::kv_width("tribal", str_of(&setup["binary_version"]), 16);
+        ui::kv_width("git repo", &setup["is_git_repo"], 16);
+        ui::kv_width("notes ref", &setup["notes_ref_ok"], 16);
+        ui::kv_width("index ref", &setup["index_ref_ok"], 16);
+        ui::kv_width("config ref", &setup["config_ref_ok"], 16);
+        ui::kv_width(
+            "index schema",
+            format!(
+                "session_files={} index_meta={} generation={}",
+                setup["index_schema"]["has_session_files"],
+                setup["index_schema"]["has_index_meta"],
+                setup["index_schema"]["generation"]
+            ),
+            16,
         );
-        println!(
-            "  context hook:    settings={} registered={} loadable_from_session_root={}",
-            setup["hook_wiring"]["claude_settings_present"],
-            setup["hook_wiring"]["lineage_hook_registered"],
-            setup["hook_wiring"]["loadable_from_session_root"]
+        ui::kv_width(
+            "context hook",
+            format!(
+                "settings={} registered={} loadable_from_session_root={}",
+                setup["hook_wiring"]["claude_settings_present"],
+                setup["hook_wiring"]["lineage_hook_registered"],
+                setup["hook_wiring"]["loadable_from_session_root"]
+            ),
+            16,
         );
-        println!(
-            "  git hooks:       pre-commit={} post-commit={}",
-            setup["git_hooks"]["pre_commit_installed"], setup["git_hooks"]["post_commit_installed"]
+        ui::kv_width(
+            "git hooks",
+            format!(
+                "pre-commit={} post-commit={}",
+                setup["git_hooks"]["pre_commit_installed"],
+                setup["git_hooks"]["post_commit_installed"]
+            ),
+            16,
         );
         for warning in setup["warnings"].as_array().into_iter().flatten() {
-            println!("  warning: {}", str_of(warning));
+            ui::warn(str_of(warning));
         }
     }
 
     if let Some(capture) = report.get("capture") {
-        println!("capture");
-        println!("  imported:        {}", capture["sessions_imported"]);
+        ui::blank();
+        ui::section("capture");
+        ui::kv_width("imported", &capture["sessions_imported"], 16);
         if let Some(discovered) = capture["sessions_discovered"].as_object() {
             for (agent, count) in discovered {
-                println!("  discovered:      {agent} {count}");
+                ui::kv_width("discovered", format!("{agent} {count}"), 16);
             }
         }
         for m in capture["workspace_mismatches"]
@@ -411,60 +427,68 @@ fn render_text(report: &serde_json::Value) {
             .into_iter()
             .flatten()
         {
-            println!(
-                "  workspace mismatch: {} at {}",
+            ui::warn(format!(
+                "workspace mismatch: {} at {}",
                 str_of(&m["session_id"]),
                 str_of(&m["workspace_root"])
-            );
+            ));
         }
         let broken = capture["broken_sessions"].as_array().map_or(0, Vec::len);
         if broken > 0 {
-            println!("  broken sessions: {broken}");
+            ui::kv_width("broken sessions", broken, 16);
         }
         let missing = capture["missing_lfs_blobs"].as_array().map_or(0, Vec::len);
         if missing > 0 {
-            println!("  missing LFS:     {missing}");
+            ui::kv_width("missing LFS", missing, 16);
         }
     }
 
     if let Some(m) = report.get("materialization") {
-        println!("materialization");
-        println!(
-            "  funnel:          {} artifacts -> {} resolvable -> {} resolved -> {} line objects",
-            m["total_artifacts"], m["resolvable"], m["resolved"], m["line_objects"]
+        ui::blank();
+        ui::section("materialization");
+        ui::kv_width(
+            "funnel",
+            format!(
+                "{} artifacts -> {} resolvable -> {} resolved -> {} line objects",
+                m["total_artifacts"], m["resolvable"], m["resolved"], m["line_objects"]
+            ),
+            16,
         );
         if let Some(reasons) = m["failure_reasons"].as_object() {
             for (reason, count) in reasons {
                 if count.as_u64().unwrap_or(0) > 0 {
-                    println!("  loss:            {reason} {count}");
+                    ui::kv_width("loss", format!("{reason} {count}"), 16);
                 }
             }
         }
     }
 
     if let Some(coverage) = report.get("coverage") {
-        println!("coverage");
+        ui::blank();
+        ui::section("coverage");
         render_coverage(coverage);
     }
 
     if let Some(links) = report.get("links").and_then(|l| l.as_array()) {
-        println!("links");
+        ui::blank();
+        ui::section("links");
         for link in links {
             let sha = str_of(&link["commit_sha"]);
             let sessions = link["sessions"].as_array().map_or(0, Vec::len);
-            println!("  {}: {} session(s)", &sha[..sha.len().min(8)], sessions);
+            ui::row(&sha[..sha.len().min(8)], format!("{sessions} session(s)"));
         }
     }
 
     if let Some(activity) = report.get("activity").and_then(|a| a.as_array()) {
-        println!("activity");
+        ui::blank();
+        ui::section("activity");
         for entry in activity {
-            println!(
-                "  {}  {}  [{}]",
-                str_of(&entry["ts"]),
+            ui::indent(format!(
+                "{}  {}  [{}]",
+                ui::dim(str_of(&entry["ts"])),
                 str_of(&entry["op"]),
                 str_of(&entry["outcome"])
-            );
+            ));
         }
     }
 }
@@ -476,40 +500,56 @@ const HISTOGRAM_WIDTH: usize = 59;
 
 fn render_coverage(coverage: &serde_json::Value) {
     if let Some(error) = coverage.get("error").and_then(|e| e.as_str()) {
-        println!("  {error}");
+        ui::indent(error);
         return;
     }
 
     let commits_total = coverage["commits_total"].as_u64().unwrap_or(0);
     let files_total = coverage["files_total"].as_u64().unwrap_or(0);
     let lines_total = coverage["lines_total"].as_u64().unwrap_or(0);
-    println!(
-        "  commits with notes:  {}/{} ({})",
-        coverage["commits_with_notes"],
-        commits_total,
-        percent(
-            coverage["commits_with_notes"].as_u64().unwrap_or(0),
-            commits_total
-        )
+    ui::kv_width(
+        "commits with notes",
+        format!(
+            "{}/{} ({})",
+            coverage["commits_with_notes"],
+            commits_total,
+            percent(
+                coverage["commits_with_notes"].as_u64().unwrap_or(0),
+                commits_total
+            )
+        ),
+        22,
     );
-    println!(
-        "  files with any:      {}/{} ({})",
-        coverage["files_with_any"],
-        files_total,
-        percent(
-            coverage["files_with_any"].as_u64().unwrap_or(0),
-            files_total
-        )
+    ui::kv_width(
+        "files with any",
+        format!(
+            "{}/{} ({})",
+            coverage["files_with_any"],
+            files_total,
+            percent(
+                coverage["files_with_any"].as_u64().unwrap_or(0),
+                files_total
+            )
+        ),
+        22,
     );
-    println!(
-        "  lines covered:       {}/{} ({})",
-        coverage["lines_covered"],
-        lines_total,
-        percent(coverage["lines_covered"].as_u64().unwrap_or(0), lines_total)
+    ui::kv_width(
+        "lines covered",
+        format!(
+            "{}/{} ({})",
+            coverage["lines_covered"],
+            lines_total,
+            percent(coverage["lines_covered"].as_u64().unwrap_or(0), lines_total)
+        ),
+        22,
     );
-    println!(
-        "  depth (within covered files): {:.1}% mean",
-        coverage["depth_within_covered"].as_f64().unwrap_or(0.0) * 100.0
+    ui::kv_width(
+        "depth",
+        format!(
+            "{:.1}% mean (within covered files)",
+            coverage["depth_within_covered"].as_f64().unwrap_or(0.0) * 100.0
+        ),
+        22,
     );
 
     let counts: Vec<u64> = COVERAGE_BUCKETS
@@ -520,10 +560,15 @@ fn render_coverage(coverage: &serde_json::Value) {
     if peak == 0 {
         return;
     }
-    println!();
+    ui::blank();
     for (bucket, count) in COVERAGE_BUCKETS.iter().zip(counts.iter()) {
         let width = (*count as usize * HISTOGRAM_WIDTH).div_ceil(peak as usize);
-        println!("  {bucket:>6}:  {count:>4}  {}", "\u{2588}".repeat(width));
+        ui::indent(format!(
+            "{:>6}:  {:>4}  {}",
+            ui::dim(bucket),
+            count,
+            ui::accent("\u{2588}".repeat(width))
+        ));
     }
 }
 

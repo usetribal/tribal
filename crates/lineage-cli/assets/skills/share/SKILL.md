@@ -1,7 +1,7 @@
 ---
 name: share
 description: >-
-  Shares the current agent session as a public link with git-lineage. Use when
+  Shares the current agent session as a public link with tribal. Use when
   the user asks to share this session, share this conversation, send someone
   this chat, or get a share link.
 ---

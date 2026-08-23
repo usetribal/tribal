@@ -299,18 +299,21 @@ fn split_to_max(text: &str, max_chars: usize) -> Vec<String> {
 /// Human-readable label for a session in lists, pickers, and the web UI.
 ///
 /// Precedence: vendor summary → architecture summary (first line) → opening ask
-/// → id prefix. Callers that need the raw id keep using `conv.id`.
+/// → id prefix. Each candidate is stripped of harness markup (slash-command
+/// XML, `claude (…)` wrappers, timestamps) so a list is a list of topics, not
+/// of `<command-name>/model</command-name>`. Callers that need the raw id keep
+/// using `conv.id`.
 pub fn display_title(conv: &Conversation) -> String {
     if let Some(title) = metadata_line(conv, SESSION_SUMMARY_KEY) {
-        return title;
+        if let Some(clean) = usable_title(&title) {
+            return clean;
+        }
     }
     if let Some(summary) = metadata_line(conv, ARCHITECTURE_SUMMARY_KEY) {
-        return summary
-            .lines()
-            .next()
-            .unwrap_or(summary.as_str())
-            .trim()
-            .to_string();
+        let first = summary.lines().next().unwrap_or(summary.as_str());
+        if let Some(clean) = usable_title(first) {
+            return clean;
+        }
     }
     if let Some(ask) = opening_ask(conv, DEFAULT_OPENING_ASK_CHARS) {
         return ask;
@@ -325,14 +328,13 @@ pub fn opening_ask(conv: &Conversation, max_chars: usize) -> Option<String> {
         .turns
         .iter()
         .find(|turn| turn.role == Role::User && !turn.content.trim().is_empty())?;
-    Some(truncate_line(
-        &first
-            .content
-            .split_whitespace()
-            .collect::<Vec<_>>()
-            .join(" "),
-        max_chars,
-    ))
+    let flat = first
+        .content
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let clean = usable_title(&flat)?;
+    Some(truncate_line(&clean, max_chars))
 }
 
 /// Short lineage id for secondary labels (`019fa49d…`).
@@ -341,6 +343,87 @@ pub fn id_prefix(id: &str) -> String {
         return id.to_string();
     }
     format!("{}…", id.chars().take(ID_PREFIX_CHARS).collect::<String>())
+}
+
+/// Flatten harness chrome for a person: strip XML tags, unwrap `claude (…)`
+/// wrappers. A title that is only a slash command or a timestamp becomes
+/// empty so the caller can fall back.
+pub fn humanize_text(raw: &str) -> String {
+    usable_title(raw).unwrap_or_default()
+}
+
+/// Claude and Cursor stamp slash commands and chrome into the vendor summary.
+/// Those are facts about the harness, not a title a person can scan.
+fn usable_title(raw: &str) -> Option<String> {
+    let stripped = strip_markup(raw);
+    let unwrapped = unwrap_agent_wrapper(&stripped);
+    let collapsed = unwrapped.split_whitespace().collect::<Vec<_>>().join(" ");
+    if collapsed.is_empty() || is_noise_title(&collapsed) {
+        return None;
+    }
+    Some(collapsed)
+}
+
+fn strip_markup(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    let mut chars = raw.chars();
+    while let Some(c) = chars.next() {
+        if c == '<' {
+            for next in chars.by_ref() {
+                if next == '>' {
+                    break;
+                }
+            }
+            continue;
+        }
+        out.push(c);
+    }
+    out
+}
+
+fn unwrap_agent_wrapper(raw: &str) -> &str {
+    let Some(open) = raw.find(" (") else {
+        return raw;
+    };
+    if !raw.ends_with(')') {
+        return raw;
+    }
+    let prefix = &raw[..open];
+    if !is_agent_prefix(prefix) {
+        return raw;
+    }
+    &raw[open + 2..raw.len() - 1]
+}
+
+fn is_agent_prefix(prefix: &str) -> bool {
+    matches!(
+        prefix,
+        "claude" | "cursor" | "codex" | "copilot" | "gemini" | "chatgpt"
+    )
+}
+
+fn is_noise_title(title: &str) -> bool {
+    if title.starts_with('/') {
+        return true;
+    }
+    if title.eq_ignore_ascii_case("[image]") || title.eq_ignore_ascii_case("image") {
+        return true;
+    }
+    if title.eq_ignore_ascii_case("user_query") || title.eq_ignore_ascii_case("user query") {
+        return true;
+    }
+    if looks_like_timestamp(title) {
+        return true;
+    }
+    title.chars().all(|c| !c.is_alphanumeric())
+}
+
+fn looks_like_timestamp(title: &str) -> bool {
+    let has_clock = title.contains("UTC")
+        || title.contains("GMT")
+        || title.contains(" AM")
+        || title.contains(" PM");
+    has_clock && title.chars().any(|c| c.is_ascii_digit())
 }
 
 fn metadata_line(conv: &Conversation, key: &str) -> Option<String> {
@@ -489,6 +572,60 @@ mod tests {
             serde_json::Value::String("Lineage RLS audit".into()),
         );
         assert_eq!(display_title(&c), "Lineage RLS audit");
+    }
+
+    #[test]
+    fn display_title_unwraps_agent_and_strips_slash_command_xml() {
+        let mut c = Conversation::new(AgentKind::Claude, "/tmp");
+        c.metadata.insert(
+            SESSION_SUMMARY_KEY.into(),
+            serde_json::Value::String("claude (<command-message>prime</command-message>)".into()),
+        );
+        assert_eq!(display_title(&c), "prime");
+    }
+
+    #[test]
+    fn display_title_skips_slash_command_and_uses_the_opening_ask() {
+        let mut c = Conversation::new(AgentKind::Claude, "/tmp");
+        c.metadata.insert(
+            SESSION_SUMMARY_KEY.into(),
+            serde_json::Value::String("claude (<command-name>/model</command-name>)".into()),
+        );
+        c.turns.push(Turn {
+            id: LineageId::new(),
+            role: Role::User,
+            content: "Add RLS to the shares table".into(),
+            tool_calls: vec![],
+            model: None,
+            timestamp: None,
+            artifacts: vec![],
+        });
+        assert_eq!(display_title(&c), "Add RLS to the shares table");
+    }
+
+    #[test]
+    fn display_title_skips_cursor_chrome() {
+        let mut c = Conversation::new(AgentKind::Cursor, "/tmp");
+        c.id = LineageId::from("01KWQPW170F48DSH8M4988VZTT");
+        c.metadata.insert(
+            SESSION_SUMMARY_KEY.into(),
+            serde_json::Value::String(
+                "cursor (<timestamp>Friday, Jul 10, 2026, 11:28 PM (UTC+1)</timestamp>)".into(),
+            ),
+        );
+        assert_eq!(display_title(&c), "01KWQPW1…");
+    }
+
+    #[test]
+    fn humanize_text_strips_harness_chrome() {
+        assert_eq!(
+            humanize_text("<timestamp>Sunday, Aug 23, 2026, 6:02 PM (UTC+1)</timestamp>"),
+            ""
+        );
+        assert_eq!(
+            humanize_text("<user_query>apply consistent styling</user_query>"),
+            "apply consistent styling"
+        );
     }
 
     #[test]

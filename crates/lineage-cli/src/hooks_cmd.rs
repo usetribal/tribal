@@ -10,6 +10,7 @@ use lineage_git::{link_recent_sessions_to_head, open_repo};
 use lineage_search::LineageIndex;
 
 use crate::events::{EventLog, Outcome};
+use crate::ui;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -40,9 +41,9 @@ fn install_hook_impl(repo_path: &Path, force: bool, verbose: bool) -> Result<()>
     );
 
     if verbose {
-        println!("installed lineage hooks:");
-        println!("  pre-commit  (import agent sessions)");
-        println!("  post-commit (link sessions to new commit)");
+        ui::action("installed lineage hooks:");
+        ui::row("pre-commit", "(import agent sessions)");
+        ui::row("post-commit", "(link sessions to new commit)");
     }
     Ok(())
 }
@@ -61,9 +62,9 @@ pub fn uninstall_hook(repo_path: &Path) -> Result<()> {
             || content.contains("Lineage post-commit hook")
         {
             fs::remove_file(&path)?;
-            println!("removed {name}");
+            ui::action(format!("removed {name}"));
         } else {
-            println!("skipped {name} (not installed by lineage)");
+            ui::action(format!("skipped {name} (not installed by lineage)"));
         }
     }
     Ok(())

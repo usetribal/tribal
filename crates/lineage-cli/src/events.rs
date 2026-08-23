@@ -1,5 +1,5 @@
 //! Append-only local event log at `.git/lineage/events.jsonl` — the one place
-//! to look for what `git-lineage` did (spec: `specs/diagnostics-v0.md`).
+//! to look for what `tribal` did (spec: `specs/diagnostics-v0.md`).
 //!
 //! Best-effort by contract: a failed write becomes a `tracing` warning and
 //! never an `Err` to the operation being recorded — the same fail-open posture

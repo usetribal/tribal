@@ -18,18 +18,19 @@ description: >-
 ## Local gates
 
 ```bash
-make check              # fmt, clippy, test, doc, typos, markdown, vscode
+make check              # fmt, clippy, CLI ui lint, test, doc, typos, markdown, vscode
 ./scripts/coverage.sh   # >=80% line coverage (main.rs excluded)
 make msrv               # Rust 1.86
 ```
 
-Individual targets: `make fmt`, `make clippy`, `make test`, `make vscode-lint`.
+Individual targets: `make fmt`, `make clippy`, `make cli-ui`, `make test`, `make vscode-lint`.
 
 Clippy must pass with `--all-targets` and `-D warnings`.
 
 ## Code style
 
 - Match the surrounding code's naming, error handling (`thiserror`), and crate boundaries.
+- **CLI stdout** — human-facing `tribal` output goes through `crates/lineage-cli/src/ui.rs`. Do not `println!` a new layout or add a second colour crate. See the `lineage-cli-command` skill.
 - **Comments** — explain *why*, in plain language, as close as possible to the code they describe. Prefer a clear sentence over terse "comment golf." Keep a comment close to the lines it explains, not floating in a docstring. Do not narrate an approach that is not in the code (a discarded alternative) unless a future maintainer would otherwise undo the choice.
 
 ## Crate map
@@ -43,7 +44,7 @@ Clippy must pass with `--all-targets` and `-D warnings`.
 | `crates/lineage-adapters` | Vendor adapters — see `add-agent-adapter` skill |
 | `crates/lineage-store` | Blob/filesystem storage |
 | `crates/lineage-search` | Rebuildable SQLite FTS index |
-| `crates/lineage-cli` | `git-lineage` — see `lineage-cli-command` skill |
+| `crates/lineage-cli` | `tribal` — see `lineage-cli-command` skill |
 | `crates/lineage-mcp` | MCP server — see `lineage-mcp-server` skill |
 | `extensions/vscode/` | VS Code UI — see `vscode-extension-dev` skill |
 | `specs/` | Schema contracts (source of truth) |
@@ -54,7 +55,7 @@ Contributor skills live in `.cursor/skills/`, `.agents/skills/`, and `.claude/sk
 
 ## PR checklist
 
-- [ ] `make check` and `./scripts/coverage.sh` pass
+- [ ] `make check` and `./scripts/coverage.sh` pass (`make cli-ui` is inside `make check`)
 - [ ] Comments explain *why* in plain language, next to the code, with no narration of discarded approaches
 - [ ] `CHANGELOG.md` updated under `[Unreleased]` if user-facing
 - [ ] `specs/` updated if schema/types changed

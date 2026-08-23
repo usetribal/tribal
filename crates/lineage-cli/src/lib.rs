@@ -1,3 +1,8 @@
+//! Human-facing stdout is owned by [`ui`]. Command modules print through it;
+//! `println!` and Debug formatting are denied here so a new command cannot invent
+//! a second layout language.
+#![deny(clippy::print_stdout, clippy::use_debug)]
+
 pub mod auth;
 pub mod brief;
 pub mod commands;
@@ -17,4 +22,5 @@ pub mod session_pick;
 pub mod share_cmd;
 pub mod share_fork;
 pub mod skill_cmd;
+pub mod ui;
 pub mod update_check;

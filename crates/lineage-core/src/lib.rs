@@ -13,9 +13,9 @@ pub use config::{
 };
 pub use conversation_util::{
     conversation_modified_code, display_title, enriched_indexable_body, files_touched,
-    files_written, generate_architecture_summary, id_prefix, merge_commit_shas, merge_ended_at,
-    opening_ask, session_chunks, turn_indexable_text, SessionChunk, ARCHITECTURE_SUMMARY_KEY,
-    DEFAULT_CHUNK_MAX_CHARS, SESSION_SUMMARY_KEY, SOURCE_MTIME_KEY,
+    files_written, generate_architecture_summary, humanize_text, id_prefix, merge_commit_shas,
+    merge_ended_at, opening_ask, session_chunks, turn_indexable_text, SessionChunk,
+    ARCHITECTURE_SUMMARY_KEY, DEFAULT_CHUNK_MAX_CHARS, SESSION_SUMMARY_KEY, SOURCE_MTIME_KEY,
 };
 pub use error::{LineageError, Result};
 pub use ids::{derive_line_object_id, derive_session_id, LineageId};
