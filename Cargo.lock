@@ -968,7 +968,7 @@ dependencies = [
 
 [[package]]
 name = "lineage-adapters"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "chrono",
  "glob",
@@ -983,7 +983,7 @@ dependencies = [
 
 [[package]]
 name = "lineage-agent"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "chrono",
  "lineage-adapters",
@@ -996,7 +996,7 @@ dependencies = [
 
 [[package]]
 name = "lineage-cli"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "chrono",
  "clap",
@@ -1024,7 +1024,7 @@ dependencies = [
 
 [[package]]
 name = "lineage-core"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "chrono",
  "schemars",
@@ -1037,7 +1037,7 @@ dependencies = [
 
 [[package]]
 name = "lineage-embed"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "safetensors",
  "tempfile",
@@ -1048,7 +1048,7 @@ dependencies = [
 
 [[package]]
 name = "lineage-git"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -1066,7 +1066,7 @@ dependencies = [
 
 [[package]]
 name = "lineage-mcp"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "lineage-cli",
  "lineage-core",
@@ -1084,7 +1084,7 @@ dependencies = [
 
 [[package]]
 name = "lineage-policy"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "aho-corasick",
  "lineage-core",
@@ -1096,7 +1096,7 @@ dependencies = [
 
 [[package]]
 name = "lineage-retrieval"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "git2",
  "lineage-core",
@@ -1112,7 +1112,7 @@ dependencies = [
 
 [[package]]
 name = "lineage-search"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "git2",
  "lineage-core",
@@ -1125,7 +1125,7 @@ dependencies = [
 
 [[package]]
 name = "lineage-store"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "git2",
  "lineage-core",

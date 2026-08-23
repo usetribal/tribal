@@ -107,10 +107,34 @@ Tests that drive `HOME` must serialise on a lock and restore it: the variable is
 process-global, and a leak sends another test at the developer's real
 configuration.
 
+## When they run
+
+Migrations run **by themselves**, on the first command after a new binary
+replaces an older one. A user is never expected to know that `upgrade` exists,
+or to remember to run it — the release that needs a migration applies it and
+says what it did.
+
+What makes that cheap enough to sit in front of every command is a version stamp
+in the config directory (`version.json`). The steady state is one string compare
+between it and the running binary; only when they differ does the runner ask the
+detectors, which is the expensive part — `0001`'s detectors open a git config in
+every repository the machine has used. A migration can only become pending when
+that version changes, so nothing is missed by not looking more often.
+
+The stamp is written **after** migrations run, never before. Writing it first
+would create the config directory, and `0001` moves the old directory only when
+the new one does not yet exist — an eager stamp strands the user's login at the
+old path permanently. A machine with no stamp is not assumed to be a fresh
+install: it runs the migrations, because the detectors already answer "is there
+old state here?" directly, and answer "no" on a genuinely new machine.
+
+What makes it *safe* to do unasked is what already made `upgrade` safe to re-run
+by hand: every step is idempotent, and an interrupted run resumes.
+
 ## Escape hatches
 
 - `tribal upgrade --dry-run` — report what would run, change nothing
-- `tribal upgrade` — apply; safe to re-run at any point
+- `tribal upgrade` — apply by hand; the manual form of what runs automatically
 - `tribal rebuild` — re-derive index and derived state from stored sessions
 
 State that cannot be converted is re-derivable: sessions live in

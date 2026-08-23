@@ -36,6 +36,9 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 /// Where the applied-step record lives, inside the config directory.
 const RECORD_FILE: &str = "migrations.json";
 
+/// Where the last version to run on this machine is stamped.
+const VERSION_STAMP_FILE: &str = "version.json";
+
 /// What a step did, for the report `upgrade` prints.
 #[derive(Debug, PartialEq, Eq)]
 pub enum Outcome {
@@ -222,6 +225,102 @@ fn repos_to_stamp(context: &Context) -> Vec<PathBuf> {
         }
     }
     out
+}
+
+// ---------------------------------------------------------------------------
+// Running migrations without being asked
+// ---------------------------------------------------------------------------
+
+/// The version that last ran on this machine.
+///
+/// This exists to keep the automatic check cheap. Asking [`pending`] whether
+/// there is work opens a git config in every registered repository, which is
+/// far too much to do on every invocation of every command. The version a
+/// binary was built as is a fact it already knows, so comparing it against the
+/// last one to run is a string compare — and a migration can only ever become
+/// pending when that string changes.
+#[derive(Debug, Serialize, Deserialize)]
+struct VersionStamp {
+    version: String,
+}
+
+fn version_stamp_path() -> Result<PathBuf> {
+    Ok(crate::auth::config_dir()?.join(VERSION_STAMP_FILE))
+}
+
+fn load_version_stamp() -> Option<String> {
+    let path = version_stamp_path().ok()?;
+    let text = fs::read_to_string(&path).ok()?;
+    let stamp: VersionStamp = serde_json::from_str(&text).ok()?;
+    Some(stamp.version)
+}
+
+fn save_version_stamp(version: &str) -> Result<()> {
+    let path = version_stamp_path()?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let stamp = VersionStamp {
+        version: version.to_string(),
+    };
+    fs::write(&path, serde_json::to_string_pretty(&stamp)?)?;
+    Ok(())
+}
+
+/// What [`run_pending_for_version`] did, so the caller can report it.
+pub enum AutoUpgrade {
+    /// The stamp matched: this version has run here before.
+    UpToDate,
+    /// The version changed and migrations were applied.
+    Upgraded {
+        from: String,
+        to: String,
+        reports: Vec<StepReport>,
+    },
+}
+
+/// Apply any migrations this version introduced, if it has not run here before.
+///
+/// Called once per invocation from the dispatcher so a user never has to know
+/// `upgrade` exists: the release that needs a migration runs it the first time
+/// any command is used. Safe to do automatically only because every step is
+/// idempotent and the run is resumable — the same properties that make
+/// `upgrade` safe to re-run by hand.
+///
+/// A machine with no stamp has never run a version that writes one, which
+/// covers both a fresh install and every release before this check existed.
+/// Those are indistinguishable here and must not be told apart by guessing: the
+/// unstamped machine runs the migrations and is stamped afterwards, because
+/// `0001`'s detectors already answer "is there old state here?" directly, and
+/// answer it with "no" on a fresh install.
+///
+/// The stamp is written only after migrations have run, on every path. Writing
+/// it first would create the config directory, and `0001` moves the old
+/// directory only when the new one does not yet exist — so an eager stamp would
+/// strand the user's login at the old path permanently.
+pub fn run_pending_for_version(context: &Context, current: &str) -> Result<AutoUpgrade> {
+    let previous = load_version_stamp();
+    if previous.as_deref() == Some(current) {
+        return Ok(AutoUpgrade::UpToDate);
+    }
+
+    let reports = apply_pending(context)?;
+    // Stamped only after the run, so an upgrade that fails partway is retried
+    // on the next command rather than being recorded as done.
+    save_version_stamp(current)?;
+
+    // A machine seeing this for the first time has nothing to report: either it
+    // is a fresh install, or its migrations were already applied by an explicit
+    // `upgrade`. Announcing an upgrade "from" a version we never saw would be
+    // an invention.
+    let Some(previous) = previous else {
+        return Ok(AutoUpgrade::UpToDate);
+    };
+    Ok(AutoUpgrade::Upgraded {
+        from: previous,
+        to: current.to_string(),
+        reports,
+    })
 }
 
 // ---------------------------------------------------------------------------

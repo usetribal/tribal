@@ -17,3 +17,4 @@ pub mod session_pick;
 pub mod share_cmd;
 pub mod share_fork;
 pub mod skill_cmd;
+pub mod update_check;

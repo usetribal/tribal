@@ -347,3 +347,81 @@ fn the_cached_server_repo_id_moves_to_the_new_key() {
         "the retired key is cleared so no reader can pick the stale one"
     );
 }
+
+// --- Running without being asked -------------------------------------------
+
+/// A fresh install. The detectors find no old state, so nothing is converted
+/// and there is no upgrade to announce — but the stamp is written, so the next
+/// command takes the cheap path.
+#[test]
+fn a_first_run_on_a_clean_machine_reports_nothing_and_stamps() {
+    let (_home, path) = HomeGuard::new();
+
+    let outcome = migrate::run_pending_for_version(&context(), "0.6.0").unwrap();
+
+    assert!(matches!(outcome, migrate::AutoUpgrade::UpToDate));
+    assert!(
+        migrate::pending(&context()).unwrap().is_empty(),
+        "a machine with no old state has nothing pending after a first run"
+    );
+    assert!(new_config(&path).join("version.json").exists());
+}
+
+/// The upgrade that matters most: a user on a release older than the stamp
+/// itself. There is no stamp to compare against, so the migrations must run on
+/// the strength of the detectors alone — and the login must survive.
+#[test]
+fn an_unstamped_machine_still_migrates_its_old_state() {
+    let (_home, path) = HomeGuard::new();
+    seed_legacy_config(&path);
+
+    migrate::run_pending_for_version(&context(), "0.6.0").unwrap();
+
+    assert!(
+        new_config(&path).join("credentials.json").exists(),
+        "stamping must not create the config directory before 0001 can move it"
+    );
+    assert!(!legacy_config(&path).exists());
+}
+
+/// The steady state, and the reason the check is cheap: the same version
+/// running again does no work at all.
+#[test]
+fn the_same_version_running_again_is_up_to_date() {
+    let (_home, _path) = HomeGuard::new();
+
+    migrate::run_pending_for_version(&context(), "0.6.0").unwrap();
+    let second = migrate::run_pending_for_version(&context(), "0.6.0").unwrap();
+
+    assert!(matches!(second, migrate::AutoUpgrade::UpToDate));
+}
+
+/// The upgrade a user never asks for: a new binary meets a machine that ran an
+/// older one, and says so on the first command they happen to run.
+#[test]
+fn a_new_version_applies_pending_migrations_and_reports_the_move() {
+    let (_home, _path) = HomeGuard::new();
+    migrate::run_pending_for_version(&context(), "0.5.0").unwrap();
+
+    let outcome = migrate::run_pending_for_version(&context(), "0.6.0").unwrap();
+
+    let migrate::AutoUpgrade::Upgraded { from, to, .. } = outcome else {
+        panic!("a version change must report the upgrade it performed");
+    };
+    assert_eq!(from, "0.5.0");
+    assert_eq!(to, "0.6.0");
+}
+
+/// A version bump that carried no migration still stamps, so the expensive
+/// detection runs once rather than on every command from then on.
+#[test]
+fn a_version_change_with_nothing_to_migrate_still_stamps() {
+    let (_home, _path) = HomeGuard::new();
+    migrate::run_pending_for_version(&context(), "0.5.0").unwrap();
+
+    let outcome = migrate::run_pending_for_version(&context(), "0.6.0").unwrap();
+    assert!(matches!(outcome, migrate::AutoUpgrade::Upgraded { .. }));
+
+    let third = migrate::run_pending_for_version(&context(), "0.6.0").unwrap();
+    assert!(matches!(third, migrate::AutoUpgrade::UpToDate));
+}

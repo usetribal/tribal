@@ -2,8 +2,8 @@ use std::path::PathBuf;
 
 use chrono::Utc;
 use lineage_cli::{
-    commands, context_cmd, digest, doctor_cmd, fork_cmd, hooks_cmd, init_cmd, pull_cmd,
-    repo_registry, retrieval_cmd, session_pick, share_cmd, skill_cmd,
+    commands, context_cmd, digest, doctor_cmd, fork_cmd, hooks_cmd, init_cmd, migrate, pull_cmd,
+    repo_registry, retrieval_cmd, session_pick, share_cmd, skill_cmd, update_check,
 };
 use lineage_retrieval::{DEFAULT_AROUND_RADIUS, DEFAULT_TRAVERSAL_LIMIT};
 use std::process::ExitCode;
@@ -691,6 +691,9 @@ fn main() -> ExitCode {
     // contract: a machine-level cache must never fail a repository command.
     repo_registry::record(&repo_path, Utc::now());
 
+    // Before the command, so it runs against state this version understands.
+    auto_upgrade(&repo_path);
+
     let result = match command {
         Commands::Upgrade { dry_run } => commands::upgrade(&repo_path, dry_run),
         Commands::Doctor {
@@ -958,10 +961,64 @@ fn main() -> ExitCode {
     };
 
     match result {
-        Ok(()) => ExitCode::SUCCESS,
+        Ok(()) => {
+            print_update_notice();
+            ExitCode::SUCCESS
+        }
         Err(e) => {
             eprintln!("error: {e}");
             ExitCode::FAILURE
         }
+    }
+}
+
+/// Apply migrations this version introduced, reporting only when there were any.
+///
+/// Best-effort by contract, like the repo registry: a machine whose config
+/// directory cannot be read or written must still be able to run commands, so a
+/// failure here warns and the command proceeds. The alternative — refusing to
+/// run until an upgrade succeeds — turns a cache problem into an outage.
+fn auto_upgrade(repo_path: &std::path::Path) {
+    let context = migrate::Context {
+        repo_path: lineage_git::open_repo(repo_path)
+            .ok()
+            .map(|_| repo_path.to_path_buf()),
+    };
+
+    let outcome = match migrate::run_pending_for_version(&context, env!("CARGO_PKG_VERSION")) {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            tracing::warn!("automatic upgrade failed: {error}");
+            return;
+        }
+    };
+
+    let migrate::AutoUpgrade::Upgraded { from, to, reports } = outcome else {
+        return;
+    };
+    println!("upgrading from v{from} to v{to}...");
+    for report in &reports {
+        // Only what actually changed: a run of "nothing to do" steps is the
+        // common case on a version bump that carried no migration, and printing
+        // it would make every upgrade look like it did work.
+        if let migrate::Outcome::Applied(detail) = &report.outcome {
+            println!("  {}  {detail}", report.step);
+        }
+    }
+}
+
+/// Tell the user about a newer release, after the command's own output.
+///
+/// Skipped for `--json`, read from argv because it is a flag on individual
+/// subcommands rather than something the dispatcher parses. A notice on stdout
+/// would make output that a caller parses invalid, which is a worse failure
+/// than never mentioning the update. (`--discover` needs no check here: it is
+/// answered and returned before this point.)
+fn print_update_notice() {
+    if std::env::args().any(|arg| arg == "--json") {
+        return;
+    }
+    if let Some(notice) = update_check::notice(env!("CARGO_PKG_VERSION"), Utc::now()) {
+        println!("{notice}");
     }
 }

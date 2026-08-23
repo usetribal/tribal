@@ -35,11 +35,14 @@ Tribal closes that gap with **local, in-repo memory**: agent context lives in yo
 ## Install
 
 ```bash
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/usetribal/tribal/releases/latest/download/lineage-cli-installer.sh | sh
+curl -fsSL https://usetribal.io/install.sh | bash
 ```
 
 Linux (x86_64 and arm64) and macOS (Intel and Apple silicon). The Linux builds
 are static, so they run without anything installed alongside them.
+
+The same command updates an existing install to the newest release: it resolves
+to the current version each time it runs, and installs over what is there.
 
 Then, in your project root:
 

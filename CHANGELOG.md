@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-23
+
+### Added
+
+- **The CLI tells you when a newer release exists.** A one-line notice after the command's own output, naming the version you are on, the one available, and the single command that installs it — `curl -fsSL https://usetribal.io/install.sh | bash`, which resolves to the newest release each time it runs and installs over what is there. The check is cached for 15 minutes, so the network is touched at most once a quarter-hour of active use rather than once per command, and every failure — offline, rate-limited, an unexpected body — is silence rather than an error, because a version check must never fail the command it is attached to. Suppressed off a terminal and under `--json`, so scripts and CI output stay clean, and switched off entirely with `TRIBAL_NO_UPDATE_CHECK`
+
+### Changed
+
+- **Migrations now run by themselves, so an upgrade needs nothing remembered.** A new binary meeting state written by an older one converts it on the first command you run, printing `upgrading from v0.5.0 to v0.6.0...` and what it changed. `upgrade` still exists and still does the same work — it is now the manual form of something that happens anyway. The steady-state cost is one string compare against the version that last ran here: the detectors that open a git config in every registered repository run only when that version actually changes, not on every invocation. Safe to do without being asked for the same reason `upgrade` is safe to re-run: every step is idempotent, and an interrupted run resumes rather than repeating
+
 ## [0.5.0] - 2026-08-23
 
 ### Changed
