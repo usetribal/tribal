@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-23
+
 ### Changed
 
 - **The CLI is now `tribal`, invoked directly rather than as a git subcommand.** `git lineage <command>` becomes `tribal <command>`. The binary is renamed, so the old invocation stops working entirely — git resolves `git lineage` by finding a `git-lineage` on `PATH`, and there is no longer one. Every command, flag, and output is otherwise unchanged. Names that travel between machines deliberately do **not** change: `refs/lineage/*`, `refs/notes/lineage`, and `.lineage/media` keep the `lineage` name, because they are pushed to remotes and shared between teammates — renaming them would rewrite history in every clone and break objects already pushed
@@ -315,7 +317,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Schema specifications v0 (conversation, line-object, git-notes)
 - CI workflow (test, clippy, fmt)
 
-[Unreleased]: https://github.com/usetribal/tribal/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/usetribal/tribal/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/usetribal/tribal/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/usetribal/tribal/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/usetribal/tribal/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/usetribal/tribal/compare/v0.1.0...v0.2.0

@@ -292,6 +292,13 @@ fn apply_config_dir(_: &Context) -> Result<Outcome> {
     )))
 }
 
+fn repository_count(count: usize) -> String {
+    if count == 1 {
+        return "1 repository".into();
+    }
+    format!("{count} repositories")
+}
+
 const LEGACY_SERVER_REPO_ID_KEY: &str = "lineage.serverRepoId";
 
 fn detect_git_config(context: &Context) -> Result<bool> {
@@ -329,9 +336,8 @@ fn apply_git_config(context: &Context) -> Result<Outcome> {
         return Ok(Outcome::Skipped("no repository carried the old key".into()));
     }
     Ok(Outcome::Applied(format!(
-        "moved the server repo id key in {} repositor{}",
-        moved.len(),
-        if moved.len() == 1 { "y" } else { "ies" }
+        "moved the server repo id key in {}",
+        repository_count(moved.len())
     )))
 }
 
@@ -391,8 +397,8 @@ fn apply_hooks(context: &Context) -> Result<Outcome> {
         ));
     }
     Ok(Outcome::Applied(format!(
-        "rewrote hooks in {stamped} repositor{}",
-        if stamped == 1 { "y" } else { "ies" }
+        "rewrote hooks in {}",
+        repository_count(stamped)
     )))
 }
 
@@ -453,8 +459,8 @@ fn apply_skills(context: &Context) -> Result<Outcome> {
         ));
     }
     Ok(Outcome::Applied(format!(
-        "rewrote agent skills in {stamped} repositor{}",
-        if stamped == 1 { "y" } else { "ies" }
+        "rewrote agent skills in {}",
+        repository_count(stamped)
     )))
 }
 
