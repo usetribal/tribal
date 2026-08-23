@@ -1,4 +1,4 @@
-//! `git lineage share` end to end against a stub server.
+//! `tribal share` end to end against a stub server.
 //!
 //! The transport is a trait, so these tests exercise the real flow — resolve
 //! which session, re-import it, apply the sync policy, assemble the batch, mint

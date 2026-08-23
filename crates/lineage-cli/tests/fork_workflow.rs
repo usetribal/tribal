@@ -1,4 +1,4 @@
-//! `git lineage fork` end to end: resolve from lineage refs, materialize a
+//! `tribal fork` end to end: resolve from lineage refs, materialize a
 //! vendor transcript, record the edge, print what to run.
 //!
 //! Run through the built binary rather than the library. The adapter reads
@@ -115,7 +115,7 @@ fn head_sha(dir: &Path) -> String {
 fn run_fork(dir: &Path, home: &Path, session_id: &str, extra: &[&str]) -> Output {
     let mut args = vec!["--repo", dir.to_str().unwrap(), "fork", session_id];
     args.extend_from_slice(extra);
-    Command::new(env!("CARGO_BIN_EXE_git-lineage"))
+    Command::new(env!("CARGO_BIN_EXE_tribal"))
         .args(&args)
         .env("HOME", home)
         .output()
@@ -292,7 +292,7 @@ fn an_unknown_session_id_says_what_to_do_next() {
     assert!(!output.status.success());
     let stderr = String::from_utf8(output.stderr).unwrap();
     assert!(stderr.contains("01NOTASESSION"), "{stderr}");
-    assert!(stderr.contains("git lineage list"), "{stderr}");
+    assert!(stderr.contains("tribal list"), "{stderr}");
 }
 
 /// A session can render to nothing legitimately — all system notes, or content
@@ -322,7 +322,7 @@ fn a_session_with_nothing_replayable_refuses_before_writing() {
     assert!(!output.status.success());
     let stderr = String::from_utf8(output.stderr).unwrap();
     assert!(stderr.contains("nothing to continue"), "{stderr}");
-    assert!(stderr.contains("git lineage show"), "{stderr}");
+    assert!(stderr.contains("tribal show"), "{stderr}");
     assert!(claude_transcripts(home.path()).is_empty());
 }
 

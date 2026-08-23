@@ -1,4 +1,4 @@
-//! Terminal-facing intent retrieval: `git lineage context query "<text>"`.
+//! Terminal-facing intent retrieval: `tribal context query "<text>"`.
 //!
 //! Runs the retrieval spine (`lineage-retrieval`) against the repo's session
 //! index and prints ranked session evidence. All three legs — lexical, dense,
@@ -327,7 +327,7 @@ fn print_retrieval_with_affordances(
     }
 }
 
-/// The affordance footer: runnable `git lineage` commands for the graph edges
+/// The affordance footer: runnable `tribal` commands for the graph edges
 /// adjacent to this evidence (spec: Verbatim-turn digest — affordance pointers).
 fn print_affordances(evidence: &Evidence, anchor_file: Option<&str>) {
     for cmd in affordances_for(evidence, anchor_file) {
@@ -335,7 +335,7 @@ fn print_affordances(evidence: &Evidence, anchor_file: Option<&str>) {
     }
 }
 
-/// `git lineage context search-within <session-id>... <text>` — scoped FTS: the
+/// `tribal context search-within <session-id>... <text>` — scoped FTS: the
 /// repair for "right sessions, wrong turns".
 pub fn search_within(
     repo_path: &Path,
@@ -359,7 +359,7 @@ pub fn search_within(
     Ok(())
 }
 
-/// `git lineage context around <turn-id>` — the turns either side of one turn,
+/// `tribal context around <turn-id>` — the turns either side of one turn,
 /// in conversation order: the repair for "right turn, missing its argument".
 pub fn around(repo_path: &Path, turn_id: &str, radius: u32, limit: usize) -> Result<()> {
     let repo = open_repo(repo_path)?;
@@ -370,7 +370,7 @@ pub fn around(repo_path: &Path, turn_id: &str, radius: u32, limit: usize) -> Res
     Ok(())
 }
 
-/// `git lineage context produced-by <turn-id>` — the code a turn produced. Refs
+/// `tribal context produced-by <turn-id>` — the code a turn produced. Refs
 /// only, so no privacy gate is needed and none is claimed.
 pub fn produced_by(repo_path: &Path, turn_id: &str, limit: usize) -> Result<()> {
     let repo = open_repo(repo_path)?;
@@ -398,7 +398,7 @@ pub fn produced_by(repo_path: &Path, turn_id: &str, limit: usize) -> Result<()> 
     Ok(())
 }
 
-/// `git lineage context sessions-for-commit <sha>` — the sessions behind a
+/// `tribal context sessions-for-commit <sha>` — the sessions behind a
 /// commit: the one verb whose entry point is ordinary git work.
 pub fn sessions_for_commit_cmd(repo_path: &Path, commit_sha: &str, limit: usize) -> Result<()> {
     let repo = open_repo(repo_path)?;
@@ -497,7 +497,7 @@ pub fn salience_report(repo_path: &Path) -> Result<()> {
     }
 
     if total_turns == 0 {
-        println!("no indexed sessions — run `git lineage import` first");
+        println!("no indexed sessions — run `tribal import` first");
         return Ok(());
     }
 

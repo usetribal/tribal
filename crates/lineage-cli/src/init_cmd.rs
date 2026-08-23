@@ -103,7 +103,7 @@ pub fn init(repo_path: &Path, options: InitOptions) -> Result<()> {
         run_non_interactive(repo_path, &options)
     } else if !stdin_is_tty() {
         Err(
-            "stdin is not a TTY; use --yes for non-interactive init (see: git lineage init --help)"
+            "stdin is not a TTY; use --yes for non-interactive init (see: tribal init --help)"
                 .into(),
         )
     } else {
@@ -150,7 +150,7 @@ fn run_non_interactive(repo_path: &Path, options: &InitOptions) -> Result<()> {
     let hooks_installed = install_hooks_with_retry(repo_path, options.force_hooks, false)?;
     install_claude_agent_hook_for_targets(repo_path, skill_targets.as_deref(), false)?;
     if !options.no_import {
-        println!("running: git lineage import --agent all --incremental");
+        println!("running: tribal import --agent all --incremental");
         commands::import(repo_path, &["all".into()], None, true, true)?;
     } else {
         println!("initial import: skipped");
@@ -425,9 +425,9 @@ fn print_footer() {
     draw_box(
         &[
             "Done",
-            "git lineage list",
-            "git lineage blame <file>:<line>",
-            "git lineage context query \"<question>\"",
+            "tribal list",
+            "tribal blame <file>:<line>",
+            "tribal context query \"<question>\"",
         ],
         40,
     );

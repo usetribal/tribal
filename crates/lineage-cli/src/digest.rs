@@ -6,7 +6,7 @@
 //! testable without constructing hook payloads.
 //!
 //! Relation → command rendering lives here rather than in `lineage-retrieval`:
-//! MCP consumes that crate and never shells out, so `git lineage …` strings must
+//! MCP consumes that crate and never shells out, so `tribal …` strings must
 //! not be visible to it. The registry names relations; each surface spells them.
 
 use lineage_retrieval::{verb_for_relation, Evidence, Retrieval, Strength, VERBS};
@@ -107,7 +107,7 @@ fn render_entry(evidence: &Evidence) -> String {
 fn verb_footer() -> String {
     let verbs: Vec<&str> = VERBS.iter().map(|verb| verb.cli).collect();
     format!(
-        "Follow a handle with: git lineage context <{}> <handle>\n",
+        "Follow a handle with: tribal context <{}> <handle>\n",
         verbs.join("|"),
     )
 }
@@ -157,11 +157,11 @@ fn render_vocabulary(continuation: Continuation) -> String {
     );
     for verb in VERBS {
         text.push_str(&format!(
-            "  git lineage context {:<20} {}\n",
+            "  tribal context {:<20} {}\n",
             verb.cli, verb.summary,
         ));
     }
-    text.push_str("  git lineage context query \"<question>\"  search every session by intent\n");
+    text.push_str("  tribal context query \"<question>\"  search every session by intent\n");
     if continuation == Continuation::Offered {
         text.push_str(FORK_CAPABILITY);
     }
@@ -183,8 +183,8 @@ fn render_vocabulary(continuation: Continuation) -> String {
 /// in the first place.
 const FORK_CAPABILITY: &str = "\
 Sessions can also be continued rather than only read:
-  git lineage fork <session>          carry on a session in your agent
-  git lineage fork <session> --brief  print a context block instead of continuing it
+  tribal fork <session>          carry on a session in your agent
+  tribal fork <session> --brief  print a context block instead of continuing it
 A session this machine holds is reopened as itself; any other is written out as a
 new session carrying its context. `--brief` writes nothing and prints a
 self-contained block — whose session it was, what they asked for, the
@@ -218,7 +218,7 @@ pub fn parse_handle(handle: &str) -> (&str, Option<&str>) {
 }
 
 /// The affordance relations this evidence entry can honour, rendered as runnable
-/// `git lineage` commands (spec: Verbatim-turn digest — a selector MUST omit
+/// `tribal` commands (spec: Verbatim-turn digest — a selector MUST omit
 /// relations it cannot honour).
 ///
 /// `session` is always available and is not a traversal verb — the whole
@@ -226,16 +226,12 @@ pub fn parse_handle(handle: &str) -> (&str, Option<&str>) {
 /// folds into it. The rest are looked up in the verb registry, so a verb the
 /// installed CLI does not have cannot be named here.
 pub fn affordances_for(evidence: &Evidence, anchor_file: Option<&str>) -> Vec<String> {
-    let mut lines = vec![format!("git lineage show {}", evidence.session_id.as_str())];
+    let mut lines = vec![format!("tribal show {}", evidence.session_id.as_str())];
     if let (Some(file), Some([start, _])) = (anchor_file, evidence.line_ranges.first()) {
-        lines.push(format!("git lineage context chain {file}:{start}"));
+        lines.push(format!("tribal context chain {file}:{start}"));
     }
     if let (Some(turn_id), Some(verb)) = (&evidence.turn_id, verb_for_relation("produced-by")) {
-        lines.push(format!(
-            "git lineage context {} {}",
-            verb.cli,
-            turn_id.as_str()
-        ));
+        lines.push(format!("tribal context {} {}", verb.cli, turn_id.as_str()));
     }
     lines.truncate(MAX_AFFORDANCES);
     lines
@@ -339,14 +335,14 @@ mod tests {
     #[test]
     fn affordances_omit_relations_the_entry_cannot_honour() {
         let cmds = affordances_for(&evidence(None, Vec::new()), None);
-        assert_eq!(cmds, vec!["git lineage show s1"]);
+        assert_eq!(cmds, vec!["tribal show s1"]);
     }
 
     #[test]
     fn a_line_anchored_turn_offers_the_chain_and_the_produced_by_verb() {
         let cmds = affordances_for(&evidence(Some("t1"), vec![[10, 12]]), Some("src/lib.rs"));
-        assert!(cmds.contains(&"git lineage context chain src/lib.rs:10".to_string()));
-        assert!(cmds.contains(&"git lineage context produced-by t1".to_string()));
+        assert!(cmds.contains(&"tribal context chain src/lib.rs:10".to_string()));
+        assert!(cmds.contains(&"tribal context produced-by t1".to_string()));
         assert!(cmds.len() <= MAX_AFFORDANCES);
     }
 }

@@ -189,7 +189,7 @@ mod tests {
     }
 
     /// A session with no vendor id has to fail differently from an agent that
-    /// cannot resume at all: the user's next move is `git lineage fork`, not
+    /// cannot resume at all: the user's next move is `tribal fork`, not
     /// "give up on this harness".
     #[test]
     fn a_session_without_a_vendor_id_points_at_fork_instead() {
@@ -204,6 +204,6 @@ mod tests {
         let err = claude
             .resume_invocation(&conversation)
             .expect_err("nothing on this machine to reopen");
-        assert!(err.to_string().contains("git lineage fork"), "{err}");
+        assert!(err.to_string().contains("tribal fork"), "{err}");
     }
 }

@@ -8,7 +8,7 @@ Tribal stores AI agent session provenance in your git repository. These guides c
 
 | Guide | Description |
 |-------|-------------|
-| [Setup](../README.md#setup) | Install the CLI and run `git lineage init` |
+| [Setup](../README.md#setup) | Install the CLI and run `tribal init` |
 | [Import](import.md) | Pull agent sessions into git refs |
 | [Explore](explore.md) | List, show, blame, and search sessions |
 | [Configuration](configuration.md) | Repository policy at `refs/lineage/config` |
@@ -31,7 +31,7 @@ Tribal stores AI agent session provenance in your git repository. These guides c
 
 | Guide | Description |
 |-------|-------------|
-| [CLI reference](cli/README.md) | Full `git lineage` command list |
+| [CLI reference](cli/README.md) | Full `tribal` command list |
 | [MCP server](mcp/README.md) | Model Context Protocol tools for agents |
 | [VS Code extension](vscode.md) | Panel, hover blame, gutter decorations |
 

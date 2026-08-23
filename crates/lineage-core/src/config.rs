@@ -41,7 +41,7 @@ pub enum CommitMappingMode {
     Auto,
     /// Always link to HEAD (legacy behavior).
     Head,
-    /// Do not auto-link; use hooks or `git lineage link`.
+    /// Do not auto-link; use hooks or `tribal link`.
     None,
 }
 

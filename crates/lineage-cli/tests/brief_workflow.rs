@@ -1,4 +1,4 @@
-//! `git lineage fork <id> --brief` end to end: print a self-contained context
+//! `tribal fork <id> --brief` end to end: print a self-contained context
 //! block for a subagent, write nothing.
 //!
 //! Run through the built binary for the same reason `fork_workflow` does — the
@@ -122,7 +122,7 @@ fn run_brief(dir: &Path, home: &Path, session_id: &str, extra: &[&str]) -> Outpu
         "--brief",
     ];
     args.extend_from_slice(extra);
-    Command::new(env!("CARGO_BIN_EXE_git-lineage"))
+    Command::new(env!("CARGO_BIN_EXE_tribal"))
         .args(&args)
         .env("HOME", home)
         .output()
@@ -192,7 +192,7 @@ fn the_brief_embeds_the_traversal_vocabulary_and_does_not_offer_to_fork() {
 
     for verb in lineage_retrieval::VERBS {
         assert!(
-            stdout.contains(&format!("git lineage context {}", verb.cli)),
+            stdout.contains(&format!("tribal context {}", verb.cli)),
             "verb {} must be reachable from inside the brief: {stdout}",
             verb.cli
         );
@@ -200,7 +200,7 @@ fn the_brief_embeds_the_traversal_vocabulary_and_does_not_offer_to_fork() {
     // A subagent cannot tell it is already inside a fork, so the block must not
     // invite it to fork again.
     assert!(
-        !stdout.contains("git lineage fork"),
+        !stdout.contains("tribal fork"),
         "the brief must not advertise fork: {stdout}"
     );
     // The vocabulary is only usable if the block also carries handles in the
@@ -280,7 +280,7 @@ fn a_session_with_no_renderable_transcript_still_briefs() {
     store(dir.path(), &conv);
 
     // fork itself refuses: codex has no transcript writer in this build.
-    let forked = Command::new(env!("CARGO_BIN_EXE_git-lineage"))
+    let forked = Command::new(env!("CARGO_BIN_EXE_tribal"))
         .args([
             "--repo",
             dir.path().to_str().unwrap(),
@@ -354,5 +354,5 @@ fn an_unknown_session_id_says_what_to_do_next() {
     assert!(!output.status.success());
     let stderr = String::from_utf8(output.stderr).unwrap();
     assert!(stderr.contains("01NOTASESSION"), "{stderr}");
-    assert!(stderr.contains("git lineage list"), "{stderr}");
+    assert!(stderr.contains("tribal list"), "{stderr}");
 }

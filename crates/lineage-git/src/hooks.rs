@@ -127,7 +127,7 @@ pub(crate) fn link_session_at_commit(
     // Overlap is checked before materialization because materialization is
     // itself filtered by the commit's changed files: no overlap ⇒ no line
     // objects, so skipping early is equivalent and cheap enough to run across
-    // whole histories (rebuild). Manual `git lineage link` bypasses this path
+    // whole histories (rebuild). Manual `tribal link` bypasses this path
     // entirely and stays authoritative.
     let workspace = lineage_core::workspace_root_for(&conversation.workspace_root, repo.workdir());
     let paths = repo_paths.with_workspace_root(&workspace);

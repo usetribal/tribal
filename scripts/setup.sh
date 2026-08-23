@@ -65,7 +65,7 @@ if ! command -v npm >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "==> Installing git-lineage CLI"
+echo "==> Installing tribal CLI"
 cargo install --path "${ROOT}/crates/lineage-cli"
 
 if [[ "${WITH_MCP}" == "true" ]]; then
@@ -116,7 +116,7 @@ if [[ "${REPO_PATH}" == "${ROOT}" ]]; then
   git -C "${ROOT}" config core.hooksPath .githooks
 fi
 
-CLI_PATH="$(command -v git-lineage || echo "${HOME}/.cargo/bin/git-lineage")"
+CLI_PATH="$(command -v tribal || echo "${HOME}/.cargo/bin/tribal")"
 
 HOOKS_MSG="pre-commit (incremental import), post-commit (link sessions)"
 if [[ "${REPO_PATH}" == "${ROOT}" ]]; then
@@ -133,9 +133,9 @@ Setup complete.
 
 Next steps:
   cd ${REPO_PATH}
-  git lineage import --agent all
-  git lineage list
-  git lineage blame <file>:<line>
+  tribal import --agent all
+  tribal list
+  tribal blame <file>:<line>
 
 VS Code extension dev:
   Open the tribal repo in VS Code and press F5.

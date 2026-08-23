@@ -1,4 +1,4 @@
-//! `git lineage --discover` — the command surface as JSON, for an agent to read.
+//! `tribal --discover` — the command surface as JSON, for an agent to read.
 //!
 //! Run through the built binary because the point of the flag is what a caller
 //! actually receives on stdout, and because walking the parser is the behaviour
@@ -10,7 +10,7 @@ use std::process::Command;
 use serde_json::Value;
 
 fn discover() -> Value {
-    let output = Command::new(env!("CARGO_BIN_EXE_git-lineage"))
+    let output = Command::new(env!("CARGO_BIN_EXE_tribal"))
         .arg("--discover")
         .output()
         .unwrap();
@@ -36,7 +36,7 @@ fn command<'a>(surface: &'a Value, name: &str) -> &'a Value {
 #[test]
 fn discover_needs_no_repository_and_no_subcommand() {
     let surface = discover();
-    assert_eq!(surface["name"], "git-lineage");
+    assert_eq!(surface["name"], "tribal");
     assert!(surface["version"].is_string());
 }
 
@@ -135,7 +135,7 @@ fn every_discovered_command_resolves() {
     let surface = discover();
     for entry in surface["commands"].as_array().unwrap() {
         let name = entry["name"].as_str().unwrap();
-        let output = Command::new(env!("CARGO_BIN_EXE_git-lineage"))
+        let output = Command::new(env!("CARGO_BIN_EXE_tribal"))
             .args([name, "--help"])
             .output()
             .unwrap();

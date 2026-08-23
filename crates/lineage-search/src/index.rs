@@ -686,7 +686,7 @@ impl LineageIndex {
     }
 
     /// Record one session↔commit edge without re-indexing the session. The link
-    /// paths (post-commit hook, `git lineage link`) write the edge to the
+    /// paths (post-commit hook, `tribal link`) write the edge to the
     /// conversation ref but never re-run `index_conversation`, so the mirror
     /// would otherwise go stale until the next rebuild.
     pub fn link_session_commit(&self, session_id: &str, commit_sha: &str) -> Result<()> {
@@ -1640,7 +1640,7 @@ mod tests {
             .unwrap()
             .is_empty());
 
-        // A link made after indexing (post-commit hook, `git lineage link`)
+        // A link made after indexing (post-commit hook, `tribal link`)
         // reaches the mirror without a re-index.
         index
             .link_session_commit(conv.id.as_str(), &"b".repeat(40))

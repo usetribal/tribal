@@ -131,7 +131,7 @@ pub fn resuming_unsupported(agent: AgentKind) -> LineageError {
 pub fn no_vendor_session_id(agent: AgentKind) -> LineageError {
     LineageError::Other(format!(
         "this session carries no {} session id, so there is nothing on this machine to reopen. \
-         `git lineage fork` writes a fresh session carrying its context instead",
+         `tribal fork` writes a fresh session carrying its context instead",
         agent.as_str()
     ))
 }

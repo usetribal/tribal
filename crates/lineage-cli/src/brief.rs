@@ -1,4 +1,4 @@
-//! `git lineage fork <session-id> --brief` — the context block for starting a
+//! `tribal fork <session-id> --brief` — the context block for starting a
 //! *subagent* on someone's session, instead of continuing it yourself.
 //!
 //! Three things shape this module.

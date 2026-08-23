@@ -146,7 +146,7 @@
         "lineage.cliPath": {
           "type": "string",
           "default": "",
-          "description": "Path to git-lineage binary (empty = use git lineage on PATH)"
+          "description": "Path to tribal binary (empty = use tribal on PATH)"
         },
         "lineage.hoverEnabled": {
           "type": "boolean",

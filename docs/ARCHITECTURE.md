@@ -45,7 +45,7 @@ weigh, not a detail.
 
 ### 3. Rendering decides how to show, never what to show
 
-A surface that displays provenance — the injected digest, `git lineage show`, the MCP
+A surface that displays provenance — the injected digest, `tribal show`, the MCP
 tool responses, the VS Code panel, the web UI — formats what it is given. It must not
 select, substitute, or infer content.
 
@@ -122,7 +122,7 @@ a vendor-specific place, so the adapter produces both and the caller learns neit
       ↓
 3. Policy engine redacts secrets, removes excluded artifacts; repo config may mark sessions private
       ↓
-4. Large turn content is compacted to Git LFS (`.git/lfs/objects/`) when above `large_blob_threshold_bytes`; transport refs enable `git lineage lfs push/fetch`
+4. Large turn content is compacted to Git LFS (`.git/lfs/objects/`) when above `large_blob_threshold_bytes`; transport refs enable `tribal lfs push/fetch`
       ↓
 5. lineage-git writes conversation blob + session ref
       ↓
@@ -168,11 +168,11 @@ a vendor-specific place, so the adapter produces both and the caller learns neit
 ### Search
 
 1. Query the local SQLite FTS index
-2. On miss or stale index: `git lineage search` auto-rebuilds, or run `git lineage rebuild index` explicitly
+2. On miss or stale index: `tribal search` auto-rebuilds, or run `tribal rebuild index` explicitly
 
 ### Rebase remap
 
-1. `git lineage remap` finds orphan commit SHAs in session metadata
+1. `tribal remap` finds orphan commit SHAs in session metadata
 2. Maps orphans to rewritten commits via stored `patch_id` on git notes
 3. Updates session `commit_shas`, re-links notes, and re-materializes line objects
 

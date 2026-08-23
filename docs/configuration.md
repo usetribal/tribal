@@ -2,7 +2,7 @@
 
 [← Documentation index](README.md) · [Privacy and policy](privacy.md) · [Import](import.md)
 
-Tribal stores repository settings in a git ref: `refs/lineage/config`. The ref holds a JSON document (`lineage-config-v0`) that controls import behavior, privacy, blob storage, and commit linking. It is written during `git lineage init` or `git lineage init --config`.
+Tribal stores repository settings in a git ref: `refs/lineage/config`. The ref holds a JSON document (`lineage-config-v0`) that controls import behavior, privacy, blob storage, and commit linking. It is written during `tribal init` or `tribal init --config`.
 
 Configuration travels with the repository when you push `refs/lineage/*`. Teammates receive the same policy after fetch.
 
@@ -14,7 +14,7 @@ There is no dedicated show command today. Read the ref directly:
 git show refs/lineage/config
 ```
 
-Or use `git lineage doctor`, which reports whether config exists and whether required refs are healthy.
+Or use `tribal doctor`, which reports whether config exists and whether required refs are healthy.
 
 ## Configuration fields
 
@@ -38,7 +38,7 @@ Legacy key `ingest_only_code_sessions` is accepted as an alias for `import_only_
 |------|----------|
 | `auto` | Score recent commits using file overlap, timing, and branch metadata; link to the best match |
 | `head` | Always link imported sessions to the current `HEAD` commit |
-| `none` | Import without auto-linking; use hooks, `git lineage link`, or manual materialize |
+| `none` | Import without auto-linking; use hooks, `tribal link`, or manual materialize |
 
 Hooks typically import with `--no-link-head` on pre-commit, then post-commit linking attaches sessions to the new commit. This pairs well with `auto` or `head` depending on your workflow.
 
@@ -54,7 +54,7 @@ See [Large content (LFS)](lfs.md) for push, fetch, and transport details.
 2. Edit fields as needed.
 3. Write the updated JSON back to the same ref (via a small script, custom tooling, or future CLI commands).
 
-Invalid JSON or an unknown `schema_version` causes import and doctor checks to fail until corrected. Prefer small, reviewable changes and test with `git lineage doctor` after updates.
+Invalid JSON or an unknown `schema_version` causes import and doctor checks to fail until corrected. Prefer small, reviewable changes and test with `tribal doctor` after updates.
 
 ## Relationship to policy
 

@@ -7,12 +7,12 @@ Tribal can install two git hooks that keep imported sessions current and linked 
 ## Install and remove
 
 ```bash
-git lineage init --hooks
-git lineage init --hooks --force   # overwrite existing hook files
-git lineage init --uninstall
+tribal init --hooks
+tribal init --hooks --force   # overwrite existing hook files
+tribal init --uninstall
 ```
 
-`git lineage init` offers hook installation in the setup wizard. Use `--force-hooks` / `--force` on init to replace existing hook scripts.
+`tribal init` offers hook installation in the setup wizard. Use `--force-hooks` / `--force` on init to replace existing hook scripts.
 
 ## Hook behavior
 
@@ -27,23 +27,23 @@ Import failures on pre-commit log to stderr but **do not block** the commit by d
 
 ## Requirements
 
-- `git-lineage` or `git lineage` on PATH inside hook environment (`~/.cargo/bin` is prepended in hook scripts).
-- Repository initialized with lineage config (`git lineage init` or `init-config`).
+- `tribal` or `tribal` on PATH inside hook environment (`~/.cargo/bin` is prepended in hook scripts).
+- Repository initialized with lineage config (`tribal init` or `init-config`).
 
 ## Contributor repos vs application repos
 
-The Tribal **monorepo** uses separate contributor hooks (format + lint) via `make install-hooks` and `core.hooksPath .githooks`. Application repositories use lineage import hooks from `git lineage init --hooks`.
+The Tribal **monorepo** uses separate contributor hooks (format + lint) via `make install-hooks` and `core.hooksPath .githooks`. Application repositories use lineage import hooks from `tribal init --hooks`.
 
 Do not assume both hook systems on the same repo without merging scripts manually.
 
 ## VS Code
 
-**Lineage: Install Git Hooks** from the command palette runs `git lineage init --hooks`.
+**Lineage: Install Git Hooks** from the command palette runs `tribal init --hooks`.
 
 ## When hooks are not enough
 
-- One-off full backfill: `git lineage import --agent all` without `--incremental`.
-- Import without linking: `--no-link-head` manually, then `git lineage link`.
+- One-off full backfill: `tribal import --agent all` without `--incremental`.
+- Import without linking: `--no-link-head` manually, then `tribal link`.
 - Disable auto import: `uninstall-hook` and import on demand.
 
 ## Related guides

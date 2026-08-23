@@ -1,4 +1,4 @@
-//! `git lineage fork <share-url>` — the receiving half of a share
+//! `tribal fork <share-url>` — the receiving half of a share
 //! (`specs/share-v0.md`).
 //!
 //! The whole design goal is that a receiver never dead-ends and is never asked
@@ -10,7 +10,7 @@
 //! — and each choice is printed as it is made so the outcome is never a
 //! surprise, only unrequested.
 //!
-//! Nothing here requires a login or a `git lineage init`. The token in the URL
+//! Nothing here requires a login or a `tribal init`. The token in the URL
 //! is the entire authorization (share-v0 "Fetch"), so this path is
 //! unauthenticated by construction and must stay that way: an anonymous
 //! receiver with only the binary is the case it exists for.

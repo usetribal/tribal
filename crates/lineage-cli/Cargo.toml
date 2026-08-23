@@ -18,7 +18,7 @@ name = "lineage_cli"
 path = "src/lib.rs"
 
 [[bin]]
-name = "git-lineage"
+name = "tribal"
 path = "src/main.rs"
 
 [dependencies]

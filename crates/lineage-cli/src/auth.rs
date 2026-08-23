@@ -106,11 +106,11 @@ pub fn config_dir() -> Result<PathBuf> {
     }
     if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
         if !xdg.is_empty() {
-            return Ok(PathBuf::from(xdg).join("lineage"));
+            return Ok(PathBuf::from(xdg).join("tribal"));
         }
     }
     let home = std::env::var("HOME").map_err(|_| "cannot locate config: HOME is not set")?;
-    Ok(PathBuf::from(home).join(".config").join("lineage"))
+    Ok(PathBuf::from(home).join(".config").join("tribal"))
 }
 
 pub fn credentials_path() -> Result<PathBuf> {
@@ -290,11 +290,7 @@ impl NotAuthenticated {
 
 impl std::fmt::Display for NotAuthenticated {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "not logged in to {}: run `git lineage login`",
-            self.server
-        )
+        write!(f, "not logged in to {}: run `tribal login`", self.server)
     }
 }
 

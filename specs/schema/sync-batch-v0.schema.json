@@ -173,7 +173,7 @@
               "type": "null"
             }
           ],
-          "description": "Set only when this session was written out by `git lineage fork`. A parent\nwith no `fork_origin` is a harness-spawned branch (sidechain/subagent)."
+          "description": "Set only when this session was written out by `tribal fork`. A parent\nwith no `fork_origin` is a harness-spawned branch (sidechain/subagent)."
         },
         "id": {
           "type": "string"
@@ -231,7 +231,7 @@
       "type": "object"
     },
     "ForkOrigin": {
-      "description": "Where a forked session came from: the deliberate act of picking up someone\nelse's session and continuing it.\n\nThis is a separate field from `parent_session_id` rather than a flag beside\nit, because that field is already overloaded. Claude sidechains set it for\nsubagent branches the harness spawned on its own, and `git lineage list`\ncurrently reports *any* conversation with a parent as a sidechain. A fork is\na different relation with different semantics — the forker owns the lines\ngoing forward, the source author is an ancestor and never a co-author — so\nit needs to be readable as one without a caller inferring from absence.\n\nIt is a typed field rather than a `metadata` key for two reasons. Metadata is\nadapter-specific extras with a first-write-wins merge rule on sync\n(`specs/sync-protocol-v0.md`), which is the wrong rule for a provenance edge;\nand a generated schema plus TS bindings make the edge discoverable to every\nconsumer instead of a string every one of them has to know to look for.\n\nRecording a fork does not breach the backfillable invariant\n(`docs/ARCHITECTURE.md`): forking is a new event, like a commit, not a latent\nrelation that could have been rederived from history.",
+      "description": "Where a forked session came from: the deliberate act of picking up someone\nelse's session and continuing it.\n\nThis is a separate field from `parent_session_id` rather than a flag beside\nit, because that field is already overloaded. Claude sidechains set it for\nsubagent branches the harness spawned on its own, and `tribal list`\ncurrently reports *any* conversation with a parent as a sidechain. A fork is\na different relation with different semantics — the forker owns the lines\ngoing forward, the source author is an ancestor and never a co-author — so\nit needs to be readable as one without a caller inferring from absence.\n\nIt is a typed field rather than a `metadata` key for two reasons. Metadata is\nadapter-specific extras with a first-write-wins merge rule on sync\n(`specs/sync-protocol-v0.md`), which is the wrong rule for a provenance edge;\nand a generated schema plus TS bindings make the edge discoverable to every\nconsumer instead of a string every one of them has to know to look for.\n\nRecording a fork does not breach the backfillable invariant\n(`docs/ARCHITECTURE.md`): forking is a new event, like a commit, not a latent\nrelation that could have been rederived from history.",
       "properties": {
         "forked_at": {
           "format": "date-time",

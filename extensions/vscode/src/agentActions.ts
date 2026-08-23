@@ -40,7 +40,7 @@ export function canForkSession(conv: Conversation): boolean {
     return conv.agent.toLowerCase() === "claude";
 }
 
-// Resume is `git lineage resume`, entire — the same arrangement as fork below,
+// Resume is `tribal resume`, entire — the same arrangement as fork below,
 // and for the same reason. The extension knows no harness verb, no flag, and no
 // id convention (ARCHITECTURE.md invariant 4); it runs the command and shows
 // what the command said.
@@ -54,7 +54,7 @@ export async function resumeAgentSession(client: LineageClient, sessionId: strin
     await showCliOutput(output);
 }
 
-// Forking is `git lineage fork`, entire. The extension holds no fork logic: it
+// Forking is `tribal fork`, entire. The extension holds no fork logic: it
 // does not know the harness state directory, the transcript format, the id
 // convention, or the flags that reopen a session — all adapter knowledge
 // (ARCHITECTURE.md invariant 4). It runs the command and shows what the command

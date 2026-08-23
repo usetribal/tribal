@@ -166,4 +166,7 @@ cargo test -p lineage-core
 3. Policy before persist — no unredacted secrets in git objects
 4. Graph before rendering — provenance edges are deterministic and backfillable; display surfaces format what they are given and never select or substitute content ([docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#invariants))
 5. Add tests for behavior changes; run `make coverage` before a PR if logic changed
-6. Comment the *why* in plain language, next to the code; no "comment golf" and no narrating discarded approaches
+6. A change to state the CLI persists on a machine — config directory, git config keys,
+   hooks, bundled skills, or the shape of a file it writes — registers a migration in
+   `crates/lineage-cli/src/migrate.rs` in the same PR ([docs/migrations.md](docs/migrations.md))
+7. Comment the *why* in plain language, next to the code; no "comment golf" and no narrating discarded approaches

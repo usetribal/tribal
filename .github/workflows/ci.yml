@@ -101,7 +101,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --release --workspace
       - name: Smoke test CLI
-        run: ./target/release/git-lineage --version
+        run: ./target/release/tribal --version
 
   vscode-extension:
     name: VS Code extension

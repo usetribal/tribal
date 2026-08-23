@@ -1,4 +1,4 @@
-//! `git lineage fork` end to end, on the reopen half: a session this machine
+//! `tribal fork` end to end, on the reopen half: a session this machine
 //! holds is resolved from lineage refs, the adapter is asked for the invocation,
 //! and it is printed — writing nothing.
 //!
@@ -73,7 +73,7 @@ fn seed_session(
 }
 
 fn run_resume(dir: &Path, home: &Path, session_id: &str) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_git-lineage"))
+    Command::new(env!("CARGO_BIN_EXE_tribal"))
         .args(["--repo", dir.to_str().unwrap(), "continue", session_id])
         .env("HOME", home)
         .output()
@@ -263,5 +263,5 @@ fn an_unknown_session_id_says_what_to_do_next() {
     assert!(!output.status.success());
     let stderr = String::from_utf8(output.stderr).unwrap();
     assert!(stderr.contains("01NOTASESSION"), "{stderr}");
-    assert!(stderr.contains("git lineage list"), "{stderr}");
+    assert!(stderr.contains("tribal list"), "{stderr}");
 }

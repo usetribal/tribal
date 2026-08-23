@@ -8,7 +8,7 @@
 //! observed traversal sequences later be derived into new canned plans.
 //!
 //! Relations are named **abstractly** here and rendered per surface: the CLI
-//! turns `search-within` into a `git lineage context …` command, MCP turns it
+//! turns `search-within` into a `tribal context …` command, MCP turns it
 //! into a tool name. An MCP-connected agent never shells out, so command strings
 //! must not live in a crate MCP consumes.
 
@@ -81,7 +81,7 @@ pub const VERBS: &[Verb] = &[
 /// read-only, is bounded by `limit`, and returns evidence; `fork` takes a bare
 /// session id, writes a transcript, records a fork edge, and returns a command
 /// to run. Folding it in would make `VERBS` a list of "things an agent can do"
-/// — at which point `verb_footer()` renders `git lineage context fork`, which is
+/// — at which point `verb_footer()` renders `tribal context fork`, which is
 /// not a command that exists, and every consumer has to branch on which kind of
 /// entry it is holding anyway.
 pub const CONTINUE_SESSION: Verb = Verb {
@@ -116,7 +116,7 @@ mod tests {
     }
 
     /// `VERBS` is what a `session#turn` handle can be fed to, and `verb_footer`
-    /// renders every entry as `git lineage context <cli>`. Continuation is
+    /// renders every entry as `tribal context <cli>`. Continuation is
     /// neither, so it must stay outside the list even though it shares the
     /// struct and the anti-drift guarantee.
     #[test]

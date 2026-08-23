@@ -1,4 +1,4 @@
-//! `git lineage pull` — bring teammates' sessions down from a Tribal server
+//! `tribal pull` — bring teammates' sessions down from a Tribal server
 //! into this repository's lineage refs.
 //!
 //! Pull is not sync with the arrows reversed. Push merges into an authority;
@@ -561,7 +561,7 @@ fn print_report(report: &PullReport, server: &str, dry_run: bool) {
     println!("Pull never deletes: sessions the server did not mention are untouched,");
     println!("and turns you already had were kept as they were.");
     println!();
-    println!("`git lineage list` shows them; `git lineage fork <id>` continues one.");
+    println!("`tribal list` shows them; `tribal fork <id>` continues one.");
 }
 
 fn describe_reasons(reasons: &BTreeMap<String, usize>) -> String {

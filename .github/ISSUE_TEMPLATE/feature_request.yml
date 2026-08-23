@@ -35,7 +35,7 @@ body:
     attributes:
       label: Area
       options:
-        - label: CLI (`git-lineage`)
+        - label: CLI (`tribal`)
         - label: MCP server
         - label: VS Code extension
         - label: Agent adapter

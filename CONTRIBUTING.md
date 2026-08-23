@@ -35,7 +35,7 @@ Use `make help` for common tasks (`make check` runs the full local gate).
 | `crates/lineage-core` | Domain types — start here for schema changes |
 | `crates/lineage-git` | Git persistence layer |
 | `crates/lineage-adapters` | Agent source adapters |
-| `crates/lineage-cli` | CLI binary (`git-lineage`) |
+| `crates/lineage-cli` | CLI binary (`tribal`) |
 | `specs/` | Schema contracts (update before changing types) |
 | `tests/fixtures/` | Golden files for adapter and git tests |
 | `extensions/vscode/` | VS Code extension |
@@ -50,7 +50,7 @@ Open a [bug report](https://github.com/usetribal/tribal/issues/new?template=bug_
 - Steps to reproduce
 - Expected vs actual behavior
 - Rust version (`rustc --version`) and OS
-- Relevant log output (`RUST_LOG=debug git lineage ...`)
+- Relevant log output (`RUST_LOG=debug tribal ...`)
 
 **Do not** include agent conversation content that may contain secrets.
 

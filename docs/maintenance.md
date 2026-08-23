@@ -7,7 +7,7 @@ Day-to-day lineage operations beyond import and search: health checks, index reb
 ## Health check
 
 ```bash
-git lineage doctor
+tribal doctor
 ```
 
 Doctor verifies that configuration exists, session refs resolve, notes are readable, and LFS references have local objects (or reports gaps). Run after clone, policy changes, or when blame/search behave unexpectedly.
@@ -18,10 +18,10 @@ Search uses a local SQLite full-text index at `.git/lineage/index.db`. It is reb
 
 ```bash
 # Explicit rebuild
-git lineage rebuild index
+tribal rebuild index
 
 # Search also rebuilds when results look stale
-git lineage search "your query"
+tribal search "your query"
 ```
 
 Rebuild after bulk import, delete, or gc if search misses known sessions.
@@ -32,12 +32,12 @@ Line objects connect file lines to conversation turns. They are created when ses
 
 ```bash
 # Link a session to a commit and materialize line objects
-git lineage link <session-id> <commit-sha>
+tribal link <session-id> <commit-sha>
 
 # Rebuild line objects for a commit or single session
-git lineage materialize
-git lineage materialize --commit <sha>
-git lineage materialize --session <session-id>
+tribal materialize
+tribal materialize --commit <sha>
+tribal materialize --session <session-id>
 ```
 
 Hooks and import normally handle linking. Use these commands when auto-mapping was skipped (`commit_mapping: none`), after manual history edits, or when blame returns no matches for a linked commit.
@@ -46,18 +46,18 @@ Hooks and import normally handle linking. Use these commands when auto-mapping w
 
 ```bash
 # Remove session ref, line objects, and note entries
-git lineage delete <session-id>
+tribal delete <session-id>
 
 # Also drop unreferenced LFS blobs referenced only by this session
-git lineage delete <session-id> --purge-blobs
+tribal delete <session-id> --purge-blobs
 ```
 
-Deletion is destructive. Confirm the session id with `git lineage list` first. Pushed refs require a follow-up push to remove data from the remote.
+Deletion is destructive. Confirm the session id with `tribal list` first. Pushed refs require a follow-up push to remove data from the remote.
 
 ## Garbage collection
 
 ```bash
-git lineage gc
+tribal gc
 ```
 
 Purges orphan line objects and unreferenced LFS blobs after deletes or failed imports. Safe to run periodically; refcounting prevents deleting blobs still used by other sessions.
@@ -65,8 +65,8 @@ Purges orphan line objects and unreferenced LFS blobs after deletes or failed im
 ## Export for audit
 
 ```bash
-git lineage export --redact --format jsonl > audit.jsonl
-git lineage export --format json > single-session.json
+tribal export --redact --format jsonl > audit.jsonl
+tribal export --format json > single-session.json
 ```
 
 Use export to review what would leave the repo before push. See [Privacy and policy](privacy.md).
@@ -76,7 +76,7 @@ Use export to review what would leave the repo before push. See [Privacy and pol
 After history rewrite, run:
 
 ```bash
-git lineage remap
+tribal remap
 ```
 
 See [After a rebase](rebase.md) for details.
@@ -84,8 +84,8 @@ See [After a rebase](rebase.md) for details.
 ## LFS maintenance
 
 ```bash
-git lineage lfs status
-git lineage lfs fetch
+tribal lfs status
+tribal lfs fetch
 ```
 
 See [Large content (LFS)](lfs.md).

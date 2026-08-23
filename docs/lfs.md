@@ -19,21 +19,21 @@ The local search index does not duplicate full turn text; it rebuilds from refs.
 
 ```bash
 # Compare referenced vs locally present objects
-git lineage lfs status
+tribal lfs status
 
 # Push pointer and data refs to remote
-git lineage lfs push
-git lineage lfs push --remote origin
+tribal lfs push
+tribal lfs push --remote origin
 
 # Fetch missing objects after clone or pull
-git lineage lfs fetch
-git lineage lfs fetch --remote origin
+tribal lfs fetch
+tribal lfs fetch --remote origin
 ```
 
 Typical team workflow alongside code:
 
 ```bash
-git lineage lfs push
+tribal lfs push
 git push origin refs/lineage/* refs/notes/lineage
 ```
 
@@ -41,8 +41,8 @@ On a fresh clone:
 
 ```bash
 git fetch origin refs/lineage/* refs/notes/lineage
-git lineage lfs fetch
-git lineage doctor
+tribal lfs fetch
+tribal doctor
 ```
 
 ## Transport modes
@@ -60,13 +60,13 @@ Use `refs` or `http` when contributors cannot install git-lfs. Use `gitcli` when
 
 ## Doctor and missing objects
 
-`git lineage doctor` reports missing LFS objects referenced from sessions. After pulling lineage refs without LFS data, run `git lineage lfs fetch` before `show`, blame, or export with hydration.
+`tribal doctor` reports missing LFS objects referenced from sessions. After pulling lineage refs without LFS data, run `tribal lfs fetch` before `show`, blame, or export with hydration.
 
-`git lineage show <id>` hydrates large text automatically. Add `--hydrate-images` when reviewing image artifacts in the session timeline.
+`tribal show <id>` hydrates large text automatically. Add `--hydrate-images` when reviewing image artifacts in the session timeline.
 
 ## Garbage collection
 
-Deleting sessions with `git lineage delete --purge-blobs` drops refcounted LFS blobs when no other session references them. `git lineage gc` sweeps orphan line objects and unreferenced blobs. Run gc after bulk deletes in long-lived repos.
+Deleting sessions with `tribal delete --purge-blobs` drops refcounted LFS blobs when no other session references them. `tribal gc` sweeps orphan line objects and unreferenced blobs. Run gc after bulk deletes in long-lived repos.
 
 ## VS Code and MCP
 

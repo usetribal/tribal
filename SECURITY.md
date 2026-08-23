@@ -31,15 +31,15 @@ Tribal handles agent conversation data that may contain secrets. Built-in mitiga
 
 - **Policy engine** — redacts secrets via vendored gitleaks rules before persistence
 - **Path excludes** — `.env`, credentials, keys, and PEM files are excluded by default
-- **Export redaction** — `git lineage export --redact` strips sensitive content
+- **Export redaction** — `tribal export --redact` strips sensitive content
 - **MCP responses** — session data is redacted by default in MCP tool output
 
 ### Recommendations for users
 
-- Run `git lineage export --redact` before sharing lineage data
+- Run `tribal export --redact` before sharing lineage data
 - Review imported sessions before pushing `refs/lineage/*` to a remote
 - Do not import sessions from untrusted sources without reviewing policy rules
-- Keep `git-lineage` and `lineage-mcp` updated
+- Keep `tribal` and `lineage-mcp` updated
 
 ## Scope
 

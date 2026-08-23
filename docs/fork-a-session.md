@@ -2,7 +2,7 @@
 
 [← Documentation index](README.md) · [VS Code extension](vscode.md) · [Explore](explore.md)
 
-`git lineage fork` carries on an agent session. There are two ways that can
+`tribal fork` carries on an agent session. There are two ways that can
 happen, and which one applies is a property of the session rather than a choice
 you make:
 
@@ -28,14 +28,14 @@ one. `--new` forces it for a session that could have been reopened.
 ## Usage
 
 ```bash
-git lineage fork <session-id>              # lineage id, prefix, or Claude UUID
-git lineage fork --query "RLS audit"       # search, then pick (--pick N if several)
-git lineage fork                           # interactive picker on a TTY
-git lineage fork <session-id> --new        # write out even if it could be reopened
-git lineage fork <session-id> --json       # structured preflight for agents
+tribal fork <session-id>              # lineage id, prefix, or Claude UUID
+tribal fork --query "RLS audit"       # search, then pick (--pick N if several)
+tribal fork                           # interactive picker on a TTY
+tribal fork <session-id> --new        # write out even if it could be reopened
+tribal fork <session-id> --json       # structured preflight for agents
 ```
 
-`git lineage list` shows **titles first** (from Claude's session summary when
+`tribal list` shows **titles first** (from Claude's session summary when
 imported, otherwise the opening ask), then id, date, agent, model, and author —
 so you can pick a session before continuing it. Session ids are interoperable:
 pass a Claude vendor UUID or a unique lineage id prefix wherever a full id works.
@@ -93,7 +93,7 @@ Install the [VS Code extension](vscode.md) in VS Code or Cursor.
 ### From the session tree
 
 - **View** — opens the session timeline webview.
-- **Resume** and **Fork** both run `git lineage fork` and open its output, so
+- **Resume** and **Fork** both run `tribal fork` and open its output, so
   you can read whose session it was and what it was about before running the
   command it prints. The command is shown, never run for you: it opens a live
   agent, and which shell that lands in stays your decision.
@@ -108,10 +108,10 @@ Conversation`, `Lineage: Fork Conversation`).
 
 ## Prerequisites
 
-1. Session imported with `git lineage import` (or hooks), or fetched from a
+1. Session imported with `tribal import` (or hooks), or fetched from a
    teammate's lineage refs.
 2. Agent CLI installed (`claude`, `codex`) and on PATH.
-3. For extension actions: `lineage.cliPath` set if `git lineage` is not on PATH
+3. For extension actions: `lineage.cliPath` set if `tribal` is not on PATH
    (see [VS Code](vscode.md)).
 
 ## Related guides

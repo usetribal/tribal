@@ -60,6 +60,7 @@ const COMMAND_GROUPS: &[(&str, &[(&str, &str)])] = &[
         &[
             ("doctor", "Check lineage health in this repository"),
             ("rebuild", "Rebuild derived state from stored sessions"),
+            ("upgrade", "Bring state stored by older versions up to date"),
         ],
     ),
 ];
@@ -95,7 +96,7 @@ fn group_of(command: &str) -> &'static str {
 
 #[derive(Parser)]
 #[command(
-    name = "git-lineage",
+    name = "tribal",
     about = "Git-native provenance for AI coding agents",
     version,
     help_template = "\
@@ -121,6 +122,17 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Bring state stored by older versions up to date
+    ///
+    /// Detects state left by a previous version — an old config directory, a
+    /// retired git-config key, hooks and agent skills naming a former command —
+    /// and converts it. Safe to run at any time: a step with nothing to do says
+    /// so, and re-running after a failure resumes from where it stopped.
+    Upgrade {
+        /// Report what would run, without changing anything
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Check repository lineage health: setup, capture, materialization, links, activity
     Doctor {
         #[arg(long)]
@@ -167,7 +179,7 @@ enum Commands {
         #[arg(long, alias = "force")]
         force_hooks: bool,
     },
-    /// Import agent sessions into git lineage refs
+    /// Import agent sessions into tribal refs
     #[command(alias = "ingest")]
     Import {
         #[arg(long, value_parser = parse_agent)]
@@ -223,7 +235,7 @@ enum Commands {
     #[command(name = "fork", alias = "continue", alias = "resume")]
     Fork {
         /// Session to continue — lineage id, id prefix, harness UUID
-        /// (`git lineage list` shows titles and ids), or a share link
+        /// (`tribal list` shows titles and ids), or a share link
         /// (`https://<host>/s/<token>`)
         session_id: Option<String>,
         /// Search local sessions by topic when no id is given
@@ -680,6 +692,7 @@ fn main() -> ExitCode {
     repo_registry::record(&repo_path, Utc::now());
 
     let result = match command {
+        Commands::Upgrade { dry_run } => commands::upgrade(&repo_path, dry_run),
         Commands::Doctor {
             json,
             section,

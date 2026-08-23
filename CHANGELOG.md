@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The CLI is now `tribal`, invoked directly rather than as a git subcommand.** `git lineage <command>` becomes `tribal <command>`. The binary is renamed, so the old invocation stops working entirely — git resolves `git lineage` by finding a `git-lineage` on `PATH`, and there is no longer one. Every command, flag, and output is otherwise unchanged. Names that travel between machines deliberately do **not** change: `refs/lineage/*`, `refs/notes/lineage`, and `.lineage/media` keep the `lineage` name, because they are pushed to remotes and shared between teammates — renaming them would rewrite history in every clone and break objects already pushed
+
+### Added
+
+- **`tribal upgrade` carries state written by an older version across the rename.** It moves `~/.config/lineage` to `~/.config/tribal` (keeping your login), rewrites the cached `lineage.serverRepoId` git-config key to `tribal.serverRepoId`, and re-stamps installed hooks and bundled agent skills that still name the old command — across every repository this machine has used the CLI in, not only the current one. Hooks you wrote yourself are left alone, and a repository that never installed skills does not gain them. `--dry-run` reports what would run without changing anything, and the command is safe to re-run at any point: a step with nothing to do says so
+
+- **A migration framework, so a future breaking change to stored state ships with its own upgrade path.** Migrations are registered in one place with the version that introduced them, and each is split into steps that are detected, applied, and recorded separately. The steps span a home directory, git config, hook scripts, and a worktree — substrates with no shared transaction, so a run cannot be atomic and is made *resumable* instead: an interrupted upgrade leaves completed steps recorded, and running it again finishes the rest rather than repeating them. See [docs/migrations.md](docs/migrations.md)
+
 ## [0.4.0] - 2026-08-22
 
 ### Added

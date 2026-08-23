@@ -1,4 +1,4 @@
-//! `git lineage fork` — carry on an agent session, whether or not it started
+//! `tribal fork` — carry on an agent session, whether or not it started
 //! here.
 //!
 //! One verb, because which of the two ways applies is a property of the session
@@ -147,8 +147,8 @@ pub fn fork_resolved(
     let source = read_conversation(repo.inner(), &id)?.ok_or_else(|| {
         format!(
             "no session {session_id} in this repository's lineage refs. \
-             `git lineage list` shows what is here; if the session is a teammate's, \
-             fetch their lineage refs first (`git lineage lfs fetch`, then `git fetch origin 'refs/lineage/*:refs/lineage/*'`)"
+             `tribal list` shows what is here; if the session is a teammate's, \
+             fetch their lineage refs first (`tribal lfs fetch`, then `git fetch origin 'refs/lineage/*:refs/lineage/*'`)"
         )
     })?;
 
@@ -162,7 +162,7 @@ pub fn fork_resolved(
     if rendered.contents.trim().is_empty() {
         return Err(format!(
             "session {} has no turns that can be replayed, so there is nothing to continue. \
-             `git lineage show {}` shows what was stored",
+             `tribal show {}` shows what was stored",
             source.id, source.id
         )
         .into());

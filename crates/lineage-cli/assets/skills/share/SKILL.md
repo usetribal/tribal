@@ -8,7 +8,7 @@ description: >-
 
 # Share this session
 
-`git lineage share` uploads the session you are in and prints a link anyone can
+`tribal share` uploads the session you are in and prints a link anyone can
 open — no account needed.
 
 ## Do this
@@ -16,7 +16,7 @@ open — no account needed.
 Run from the repository root:
 
 ```bash
-git lineage share
+tribal share
 ```
 
 Then give the user the printed URL, on its own, as the whole answer.
@@ -24,7 +24,7 @@ Then give the user the printed URL, on its own, as the whole answer.
 Only when the user names a different session than the one you are in:
 
 ```bash
-git lineage share --session <session-id>
+tribal share --session <session-id>
 ```
 
 If the command fails — not a lineage repo, not signed in, session marked

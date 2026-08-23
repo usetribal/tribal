@@ -15,7 +15,7 @@
 **Preserve the prompts, decisions, and context behind every commit.**
 
 ```bash
-git lineage init
+tribal init
 ```
 
 Tribal is agent-first engineering context memory for your codebase. It imports sessions from Cursor, Claude Code, and Codex into your git repo, linked to the commits, files, and lines they touched, so your team and your agents can search past decisions, blame a line back to the prompt that wrote it, and pick up where a conversation left off. Stored as git refs and notes.
@@ -45,7 +45,7 @@ Then, in your project root:
 
 ```bash
 cd /path/to/your-app
-git lineage init
+tribal init
 ```
 
 ## Setup from source
@@ -65,7 +65,7 @@ cd tribal
 make setup
 ```
 
-### 3. Add git-lineage to your PATH
+### 3. Add tribal to your PATH
 
 ```bash
 export PATH="$HOME/.cargo/bin:$PATH"
@@ -75,7 +75,7 @@ export PATH="$HOME/.cargo/bin:$PATH"
 
 ```bash
 cd /path/to/your-app
-git lineage init
+tribal init
 ```
 
 ### Development
@@ -99,26 +99,26 @@ See [docs/README.md](docs/README.md) for full documentation, [CONTRIBUTING.md](C
 
 | Problem | What to try |
 |---------|-------------|
-| `git: 'lineage' is not a git command` | Ensure `~/.cargo/bin` is on `PATH`; or use `git-lineage` directly |
-| `discovered 0 … session(s)` | Run `git lineage doctor`; verify [agent paths](docs/agent-paths.md); confirm you are in the repo root |
-| `missing LFS` in doctor | Run `git lineage lfs fetch` after pulling refs from remote |
-| Search returns nothing | Run `git lineage rebuild index`, or search again (auto-rebuilds on empty results) |
-| Blame shows no sessions | Run `git lineage import` then commit (or `install-hook`); line objects materialize at link time |
-| Sessions contain secrets | Run `git lineage init --config`; use `export --redact` before sharing; review `refs/lineage/config` excludes |
+| `git: 'lineage' is not a git command` | Ensure `~/.cargo/bin` is on `PATH`; or use `tribal` directly |
+| `discovered 0 … session(s)` | Run `tribal doctor`; verify [agent paths](docs/agent-paths.md); confirm you are in the repo root |
+| `missing LFS` in doctor | Run `tribal lfs fetch` after pulling refs from remote |
+| Search returns nothing | Run `tribal rebuild index`, or search again (auto-rebuilds on empty results) |
+| Blame shows no sessions | Run `tribal import` then commit (or `install-hook`); line objects materialize at link time |
+| Sessions contain secrets | Run `tribal init --config`; use `export --redact` before sharing; review `refs/lineage/config` excludes |
 
 Target a different repository path with `--repo /path/to/repo` on any command.
 
 ## Roadmap
 
 ```text
-[x] Rebase-aware lineage remapping (git lineage remap)
-[x] Git LFS backend for large session content (git lineage lfs push/fetch)
+[x] Rebase-aware lineage remapping (tribal remap)
+[x] Git LFS backend for large session content (tribal lfs push/fetch)
 [x] Repo config ref (refs/lineage/config) and incremental import
 [x] Pre-commit and post-commit hooks for automatic import and linking
 [x] One-command project setup (make setup)
-[x] Bundled agent skill install (git lineage init --skills)
+[x] Bundled agent skill install (tribal init --skills)
 [x] Session author attribution (prompted_by_email / prompted_by_name)
-[x] Multi-signal commit mapping, code-only import default, session delete/purge, and git lineage gc
+[x] Multi-signal commit mapping, code-only import default, session delete/purge, and tribal gc
 [x] Image artifacts (content-addressed LFS) and heuristic architecture summaries
 [x] LFS HTTP batch API transport (alongside git-lfs CLI and ref fallback)
 [x] VS Code extension: session timeline, gutter decorations, hover blame, resume/fork (Claude & Codex), .vsix packaging

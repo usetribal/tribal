@@ -225,7 +225,7 @@ async fn fork_brief_returns_a_block_and_writes_nothing() {
     // The brief goes to a subagent exploring one session somebody already chose;
     // offering `fork` there invites it to fork again from inside a fork.
     assert!(
-        !block.contains("git lineage fork"),
+        !block.contains("tribal fork"),
         "the brief withholds continuation: {block}"
     );
 }

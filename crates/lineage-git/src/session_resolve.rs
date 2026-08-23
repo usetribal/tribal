@@ -57,7 +57,7 @@ pub fn resolve_session(repo: &Repository, hint: &str) -> Result<LineageId, Resol
     let hint = hint.trim();
     if hint.is_empty() {
         return Err(ResolveError::NotFound(
-            "session id required — `git lineage list` shows what is here".into(),
+            "session id required — `tribal list` shows what is here".into(),
         ));
     }
 
@@ -96,7 +96,7 @@ pub fn resolve_session(repo: &Repository, hint: &str) -> Result<LineageId, Resol
 
     Err(ResolveError::NotFound(format!(
         "no session matching '{hint}' in this repository's lineage refs. \
-         `git lineage list` shows what is here"
+         `tribal list` shows what is here"
     )))
 }
 
@@ -147,7 +147,7 @@ fn pick_unique(
     match matches.len() {
         0 => Err(ResolveError::NotFound(format!(
             "no session matching '{hint}' in this repository's lineage refs. \
-             `git lineage list` shows what is here"
+             `tribal list` shows what is here"
         ))),
         1 => Ok(matches[0].0.clone()),
         _ => Err(ResolveError::Ambiguous {

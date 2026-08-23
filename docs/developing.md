@@ -19,7 +19,7 @@ cd tribal
 make setup
 ```
 
-`make setup` builds the CLI, compiles the extension, runs `git lineage init` in the tribal repo, and installs contributor git hooks (format + lint on commit).
+`make setup` builds the CLI, compiles the extension, runs `tribal init` in the tribal repo, and installs contributor git hooks (format + lint on commit).
 
 Optional flags:
 

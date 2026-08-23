@@ -9,7 +9,7 @@ Tribal data lives in git refs and notes alongside your code. Teammates with repo
 Lineage-specific refs are separate from branch tips:
 
 ```bash
-git lineage lfs push
+tribal lfs push
 git push origin refs/lineage/* refs/notes/lineage
 ```
 
@@ -32,33 +32,33 @@ After cloning your application repository:
 
 ```bash
 git fetch origin refs/lineage/* refs/notes/lineage
-git lineage lfs fetch
-git lineage doctor
-git lineage rebuild index
+tribal lfs fetch
+tribal doctor
+tribal rebuild index
 ```
 
-Install the CLI (`make setup` or `cargo install --path crates/lineage-cli`) and optionally run `git lineage init` for hooks and agent skills. Init-config is only needed if `refs/lineage/config` was not fetched.
+Install the CLI (`make setup` or `cargo install --path crates/lineage-cli`) and optionally run `tribal init` for hooks and agent skills. Init-config is only needed if `refs/lineage/config` was not fetched.
 
 Verify access:
 
 ```bash
-git lineage list --json
-git lineage search "module name"
+tribal list --json
+tribal search "module name"
 ```
 
 ## Large content
 
-Sessions with long tool output or images require LFS objects locally. Always pair ref push with `git lineage lfs push` and advise teammates to `lfs fetch`. See [Large content (LFS)](lfs.md).
+Sessions with long tool output or images require LFS objects locally. Always pair ref push with `tribal lfs push` and advise teammates to `lfs fetch`. See [Large content (LFS)](lfs.md).
 
 ## Review before public release
 
 Open-source or public mirrors need extra care:
 
 ```bash
-git lineage export --redact --format jsonl > review.jsonl
+tribal export --redact --format jsonl > review.jsonl
 ```
 
-Read [Privacy and policy](privacy.md). Remove or delete sensitive sessions (`git lineage delete`) before pushing if review finds issues.
+Read [Privacy and policy](privacy.md). Remove or delete sensitive sessions (`tribal delete`) before pushing if review finds issues.
 
 ## VS Code and MCP
 
@@ -66,7 +66,7 @@ Teammates can use the [VS Code extension](vscode.md) or [MCP server](mcp/README.
 
 ## Rebases and force-push
 
-If your team rebases shared branches, run `git lineage remap` after rewrite and push updated notes. See [After a rebase](rebase.md).
+If your team rebases shared branches, run `tribal remap` after rewrite and push updated notes. See [After a rebase](rebase.md).
 
 ## Removing shared data
 

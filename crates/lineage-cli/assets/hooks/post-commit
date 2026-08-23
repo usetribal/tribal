@@ -4,8 +4,6 @@ set -e
 
 export PATH="${HOME}/.cargo/bin:${PATH}"
 
-if command -v git-lineage >/dev/null 2>&1; then
-  git-lineage hook post-commit
-elif git lineage hook post-commit; then
-  :
+if command -v tribal >/dev/null 2>&1; then
+  tribal hook post-commit
 fi

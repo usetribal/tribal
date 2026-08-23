@@ -35,7 +35,7 @@ pub const SYNC_CONVERSATIONS_PER_CHUNK: usize = 10;
 /// Local git-config key caching the server-issued repo id, so subsequent syncs
 /// can send it back as `repo.server_repo_id`. Not committed — avoids a fork
 /// inheriting the parent's binding (sync-protocol-v0 "Repo binding").
-pub const SERVER_REPO_ID_KEY: &str = "lineage.serverRepoId";
+pub const SERVER_REPO_ID_KEY: &str = "tribal.serverRepoId";
 
 #[derive(Debug, Default)]
 pub struct SyncReport {
@@ -390,7 +390,7 @@ fn post_batch(base: &str, token: &str, batch: &SyncBatch) -> Result<SyncResponse
         .map_err(|e| LineageError::Other(format!("sync response parse failed: {e}")))
 }
 
-fn read_git_config(repo: &Repository, key: &str) -> Option<String> {
+pub fn read_git_config(repo: &Repository, key: &str) -> Option<String> {
     let value = repo.config().ok()?.get_string(key).ok()?;
     if value.trim().is_empty() {
         None
@@ -399,10 +399,23 @@ fn read_git_config(repo: &Repository, key: &str) -> Option<String> {
     }
 }
 
-fn write_git_config(repo: &Repository, key: &str, value: &str) -> Result<(), LineageError> {
+pub fn write_git_config(repo: &Repository, key: &str, value: &str) -> Result<(), LineageError> {
     repo.config()
         .and_then(|mut cfg| cfg.set_str(key, value))
         .map_err(|e| LineageError::Other(format!("failed to cache {key}: {e}")))
+}
+
+/// Drop a key from the repository config, treating an absent key as success so
+/// callers clearing a retired name need not check first.
+pub fn remove_git_config(repo: &Repository, key: &str) -> Result<(), LineageError> {
+    let mut cfg = repo
+        .config()
+        .map_err(|e| LineageError::Other(format!("failed to open config: {e}")))?;
+    match cfg.remove(key) {
+        Ok(()) => Ok(()),
+        Err(e) if e.code() == git2::ErrorCode::NotFound => Ok(()),
+        Err(e) => Err(LineageError::Other(format!("failed to clear {key}: {e}"))),
+    }
 }
 
 #[cfg(test)]

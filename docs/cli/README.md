@@ -2,7 +2,7 @@
 
 [← Documentation index](../README.md) · [Setup](../../README.md#setup)
 
-`git lineage` is the primary interface for importing, querying, sharing, and maintaining agent provenance in a git repository.
+`tribal` is the primary interface for importing, querying, sharing, and maintaining agent provenance in a git repository.
 
 ## Install
 
@@ -11,12 +11,12 @@ cargo install --path crates/lineage-cli
 # or: make setup
 ```
 
-Ensure `~/.cargo/bin` is on your `PATH` so `git lineage` resolves. The binary name is `git-lineage`.
+Ensure `~/.cargo/bin` is on your `PATH` so `tribal` resolves. The binary name is `tribal`.
 
 Target another repository:
 
 ```bash
-git lineage --repo /path/to/repo <command>
+tribal --repo /path/to/repo <command>
 ```
 
 ---
@@ -24,10 +24,10 @@ git lineage --repo /path/to/repo <command>
 ## Project setup
 
 ```bash
-git lineage init                    # interactive wizard
-git lineage init --yes              # non-interactive defaults
-git lineage init --no-import        # skip first import
-git lineage init --config             # write default refs/lineage/config only
+tribal init                    # interactive wizard
+tribal init --yes              # non-interactive defaults
+tribal init --no-import        # skip first import
+tribal init --config             # write default refs/lineage/config only
 ```
 
 ### Agent skills
@@ -35,10 +35,10 @@ git lineage init --config             # write default refs/lineage/config only
 Two bundled skills: `lineage` teaches agents to use lineage features (search, blame, share, rebase, resume), and `share` teaches them to turn the current session into a link. Installed during init or manually:
 
 ```bash
-git lineage init --skills
-git lineage init --skills --target cursor
-git lineage init --skills --target claude --target codex
-git lineage init --skills --target all --force
+tribal init --skills
+tribal init --skills --target cursor
+tribal init --skills --target claude --target codex
+tribal init --skills --target all --force
 ```
 
 | Target | Install path |
@@ -54,13 +54,13 @@ Re-run with `--force` after upgrading the CLI to refresh skill content.
 
 ## Discovering the surface
 
-`git lineage --discover` prints the whole command surface as JSON — every
+`tribal --discover` prints the whole command surface as JSON — every
 command including the hidden ones, with its group, aliases, options, and nested
 subcommands. It is walked from the parser itself, so it cannot drift from what
 the binary accepts, and it needs no repository.
 
 ```bash
-git lineage --discover | jq '.commands[] | select(.hidden) | .name'
+tribal --discover | jq '.commands[] | select(.hidden) | .name'
 ```
 
 Intended for an agent deciding what to call: `--help` shows what a person should
@@ -72,18 +72,18 @@ reach for first, `--discover` shows everything that exists.
 
 | Command | Description |
 |---------|-------------|
-| `git lineage doctor [--json] [--section NAME] [--activity-limit N]` | Six-section health report (setup, capture, materialization, coverage, links, activity); see `specs/diagnostics-v0.md` |
-| `git lineage init [options]` | Interactive setup: config, agent skills, hooks, optional import |
-| `git lineage init --config` | Write default `refs/lineage/config` |
-| `git lineage init --skills [options]` | Install the bundled agent skills |
-| `git lineage init --hooks [--force-hooks]` | Install the pre-commit and post-commit hooks |
-| `git lineage init --uninstall` | Remove the hooks and agent-hook wiring that setup installed |
+| `tribal doctor [--json] [--section NAME] [--activity-limit N]` | Six-section health report (setup, capture, materialization, coverage, links, activity); see `specs/diagnostics-v0.md` |
+| `tribal init [options]` | Interactive setup: config, agent skills, hooks, optional import |
+| `tribal init --config` | Write default `refs/lineage/config` |
+| `tribal init --skills [options]` | Install the bundled agent skills |
+| `tribal init --hooks [--force-hooks]` | Install the pre-commit and post-commit hooks |
+| `tribal init --uninstall` | Remove the hooks and agent-hook wiring that setup installed |
 
 ### Import
 
 | Command | Description |
 |---------|-------------|
-| `git lineage import [options]` | Import agent history (`ingest` alias) |
+| `tribal import [options]` | Import agent history (`ingest` alias) |
 
 Flags: `--agent cursor|claude|codex|all`, `--since DATE`, `--incremental`, `--no-link-head`.
 
@@ -93,17 +93,17 @@ See [Import](../import.md).
 
 | Command | Description |
 |---------|-------------|
-| `git lineage list [--commit SHA] [--json]` | List sessions or sessions at commit |
-| `git lineage show <id> [--json] [--hydrate-images]` | Show conversation |
-| `git lineage blame <path>[:line] [--json]` | Tribal for a file line |
-| `git lineage fork [<session-id>] [--query <text>] [--pick N] [--new] [--json]` | Continue a session: reopens one this machine holds, writes out any other. `--new` writes one out even when it could be reopened (see [Fork a session](#fork-a-session)) |
-| `git lineage fork <share-url> [--into DIR] [--no-open] [--server URL]` | Continue a session from a share link — clones the repo if needed and opens the harness (see [Fork a session](#fork-a-session)) |
-| `git lineage fork <session-id> --brief` | Print a context block for starting a subagent on that session; writes nothing (see [Brief a subagent](#brief-a-subagent-on-a-session)) |
-| `git lineage search <query>` | Full-text search (auto-rebuilds stale index). Superseded by `git lineage context query`, which ranks and returns follow-up commands |
-| `git lineage rebuild [--embed]` | Rebuild all derived state (links, line objects, index) from stored sessions; `--embed` also runs the dense-embedding backfill |
-| `git lineage rebuild index` | Rebuild only the search index |
-| `git lineage rebuild embeddings` | Rebuild only the dense embeddings — the semantic backfill (shows a per-session progress bar) |
-| `git lineage export [--redact] [--format json\|jsonl]` | Export sessions |
+| `tribal list [--commit SHA] [--json]` | List sessions or sessions at commit |
+| `tribal show <id> [--json] [--hydrate-images]` | Show conversation |
+| `tribal blame <path>[:line] [--json]` | Tribal for a file line |
+| `tribal fork [<session-id>] [--query <text>] [--pick N] [--new] [--json]` | Continue a session: reopens one this machine holds, writes out any other. `--new` writes one out even when it could be reopened (see [Fork a session](#fork-a-session)) |
+| `tribal fork <share-url> [--into DIR] [--no-open] [--server URL]` | Continue a session from a share link — clones the repo if needed and opens the harness (see [Fork a session](#fork-a-session)) |
+| `tribal fork <session-id> --brief` | Print a context block for starting a subagent on that session; writes nothing (see [Brief a subagent](#brief-a-subagent-on-a-session)) |
+| `tribal search <query>` | Full-text search (auto-rebuilds stale index). Superseded by `tribal context query`, which ranks and returns follow-up commands |
+| `tribal rebuild [--embed]` | Rebuild all derived state (links, line objects, index) from stored sessions; `--embed` also runs the dense-embedding backfill |
+| `tribal rebuild index` | Rebuild only the search index |
+| `tribal rebuild embeddings` | Rebuild only the dense embeddings — the semantic backfill (shows a per-session progress bar) |
+| `tribal export [--redact] [--format json\|jsonl]` | Export sessions |
 
 See [Explore](../explore.md).
 
@@ -111,9 +111,9 @@ See [Explore](../explore.md).
 
 | Command | Description |
 |---------|-------------|
-| `git lineage link <session-id> <commit-sha>` | Manually link session and materialize |
-| `git lineage materialize [--commit SHA] [--session ID]` | Build line objects |
-| `git lineage remap` | Recover lineage after rebase |
+| `tribal link <session-id> <commit-sha>` | Manually link session and materialize |
+| `tribal materialize [--commit SHA] [--session ID]` | Build line objects |
+| `tribal remap` | Recover lineage after rebase |
 
 See [Rebase](../rebase.md) and [Maintenance](../maintenance.md).
 
@@ -121,9 +121,9 @@ See [Rebase](../rebase.md) and [Maintenance](../maintenance.md).
 
 | Command | Description |
 |---------|-------------|
-| `git lineage lfs status` | Referenced vs local LFS objects |
-| `git lineage lfs push [--remote origin]` | Push LFS refs |
-| `git lineage lfs fetch [--remote origin]` | Fetch missing LFS objects |
+| `tribal lfs status` | Referenced vs local LFS objects |
+| `tribal lfs push [--remote origin]` | Push LFS refs |
+| `tribal lfs fetch [--remote origin]` | Fetch missing LFS objects |
 
 See [LFS](../lfs.md).
 
@@ -131,16 +131,16 @@ See [LFS](../lfs.md).
 
 | Command | Description |
 |---------|-------------|
-| `git lineage context hook claude` | Agent-hook endpoint (Claude Code PostToolUse on stdin); emits injection JSON or nothing |
-| `git lineage context hook claude-session-start` | Agent-hook endpoint (Claude Code SessionStart); emits the traversal vocabulary and the continuation capability (`continue`, `continue --brief`) once per session |
-| `git lineage context log [--limit N]` | Show recorded context injections, newest last |
-| `git lineage context install [--user]` | Wire the context hook per-repo or user-level (all repos) |
-| `git lineage context uninstall [--user]` | Remove lineage context-hook wiring |
-| `git lineage context query "<text>" [--timing]` | Retrieve past turns matching a free-text intent. With no leg/`--file` flag the query is **dispatched**: a named file that exists (in the corpus or the working tree) routes to the temporal plan on that anchor, everything else to the fused plan; `--timing` prints the chosen `route:` and per-stage timings |
-| `git lineage context query "<text>" [--lexical\|--dense\|--fused]` | Force one leg, skipping the dispatcher — the flags exist to see a leg in isolation |
-| `git lineage context query --file <path>[:<line>] ["text"]` | Force the line-anchored temporal plan (skips the dispatcher): the turns that authored the file/line, time-ordered (walked back through ancestry); with text, the text re-ranks those anchored turns |
-| `git lineage context salience` | Report the corpus's turn-salience breakdown (what indexing keeps and drops) |
-| `git lineage context chain <file>:<line>` | Print the temporal chain for a line — one hop per row (short sha, date, session, turn, confidence, or `DARK(kind)`) — resolved from the index (one live blame anchors HEAD, the rest are indexed reads) |
+| `tribal context hook claude` | Agent-hook endpoint (Claude Code PostToolUse on stdin); emits injection JSON or nothing |
+| `tribal context hook claude-session-start` | Agent-hook endpoint (Claude Code SessionStart); emits the traversal vocabulary and the continuation capability (`continue`, `continue --brief`) once per session |
+| `tribal context log [--limit N]` | Show recorded context injections, newest last |
+| `tribal context install [--user]` | Wire the context hook per-repo or user-level (all repos) |
+| `tribal context uninstall [--user]` | Remove lineage context-hook wiring |
+| `tribal context query "<text>" [--timing]` | Retrieve past turns matching a free-text intent. With no leg/`--file` flag the query is **dispatched**: a named file that exists (in the corpus or the working tree) routes to the temporal plan on that anchor, everything else to the fused plan; `--timing` prints the chosen `route:` and per-stage timings |
+| `tribal context query "<text>" [--lexical\|--dense\|--fused]` | Force one leg, skipping the dispatcher — the flags exist to see a leg in isolation |
+| `tribal context query --file <path>[:<line>] ["text"]` | Force the line-anchored temporal plan (skips the dispatcher): the turns that authored the file/line, time-ordered (walked back through ancestry); with text, the text re-ranks those anchored turns |
+| `tribal context salience` | Report the corpus's turn-salience breakdown (what indexing keeps and drops) |
+| `tribal context chain <file>:<line>` | Print the temporal chain for a line — one hop per row (short sha, date, session, turn, confidence, or `DARK(kind)`) — resolved from the index (one live blame anchors HEAD, the rest are indexed reads) |
 
 #### Traversal verbs
 
@@ -150,10 +150,10 @@ read-only and privacy-gated, and is bounded by `--limit`.
 
 | Command | Repairs |
 |---------|---------|
-| `git lineage context search-within "<text>" --session <handle>...` | Right sessions, wrong turns — searches the text of named sessions in one call rather than N greps |
-| `git lineage context around <handle> [--radius N]` | Right turn, missing its argument — the turns adjacent to it in its session |
-| `git lineage context produced-by <handle>` | Right turn, want its outcome — the code that turn produced, as `file:lines` |
-| `git lineage context sessions-for-commit <sha>` | Have a commit, want the reasoning — the sessions behind it (short shas resolve as elsewhere in git) |
+| `tribal context search-within "<text>" --session <handle>...` | Right sessions, wrong turns — searches the text of named sessions in one call rather than N greps |
+| `tribal context around <handle> [--radius N]` | Right turn, missing its argument — the turns adjacent to it in its session |
+| `tribal context produced-by <handle>` | Right turn, want its outcome — the code that turn produced, as `file:lines` |
+| `tribal context sessions-for-commit <sha>` | Have a commit, want the reasoning — the sessions behind it (short shas resolve as elsewhere in git) |
 
 The same four are MCP tools (`lineage_search_within`, `lineage_turns_around`,
 `lineage_produced_by`, `lineage_sessions_for_commit`); paired registry tests
@@ -161,7 +161,7 @@ assert neither surface can gain or lose a verb without the other. MCP agents
 discover them from `tools/list`; CLI sessions learn them from the `SessionStart`
 hook that `context install` wires.
 
-The `SessionStart` vocabulary also names `git lineage fork` and `fork --brief`,
+The `SessionStart` vocabulary also names `tribal fork` and `fork --brief`,
 so a CLI session knows a session can be *continued* and not only read. That
 capability is registered alongside the verbs (`lineage-retrieval::CONTINUE_SESSION`)
 and reaches MCP as `lineage_fork_brief`, under the same paired tests — but it is
@@ -200,15 +200,15 @@ injections), so read it from `.git/lineage/events.jsonl` directly.
 
 | Command | Description |
 |---------|-------------|
-| `git lineage login [--server URL]` | Sign in to a Tribal server (browser device flow; defaults to production) |
-| `git lineage sync [--server URL] [--token TOKEN] [--remote origin]` | Exchange sessions with a Tribal server: push, then pull |
-| `git lineage push [--server URL] [--token TOKEN] [--remote origin]` | Push only — the one-way half of `sync` |
-| `git lineage pull [--server URL] [--token TOKEN] [--remote origin] [--dry-run]` | Pull only — the other half (see [Pull teammates' sessions](#pull-teammates-sessions)) |
+| `tribal login [--server URL]` | Sign in to a Tribal server (browser device flow; defaults to production) |
+| `tribal sync [--server URL] [--token TOKEN] [--remote origin]` | Exchange sessions with a Tribal server: push, then pull |
+| `tribal push [--server URL] [--token TOKEN] [--remote origin]` | Push only — the one-way half of `sync` |
+| `tribal pull [--server URL] [--token TOKEN] [--remote origin] [--dry-run]` | Pull only — the other half (see [Pull teammates' sessions](#pull-teammates-sessions)) |
 
-| `git lineage share [--session ID] [--server URL] [--token TOKEN] [--remote origin] [--no-open]` | Share one session as a link anyone can open (see [Share a session as a link](#share-a-session-as-a-link)) |
+| `tribal share [--session ID] [--server URL] [--token TOKEN] [--remote origin] [--no-open]` | Share one session as a link anyone can open (see [Share a session as a link](#share-a-session-as-a-link)) |
 
 `sync` is the one to reach for; `push` and `pull` stay addressable for a
-one-directional run and are hidden from `git lineage -h`.
+one-directional run and are hidden from `tribal -h`.
 
 **You do not have to run `login` first.** Any command that talks to a server
 resolves its token the same way — explicit `--token`, then `LINEAGE_TOKEN`, then
@@ -250,8 +250,8 @@ then the stored login. Implements
 
 | Command | Description |
 |---------|-------------|
-| `git lineage init --hooks [--force]` | Install pre-commit and post-commit hooks |
-| `git lineage init --uninstall` | Remove lineage hooks |
+| `tribal init --hooks [--force]` | Install pre-commit and post-commit hooks |
+| `tribal init --uninstall` | Remove lineage hooks |
 
 See [Git hooks](../git-hooks.md).
 
@@ -259,8 +259,8 @@ See [Git hooks](../git-hooks.md).
 
 | Command | Description |
 |---------|-------------|
-| `git lineage delete <session-id> [--purge-blobs]` | Remove a session from this repository. Hidden from `git lineage -h`: it is local-only, so it does not stop a synced or shared session reaching anyone else |
-| `git lineage gc` | Purge orphan line objects and unreferenced LFS blobs |
+| `tribal delete <session-id> [--purge-blobs]` | Remove a session from this repository. Hidden from `tribal -h`: it is local-only, so it does not stop a synced or shared session reaching anyone else |
+| `tribal gc` | Purge orphan line objects and unreferenced LFS blobs |
 
 See [Maintenance](../maintenance.md) and [Privacy](../privacy.md).
 
@@ -268,12 +268,12 @@ See [Maintenance](../maintenance.md) and [Privacy](../privacy.md).
 
 ## Pull teammates' sessions
 
-`git lineage pull` brings sessions your teammates have synced down into this
+`tribal pull` brings sessions your teammates have synced down into this
 repository's lineage refs, so `list`, `show`, `search`, and `fork` see them the
 same as sessions you imported yourself.
 
 ```bash
-git lineage pull
+tribal pull
 ```
 
 ```text
@@ -286,7 +286,7 @@ Wrote 3 session(s):
 Pull never deletes: sessions the server did not mention are untouched,
 and turns you already had were kept as they were.
 
-`git lineage list` shows them; `git lineage fork <id>` continues one.
+`tribal list` shows them; `tribal fork <id>` continues one.
 ```
 
 `--dry-run` reports what would arrive and writes nothing. `--server`, `--token`,
@@ -330,11 +330,11 @@ Notes:
 
 ## Share a session as a link
 
-`git lineage share` turns the session you are in into a link anyone can open
+`tribal share` turns the session you are in into a link anyone can open
 without a Tribal account, and opens it in your browser.
 
 ```bash
-git lineage share
+tribal share
 ```
 
 ```text
@@ -358,8 +358,8 @@ in. `--session` overrides it and takes the same id forms as `fork`: a lineage id
 an id prefix, or the harness UUID you can copy out of your terminal.
 
 ```bash
-git lineage share --session 01HQZX8K9V2M3N4P5Q6R7S8T9U
-git lineage share --session 550e8400-e29b-41d4-a716-446655440000
+tribal share --session 01HQZX8K9V2M3N4P5Q6R7S8T9U
+tribal share --session 550e8400-e29b-41d4-a716-446655440000
 ```
 
 **A private session is refused, never stripped.** Sharing a session your repo
@@ -384,7 +384,7 @@ Notes:
 
 ## Fork a session
 
-`git lineage fork <session-id>` carries on an agent session. Which of the two
+`tribal fork <session-id>` carries on an agent session. Which of the two
 ways that happens is a property of the session, not a choice you make:
 
 - A session **your harness still holds** is reopened in place. Nothing is
@@ -397,8 +397,8 @@ Which one happened is printed. Claude Code and Codex can be reopened; Cursor
 declines by name, because the id lineage records comes from its IDE store and
 `cursor-agent --resume` reads a separate CLI store.
 
-`git lineage fork <share-url>` does the same from a share link — no account, no
-`git lineage init`, no prior setup. It fetches the shared session, works out
+`tribal fork <share-url>` does the same from a share link — no account, no
+`tribal init`, no prior setup. It fetches the shared session, works out
 where to land it (the current checkout if its remote matches, the most recently
 used matching checkout it has seen, or a fresh clone into `./<name>` — printed,
 never asked), writes the transcript, and opens the harness on it. `--into <dir>`
@@ -412,7 +412,7 @@ that publishes nothing falls back to rewriting `app.<domain>` to `api.<domain>`,
 which is why a deployment serving its API under a path prefix needs either the
 document or `--server`.
 
-Find one with `git lineage list`, which shows id, date, turn count, agent, model,
+Find one with `tribal list`, which shows id, date, turn count, agent, model,
 and who ran it, newest first:
 
 ```text
@@ -423,7 +423,7 @@ and who ran it, newest first:
 Then fork it:
 
 ```bash
-git lineage fork 01HQZX8K9V2M3N4P5Q6R7S8T9U
+tribal fork 01HQZX8K9V2M3N4P5Q6R7S8T9U
 ```
 
 ```text
@@ -465,7 +465,7 @@ Notes:
 
 ## Brief a subagent on a session
 
-`git lineage fork <session-id> --brief` writes nothing. It prints a
+`tribal fork <session-id> --brief` writes nothing. It prints a
 self-contained context block for handing to a **subagent** — one the calling
 agent spawns with its own tool — so someone else's session can be investigated
 without loading it into the current window.
@@ -474,7 +474,7 @@ Tribal cannot spawn the subagent; that is model-initiated. Its whole job here
 is to emit the text.
 
 ```bash
-git lineage fork 01HQZX8K9V2M3N4P5Q6R7S8T9U --brief
+tribal fork 01HQZX8K9V2M3N4P5Q6R7S8T9U --brief
 ```
 
 The block has three parts:
@@ -515,10 +515,10 @@ Notes:
 
 ## Reopening versus writing one out
 
-`git lineage fork` reopens a session your harness holds:
+`tribal fork` reopens a session your harness holds:
 
 ```bash
-git lineage fork 01HQZX8K9V2M3N4P5Q6R7S8T9U
+tribal fork 01HQZX8K9V2M3N4P5Q6R7S8T9U
 ```
 
 ```text

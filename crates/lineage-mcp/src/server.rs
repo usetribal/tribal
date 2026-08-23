@@ -343,7 +343,7 @@ async fn handle_tool_call(repo_path: &Path, params: &Value) -> Result<Value, Str
         }
         "lineage_doctor" => {
             // The full diagnostics-v0 report, unfiltered — same object as
-            // `git lineage doctor --json`.
+            // `tribal doctor --json`.
             let report = lineage_cli::doctor_cmd::doctor_report(
                 repo_path,
                 lineage_cli::doctor_cmd::DEFAULT_ACTIVITY_LIMIT,

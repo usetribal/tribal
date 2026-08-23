@@ -26,7 +26,7 @@ export class LineageClient {
             return stdout;
         }
 
-        const { stdout } = await execFileAsync("git", ["lineage", ...args], {
+        const { stdout } = await execFileAsync("tribal", args, {
             cwd: this.workspaceRoot,
             maxBuffer: 10 * 1024 * 1024,
         });

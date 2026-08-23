@@ -8,15 +8,15 @@ Import discovers agent transcripts on disk, normalizes them to Tribal conversati
 
 ```bash
 # All supported agents
-git lineage import --agent all
+tribal import --agent all
 
 # One agent
-git lineage import --agent cursor
-git lineage import --agent claude
-git lineage import --agent codex
+tribal import --agent cursor
+tribal import --agent claude
+tribal import --agent codex
 ```
 
-Alias: `git lineage ingest` (same command).
+Alias: `tribal ingest` (same command).
 
 ## First import vs incremental
 
@@ -25,7 +25,7 @@ Alias: `git lineage ingest` (same command).
 **Incremental import** skips sessions already recorded unless the source transcript file changed:
 
 ```bash
-git lineage import --agent all --incremental
+tribal import --agent all --incremental
 ```
 
 Hooks use incremental import on every commit. Day-to-day workflow: enable hooks or run incremental import before pushing.
@@ -41,7 +41,7 @@ Hooks use incremental import on every commit. Day-to-day workflow: enable hooks 
 Example bounded import:
 
 ```bash
-git lineage import --agent claude --since 2026-03-01 --incremental
+tribal import --agent claude --since 2026-03-01 --incremental
 ```
 
 ## What happens during import
@@ -64,17 +64,17 @@ Import stamps `prompted_by_email` and `prompted_by_name` from the repository git
 
 ## Setup integration
 
-`git lineage init` can run the first import interactively. Non-interactive:
+`tribal init` can run the first import interactively. Non-interactive:
 
 ```bash
-git lineage init --yes
-git lineage init --yes --no-import
+tribal init --yes
+tribal init --yes --no-import
 ```
 
 Manual import any time:
 
 ```bash
-git lineage import --agent all --incremental
+tribal import --agent all --incremental
 ```
 
 ## Automatic import
@@ -85,9 +85,9 @@ git lineage import --agent all --incremental
 
 | Issue | What to check |
 |-------|----------------|
-| `discovered 0 session(s)` | [Agent paths](agent-paths.md); run from repo root; `git lineage doctor` |
+| `discovered 0 session(s)` | [Agent paths](agent-paths.md); run from repo root; `tribal doctor` |
 | Sessions missing from manifest | `import_only_code_sessions`; session may have no code edits |
-| No blame after import | Commit with hooks or `git lineage link` / `materialize` |
+| No blame after import | Commit with hooks or `tribal link` / `materialize` |
 | Secrets in session | [Privacy](privacy.md); tighten `exclude_paths` |
 
 ## Related guides

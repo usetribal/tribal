@@ -49,7 +49,7 @@ fn without_a_terminal_a_missing_login_fails_rather_than_blocking() {
         .unwrap_err();
     let message = error.to_string();
     assert!(message.contains("not logged in"), "{message}");
-    assert!(message.contains("git lineage login"), "{message}");
+    assert!(message.contains("tribal login"), "{message}");
 }
 
 /// The behaviour asked for: at a terminal, a command that needs a token signs

@@ -34,7 +34,7 @@ Maps source lines to the agent conversation turn that introduced or modified the
 
 - **exact**: Derived from structured tool call (edit_file with line range)
 - **heuristic**: Inferred from blame + session time overlap
-- **manual**: User-linked via `git lineage link`
+- **manual**: User-linked via `tribal link`
 
 ## Many-to-one
 

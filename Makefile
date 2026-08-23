@@ -19,7 +19,7 @@ endif
 
 help:
 	@echo "Tribal targets:"
-	@echo "  make setup        - one-command local dev setup (CLI, extension, git lineage init)"
+	@echo "  make setup        - one-command local dev setup (CLI, extension, tribal init)"
 	@echo "    REPO=path        target git repo (default: lineage repo root)"
 	@echo "    IMPORT=1         run initial import after setup"
 	@echo "    WITH_MCP=1       also install lineage-mcp"

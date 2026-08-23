@@ -53,7 +53,7 @@ Commands with `--json` emit serde-shaped structures aligned with specs. If you a
 
 ## Validation
 
-Import and read paths validate `schema_version` and fail with explicit errors on mismatch. `git lineage doctor` helps detect broken refs but does not replace schema review in PRs.
+Import and read paths validate `schema_version` and fail with explicit errors on mismatch. `tribal doctor` helps detect broken refs but does not replace schema review in PRs.
 
 ## Related guides
 

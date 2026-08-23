@@ -166,7 +166,7 @@ export function activate(context: vscode.ExtensionContext): void {
                     await resumeAgentSession(client!, id);
                 } catch (e) {
                     // The CLI's stderr names the agent that cannot be resumed,
-                    // or points at `git lineage fork` when the session is not on
+                    // or points at `tribal fork` when the session is not on
                     // this machine. execFile's own prose buries both.
                     vscode.window.showErrorMessage(`Resume session failed: ${cliMessage(e)}`);
                 }

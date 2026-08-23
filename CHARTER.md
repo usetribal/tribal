@@ -51,7 +51,7 @@ oss/
 │   ├── lineage-store/     #   large-content tiering
 │   ├── lineage-search/    #   local, disposable SQLite index
 │   ├── lineage-mcp/       #   MCP server (stdio JSON-RPC)
-│   └── git-lineage/       #   the `git lineage` CLI
+│   └── tribal/       #   the `tribal` CLI
 │
 └── extensions/
     └── vscode/            # VS Code extension (TS) — shells out to the CLI

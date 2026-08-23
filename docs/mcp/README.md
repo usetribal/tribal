@@ -47,7 +47,7 @@ right. Each is read-only, privacy-gated, and bounded by an optional `limit`.
 | `lineage_produced_by` | Right turn, want its outcome — the code that turn produced |
 | `lineage_sessions_for_commit` | Have a commit, want the reasoning — the sessions behind `commit_sha` |
 
-These are the same four verbs the CLI exposes as `git lineage context <verb>`,
+These are the same four verbs the CLI exposes as `tribal context <verb>`,
 defined once in `lineage-retrieval::VERBS`; registry tests assert neither
 surface can gain or lose one without the other. `tools/list` is verb discovery
 for free on this path, so MCP needs no equivalent of the CLI's `SessionStart`
@@ -59,7 +59,7 @@ hook.
 |------|-------------|
 | `lineage_fork_brief` | A self-contained context block for `session_id` — whose session it was, what they asked for, the turns that changed code, the traversal verbs, and an empty task slot — for starting a subagent on it |
 
-This is the brief half of `git lineage fork` and **only** that half: it writes
+This is the brief half of `tribal fork` and **only** that half: it writes
 no transcript and records no fork edge. The CLI's `fork` prints a command for a
 human to run and can write a transcript into the harness's state directory; over
 MCP there is nobody at a terminal to read a printed command, and writing a

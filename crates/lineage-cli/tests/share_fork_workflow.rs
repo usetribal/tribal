@@ -1,4 +1,4 @@
-//! `git lineage fork <share-url>` — the receiving half of a share, end to end
+//! `tribal fork <share-url>` — the receiving half of a share, end to end
 //! against a stub server.
 //!
 //! Everything that leaves the process — the fetch, the registry lookup, the
@@ -611,7 +611,7 @@ fn a_harness_that_will_not_start_leaves_the_fork_done_and_the_command_printed() 
 /// `LINEAGE_CONFIG_DIR` pointed at a tempdir rather than calling the library in
 /// this process, whose environment is shared with every other test.
 fn run_cli(args: &[&str], cwd: &Path, config_dir: &Path, home: &Path) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_git-lineage"))
+    Command::new(env!("CARGO_BIN_EXE_tribal"))
         .args(args)
         .current_dir(cwd)
         .env("LINEAGE_CONFIG_DIR", config_dir)
@@ -786,7 +786,7 @@ fn a_url_argument_takes_the_share_path_rather_than_the_session_lookup() {
         "took the session-id path instead of the share path: {stderr}"
     );
     assert!(
-        !stderr.contains("git lineage list"),
+        !stderr.contains("tribal list"),
         "the session-id error must not appear for a URL: {stderr}"
     );
 }

@@ -1,8 +1,8 @@
 # Diagnostics v0
 
 Two diagnostic surfaces: the **event log**, a local record of every operation
-`git-lineage` performs, and the **doctor report**, the machine-readable output
-of `git lineage doctor --json`. Both are narrative contracts defined by this
+`tribal` performs, and the **doctor report**, the machine-readable output
+of `tribal doctor --json`. Both are narrative contracts defined by this
 document; they are not generated from `lineage-core` types.
 
 ## Event log
@@ -49,7 +49,7 @@ One entry per command invocation.
 | `context_hook` | `{ "file_path": "...", "harness": "claude", "session_ids": [...], "handles": [...], "strength": "..." }` — `handles` are the digest's rendered handles, in selection order, so a later traversal can be tied to the entry that offered it; when `outcome` is `silent` or `error`, `session_ids`/`handles`/`strength` are absent and a `reason` field is present |
 | `context_traversal` | `{ "relation": "...", "handle": "...", "session_ids": [...], "results": count }` — one entry per traversal verb run. `relation` is the abstract verb name from `lineage-retrieval::VERBS` (never the CLI or MCP spelling), so the same traversal logs identically whichever surface issued it. `handle` is the argument as given; `session_ids` is what it resolved to — the sessions for `search-within`, the turn's session for `around`/`produced-by`, and empty for `sessions-for-commit`, which is addressed by commit sha. `results: 0` is recorded, not skipped: an honest-nothing traversal is still one the agent chose to make |
 
-`git lineage context log` renders the `context_hook` entries with
+`tribal context log` renders the `context_hook` entries with
 `outcome: "ok"` — they are the injection log required by
 [context-injection-v0 § Injection log](context-injection-v0.md#injection-log).
 
@@ -71,7 +71,7 @@ path) produce no entry.
 ## Doctor report
 
 ```bash
-git lineage doctor [--json] [--section <name>]...
+tribal doctor [--json] [--section <name>]...
 ```
 
 `--json` emits one object; `--section` (repeatable) filters which top-level
@@ -97,7 +97,7 @@ Installation and wiring state.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `binary_version` | string | Version of the running `git-lineage` |
+| `binary_version` | string | Version of the running `tribal` |
 | `is_git_repo` | bool | Directory is a git repository |
 | `notes_ref_ok` | bool | Tribal notes ref present or creatable |
 | `index_ref_ok` | bool | Tribal index ref present or creatable |

@@ -166,7 +166,7 @@ pub struct Turn {
 ///
 /// This is a separate field from `parent_session_id` rather than a flag beside
 /// it, because that field is already overloaded. Claude sidechains set it for
-/// subagent branches the harness spawned on its own, and `git lineage list`
+/// subagent branches the harness spawned on its own, and `tribal list`
 /// currently reports *any* conversation with a parent as a sidechain. A fork is
 /// a different relation with different semantics — the forker owns the lines
 /// going forward, the source author is an ancestor and never a co-author — so
@@ -235,7 +235,7 @@ pub struct Conversation {
     pub workspace_root: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_session_id: Option<LineageId>,
-    /// Set only when this session was written out by `git lineage fork`. A parent
+    /// Set only when this session was written out by `tribal fork`. A parent
     /// with no `fork_origin` is a harness-spawned branch (sidechain/subagent).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fork_origin: Option<ForkOrigin>,

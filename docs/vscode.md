@@ -2,7 +2,7 @@
 
 [← Documentation index](README.md) · [CLI reference](cli/README.md) · [Fork a session](fork-a-session.md)
 
-The Tribal extension brings session search, timeline view, gutter blame, and resume/fork into VS Code and Cursor. It shells out to `git lineage` for all repository operations.
+The Tribal extension brings session search, timeline view, gutter blame, and resume/fork into VS Code and Cursor. It shells out to `tribal` for all repository operations.
 
 ## Install
 
@@ -24,8 +24,8 @@ Install the generated `.vsix` via **Extensions: Install from VSIX**.
 
 ### Requirements
 
-- `git lineage` on PATH, or `lineage.cliPath` configured
-- A git repository with lineage initialized (`git lineage init`)
+- `tribal` on PATH, or `lineage.cliPath` configured
+- A git repository with lineage initialized (`tribal init`)
 
 ## Features
 
@@ -42,11 +42,11 @@ Install the generated `.vsix` via **Extensions: Install from VSIX**.
 
 | Command | Keybinding | Description |
 |---------|------------|-------------|
-| Lineage: Import Sessions | | Run `git lineage import` |
+| Lineage: Import Sessions | | Run `tribal import` |
 | Lineage: Refresh Sessions | | Reload session tree |
 | Lineage: View Conversation | | Open timeline for a session |
 | Lineage: Resume Conversation | | Resume Claude/Codex in terminal |
-| Lineage: Fork Conversation | | Run `git lineage fork` and show its output |
+| Lineage: Fork Conversation | | Run `tribal fork` and show its output |
 | Lineage: Show Lineage for Line | `Cmd+Shift+L` / `Ctrl+Shift+L` | Blame line and open session |
 | Lineage: View Commit | | Show linked `git show` |
 | Lineage: Search Sessions | | Full-text search |
@@ -61,14 +61,14 @@ Install the generated `.vsix` via **Extensions: Install from VSIX**.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `lineage.cliPath` | `""` | Path to `git-lineage` binary; empty uses `git lineage` on PATH |
+| `lineage.cliPath` | `""` | Path to `tribal` binary; empty uses `tribal` on PATH |
 | `lineage.decorateGutter` | `true` | Gutter icon on lines with lineage |
 | `lineage.hoverEnabled` | `true` | Show lineage hover in editor |
 | `lineage.autoRefresh` | `true` | Refresh session list after import |
 
 ## Typical workflow
 
-1. Run `git lineage init` in your project (or use **Init Config** + **Install Git Hooks** from the palette).
+1. Run `tribal init` in your project (or use **Init Config** + **Install Git Hooks** from the palette).
 2. **Import Sessions** or commit with hooks enabled.
 3. Open the Tribal activity bar to browse sessions.
 4. Use **Show Tribal for Line** or gutter icons while editing.
@@ -84,7 +84,7 @@ npm install
 npm run check
 ```
 
-Press **F5** in the tribal monorepo with the **Tribal Extension** launch configuration. Default settings point `lineage.cliPath` at the debug `git-lineage` binary built by `make setup`.
+Press **F5** in the tribal monorepo with the **Tribal Extension** launch configuration. Default settings point `lineage.cliPath` at the debug `tribal` binary built by `make setup`.
 
 See [Developing](developing.md) for full contributor workflow.
 
@@ -93,7 +93,7 @@ See [Developing](developing.md) for full contributor workflow.
 | Problem | What to try |
 |---------|-------------|
 | Empty session list | Import sessions; check `lineage.cliPath` |
-| Commands fail silently | Run `git lineage doctor` in terminal |
+| Commands fail silently | Run `tribal doctor` in terminal |
 | Resume unavailable | Confirm agent is Claude/Codex and session has vendor id |
 | Stale gutter icons | **Refresh Sessions** or re-run import |
 

@@ -230,7 +230,7 @@ fn repo_binding_or_local(repo: &lineage_git::LineageRepo) -> RepoBinding {
     })
 }
 
-/// `git lineage context log` — what was injected, newest last. The injection
+/// `tribal context log` — what was injected, newest last. The injection
 /// log required by context-injection-v0 is a view over the event log's
 /// `context_hook` entries with `outcome: "ok"` (spec: diagnostics-v0), not a
 /// separate file.
@@ -269,7 +269,7 @@ pub fn print_log(repo_path: &Path, limit: usize) -> Result<()> {
     Ok(())
 }
 
-/// `git lineage context chain <file>:<line>`: print the temporal chain for a
+/// `tribal context chain <file>:<line>`: print the temporal chain for a
 /// line, one hop per row. One live blame anchors the line at HEAD to its commit;
 /// every subsequent hop is resolved from the index tables (`line_history` takes
 /// no repo, so it cannot blame). Mirrors `chain.sh`'s columns for parity.
@@ -391,8 +391,8 @@ pub fn hook_claude_session_start(repo_path: &Path, input: &str, now_unix: i64) -
 }
 
 const CLAUDE_SETTINGS_FILE: &str = ".claude/settings.json";
-const HOOK_COMMAND: &str = "git lineage context hook claude";
-const SESSION_START_HOOK_COMMAND: &str = "git lineage context hook claude-session-start";
+const HOOK_COMMAND: &str = "tribal context hook claude";
+const SESSION_START_HOOK_COMMAND: &str = "tribal context hook claude-session-start";
 
 /// Wires the injection endpoint into Claude Code's project settings.
 /// Idempotent, and merges into existing settings rather than replacing them —
@@ -554,7 +554,7 @@ fn group_has_lineage_hook(group: &serde_json::Value) -> bool {
     group["hooks"].as_array().into_iter().flatten().any(|hook| {
         hook["command"]
             .as_str()
-            .is_some_and(|c| c.contains("git lineage context hook"))
+            .is_some_and(|c| c.contains("tribal context hook"))
     })
 }
 

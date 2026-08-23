@@ -8,20 +8,20 @@
 //! `lineage-mcp/tests/server.rs`.
 //!
 //! `CONTINUE_SESSION` is registered beside the verbs and covered here too, but
-//! it lands in a different place on this surface: `git lineage fork`, a
+//! it lands in a different place on this surface: `tribal fork`, a
 //! top-level command, not a `context` subcommand. That difference is precisely
 //! why it is not in `VERBS` — everything in that list is reachable as
-//! `git lineage context <cli>`.
+//! `tribal context <cli>`.
 
 use std::process::Command;
 
 use lineage_retrieval::{CONTINUE_SESSION, VERBS};
 
-/// The subcommand names `git lineage context --help` advertises. Read from the
+/// The subcommand names `tribal context --help` advertises. Read from the
 /// built binary rather than from the source enum: what an agent can actually
 /// invoke is what clap accepts, not what a table says.
 fn context_subcommands() -> Vec<String> {
-    let out = Command::new(env!("CARGO_BIN_EXE_git-lineage"))
+    let out = Command::new(env!("CARGO_BIN_EXE_tribal"))
         .args(["context", "--help"])
         .output()
         .unwrap();
@@ -63,7 +63,7 @@ fn every_registry_verb_is_a_context_subcommand() {
 /// the binary rejects is worse than one that never mentioned it.
 #[test]
 fn the_continuation_capability_is_a_top_level_command_with_brief() {
-    let out = Command::new(env!("CARGO_BIN_EXE_git-lineage"))
+    let out = Command::new(env!("CARGO_BIN_EXE_tribal"))
         .args([CONTINUE_SESSION.cli, "--help"])
         .output()
         .unwrap();

@@ -1,4 +1,4 @@
-//! `git lineage share` — turn the session you are in into a link anyone can
+//! `tribal share` — turn the session you are in into a link anyone can
 //! open without an account (`specs/share-v0.md`).
 //!
 //! Capture is the sync path with a filter, not a second upload route: the same
@@ -139,8 +139,8 @@ pub fn resolve_current_session(
 
     let Some(hint) = session_id else {
         let session = most_recently_modified(discovered).ok_or_else(|| {
-            "no agent session found for this directory — run `git lineage share --session <id>` \
-             with a session `git lineage list` shows, or start an agent session here first"
+            "no agent session found for this directory — run `tribal share --session <id>` \
+             with a session `tribal list` shows, or start an agent session here first"
                 .to_string()
         })?;
         return Ok(CurrentSession {

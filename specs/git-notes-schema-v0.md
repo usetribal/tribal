@@ -26,7 +26,7 @@ Each commit with linked sessions gets a note:
 }
 ```
 
-`patch_id` (optional) is a stable hash of the commit's normalized diff, used by `git lineage remap` after rebases.
+`patch_id` (optional) is a stable hash of the commit's normalized diff, used by `tribal remap` after rebases.
 
 ## Blob storage
 

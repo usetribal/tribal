@@ -228,7 +228,7 @@ fn agent_hook_install_is_idempotent_and_merge_preserving() {
     assert_eq!(groups[0]["matcher"], "Bash");
     assert_eq!(
         groups[1]["hooks"][0]["command"],
-        "git lineage context hook claude"
+        "tribal context hook claude"
     );
 }
 
@@ -244,7 +244,7 @@ fn install_writes_both_hook_groups_and_backfills_a_missing_one() {
     assert_eq!(session_start.len(), 1);
     assert_eq!(
         session_start[0]["hooks"][0]["command"],
-        "git lineage context hook claude-session-start"
+        "tribal context hook claude-session-start"
     );
     // SessionStart has no tool to match on, so the group carries no matcher.
     assert!(session_start[0].get("matcher").is_none());
@@ -253,7 +253,7 @@ fn install_writes_both_hook_groups_and_backfills_a_missing_one() {
     // must add the missing one rather than see the shared prefix and stop.
     fs::write(
         &settings_path,
-        r#"{"hooks": {"PostToolUse": [{"matcher": "Read", "hooks": [{"type": "command", "command": "git lineage context hook claude"}]}]}}"#,
+        r#"{"hooks": {"PostToolUse": [{"matcher": "Read", "hooks": [{"type": "command", "command": "tribal context hook claude"}]}]}}"#,
     )
     .unwrap();
     assert!(context_cmd::install_claude_agent_hook(dir.path()).unwrap());
@@ -357,7 +357,7 @@ fn session_start_hook_fails_open_on_a_malformed_payload() {
     assert!(parsed["hookSpecificOutput"]["additionalContext"]
         .as_str()
         .unwrap()
-        .contains("git lineage context"));
+        .contains("tribal context"));
 }
 
 #[test]

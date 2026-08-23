@@ -24,14 +24,14 @@ A session becomes private when:
 
 Private sessions still exist in the manifest for your repo, but turn content may be stripped on export when `strip_private_on_export` is true (the default).
 
-To keep a session local in practice, avoid pushing `refs/lineage/*` until you have reviewed exports, or delete the session with `git lineage delete`.
+To keep a session local in practice, avoid pushing `refs/lineage/*` until you have reviewed exports, or delete the session with `tribal delete`.
 
 ## Export and sharing
 
 Before pushing lineage refs publicly or to a broad team audience:
 
 ```bash
-git lineage export --redact --format jsonl > review.jsonl
+tribal export --redact --format jsonl > review.jsonl
 ```
 
 Review the file for content you are comfortable sharing. `--redact` applies export-time policy (including private session stripping).
@@ -39,7 +39,7 @@ Review the file for content you are comfortable sharing. `--redact` applies expo
 Sharing refs themselves:
 
 ```bash
-git lineage lfs push
+tribal lfs push
 git push origin refs/lineage/* refs/notes/lineage
 ```
 
@@ -55,7 +55,7 @@ After fetch, teammates get the same conversation blobs, notes, and line objects 
 
 ## Images and large artifacts
 
-Image and large text artifacts may live in Git LFS. They follow the same path excludes and redaction rules as inline content. Use `git lineage show <id> --hydrate-images` only in trusted environments when reviewing media.
+Image and large text artifacts may live in Git LFS. They follow the same path excludes and redaction rules as inline content. Use `tribal show <id> --hydrate-images` only in trusted environments when reviewing media.
 
 ## Configuration levers
 
@@ -70,10 +70,10 @@ Details: [Configuration](configuration.md).
 
 ## Operational hygiene
 
-- Run `git lineage doctor` after changing policy or cloning a repo with lineage refs.
-- Use `git lineage delete <id> --purge-blobs` to remove a session and refcount-aware LFS data when a conversation should not remain in history.
-- Run `git lineage gc` periodically to drop orphan line objects and unreferenced blobs.
-- Do not paste raw `git lineage show` or export output into public issue trackers.
+- Run `tribal doctor` after changing policy or cloning a repo with lineage refs.
+- Use `tribal delete <id> --purge-blobs` to remove a session and refcount-aware LFS data when a conversation should not remain in history.
+- Run `tribal gc` periodically to drop orphan line objects and unreferenced blobs.
+- Do not paste raw `tribal show` or export output into public issue trackers.
 
 ## Reporting security issues
 

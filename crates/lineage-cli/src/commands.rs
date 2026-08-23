@@ -23,6 +23,7 @@ use lineage_search::{LineageIndex, SearchHit};
 
 use crate::auth;
 use crate::events::{EventLog, Outcome};
+use crate::migrate;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -879,7 +880,7 @@ pub fn index_persisted_sessions_best_effort(repo: &LineageRepo, session_ids: &[L
     if let Err(error) = index_persisted_sessions(repo, session_ids) {
         eprintln!(
             "warning: session saved but not added to the search index ({error}); \
-             run `git lineage rebuild index` to make it searchable"
+             run `tribal rebuild index` to make it searchable"
         );
     }
 }
@@ -927,7 +928,7 @@ fn run_embed_pass(repo_path: &Path) -> Result<usize> {
     Ok(embedded)
 }
 
-/// `git lineage rebuild embeddings`: the dense-embedding backfill on its own,
+/// `tribal rebuild embeddings`: the dense-embedding backfill on its own,
 /// symmetric with `rebuild index`.
 pub fn rebuild_embeddings(repo_path: &Path) -> Result<()> {
     let embedded = run_embed_pass(repo_path)?;
@@ -1203,6 +1204,47 @@ pub fn rebuild(repo_path: &Path, embed: bool) -> Result<()> {
             "sessions_embedded": sessions_embedded,
         }),
     );
+    Ok(())
+}
+
+/// Bring state left by an older version up to date.
+///
+/// Reports every step it considered, not only the ones that changed something:
+/// after a rename the interesting answer is often "nothing here needed moving",
+/// and a silent command cannot distinguish that from having done nothing.
+pub fn upgrade(repo_path: &Path, dry_run: bool) -> Result<()> {
+    // A repository is optional: the config directory is machine-global, so this
+    // has to work from a home directory that is not a checkout.
+    let context = migrate::Context {
+        repo_path: open_repo(repo_path).ok().map(|_| repo_path.to_path_buf()),
+    };
+
+    if dry_run {
+        let pending = migrate::pending(&context)?;
+        if pending.is_empty() {
+            println!("up to date");
+            return Ok(());
+        }
+        println!("would run:");
+        for (migration, step) in pending {
+            println!("  {migration}  {step}");
+        }
+        return Ok(());
+    }
+
+    let reports = migrate::apply_pending(&context)?;
+    if reports.is_empty() {
+        println!("up to date");
+        return Ok(());
+    }
+
+    for report in &reports {
+        let (verb, detail) = match &report.outcome {
+            migrate::Outcome::Applied(detail) => ("applied", detail),
+            migrate::Outcome::Skipped(detail) => ("skipped", detail),
+        };
+        println!("  {verb}  {}  {}", report.step, detail);
+    }
     Ok(())
 }
 

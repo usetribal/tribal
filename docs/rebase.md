@@ -17,7 +17,7 @@ You do not need remap for normal fast-forward pulls or merge commits that preser
 ## Command
 
 ```bash
-git lineage remap
+tribal remap
 ```
 
 Remap:
@@ -30,20 +30,20 @@ Remap:
 Verify:
 
 ```bash
-git lineage list --commit <new-sha> --json
-git lineage blame path/to/file.rs:42
+tribal list --commit <new-sha> --json
+tribal blame path/to/file.rs:42
 ```
 
 ## Limits
 
-Remap succeeds when patch-id correspondence exists between old and new commits. Extreme history surgery (splitting patches unrelated to original commits) may leave orphans. Manual `git lineage link` and `materialize` can repair individual sessions.
+Remap succeeds when patch-id correspondence exists between old and new commits. Extreme history surgery (splitting patches unrelated to original commits) may leave orphans. Manual `tribal link` and `materialize` can repair individual sessions.
 
 ## Workflow tip
 
 ```bash
 git rebase -i main
-git lineage remap
-git lineage doctor
+tribal remap
+tribal doctor
 # push updated refs if sharing lineage with team
 git push origin refs/lineage/* refs/notes/lineage
 ```

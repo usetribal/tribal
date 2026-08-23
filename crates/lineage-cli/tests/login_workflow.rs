@@ -48,7 +48,7 @@ fn login_stores_handle_and_exchange_resolves_token() {
 
     // A dead session (server 401) must tell the user to log in again.
     let error = auth::access_token_for(&server).unwrap_err().to_string();
-    assert!(error.contains("git lineage login"), "got: {error}");
+    assert!(error.contains("tribal login"), "got: {error}");
 
     // No login recorded for an unknown server.
     let error = auth::access_token_for("http://127.0.0.1:1/api")
