@@ -87,3 +87,40 @@ fn resolves_v4a_patch_glob_and_multi_path_tool_calls() {
     assert!(target.value.contains("src/config.rs"));
     assert!(target.value.contains("src/new_module.rs"));
 }
+
+/// Regression coverage for Cursor's harness-injected `<user_query>`/
+/// `<timestamp>` wrapper and noise-tag blocks (`<uploaded_documents>`
+/// confirmed in real data, alongside `<external_links>`, `<mcp_meta_tools>`,
+/// `<dynamic_tools>`, `<manually_attached_skills>`, `<image_files>`).
+/// Claude Code carries none of this — a plain typed turn there has no
+/// wrapper at all. Before this, every Cursor user turn stored the raw tags
+/// as if they were the message itself.
+#[test]
+fn strips_cursor_wrapper_and_noise_tags_from_user_turns() {
+    let fixture =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/cursor-history");
+    let adapter = CursorAdapter::new(&fixture);
+    let sessions = adapter.discover().unwrap();
+    let conv = adapter.read(&sessions[0]).unwrap();
+
+    let first_turn = &conv.turns[0];
+    assert_eq!(
+        first_turn.content,
+        "Refactor src/auth.rs to use JWT middleware"
+    );
+    assert!(!first_turn.content.contains("<user_query>"));
+    assert!(!first_turn.content.contains("<timestamp>"));
+    let ts = first_turn
+        .timestamp
+        .expect("timestamp recovered from the wrapper");
+    assert_eq!(ts.to_rfc3339(), "2026-06-14T18:46:00+00:00");
+
+    let last_turn = conv.turns.last().expect("uploaded_documents turn");
+    // The tag markers are gone, but the content they wrapped — the
+    // attached-file notice — is real context for the turn and is kept.
+    assert!(!last_turn.content.contains("<uploaded_documents>"));
+    assert!(!last_turn.content.contains("</uploaded_documents>"));
+    assert!(!last_turn.content.contains("<user_query>"));
+    assert!(last_turn.content.contains("/tmp/notes.txt"));
+    assert!(last_turn.content.contains("review the file I attached"));
+}

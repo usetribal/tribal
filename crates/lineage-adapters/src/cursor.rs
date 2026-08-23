@@ -14,6 +14,7 @@ use serde::Deserialize;
 
 use crate::citations::enrich_turn_with_citations;
 use crate::content::{enrich_turn_with_images, extract_cursor_content};
+use crate::cursor_tags::strip_cursor_tags;
 use crate::metadata::{finalize_session_metadata, insert_str, normalize_model};
 use crate::path_util::cursor_transcripts_dir;
 
@@ -191,6 +192,15 @@ impl SessionReader for CursorAdapter {
                 continue;
             };
 
+            // Cursor's IDE transcript wraps nearly every user turn in
+            // <user_query>/<timestamp> and occasionally injects whole
+            // system-prompt or file-upload blocks into the message text —
+            // none of it is what the person actually typed. Stripped before
+            // enrichment scans the text, so noise blocks aren't searched
+            // for citations or image markdown that was never really there.
+            let stripped = strip_cursor_tags(&text);
+            let text = stripped.text;
+
             if text.is_empty() && tool_calls.is_empty() {
                 continue;
             }
@@ -212,7 +222,7 @@ impl SessionReader for CursorAdapter {
                 content: text,
                 tool_calls,
                 model: normalize_model(model),
-                timestamp: None,
+                timestamp: stripped.timestamp,
                 artifacts,
             });
             turn_index += 1;

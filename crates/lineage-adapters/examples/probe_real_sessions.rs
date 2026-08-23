@@ -239,6 +239,31 @@ fn inspect_session(adapter: &impl SessionReader, session: &SessionRef, report: &
                 if t.timestamp.is_none() {
                     report.missing_timestamps += 1;
                 }
+                // Only the *outer* wrapper leaking through is a bug — a
+                // pasted transcript containing these tag names as literal
+                // text further into the message is expected and must
+                // survive untouched (see cursor_tags::real_data_repro).
+                let leading = t.content.trim_start();
+                for tag in [
+                    "<user_query>",
+                    "<timestamp>",
+                    "<uploaded_documents>",
+                    "<external_links>",
+                    "<mcp_meta_tools>",
+                    "<dynamic_tools>",
+                    "<manually_attached_skills>",
+                    "<image_files>",
+                ] {
+                    if leading.starts_with(tag) {
+                        *report.by_name.entry(format!("leftover {tag}")).or_insert(0) += 1;
+                        if report.errors.len() < 10 {
+                            report.errors.push(format!(
+                                "leftover {tag} in: {}",
+                                t.content.chars().take(300).collect::<String>()
+                            ));
+                        }
+                    }
+                }
                 for tc in &t.tool_calls {
                     // tool_result carries an answer, not a call — it never
                     // names a target by design (ToolTarget documents "what a

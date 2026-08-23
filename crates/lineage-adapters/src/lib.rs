@@ -1,6 +1,7 @@
 mod apply_patch;
 mod citations;
 mod content;
+mod cursor_tags;
 mod metadata;
 mod path_util;
 mod shell_writes;
