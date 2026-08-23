@@ -1,3 +1,4 @@
+mod apply_patch;
 mod citations;
 mod content;
 mod metadata;

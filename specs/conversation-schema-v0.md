@@ -105,6 +105,13 @@ Set at first import from the repository git config (`user.email`, `user.name`). 
 | `model` | string | no | Model identifier |
 | `timestamp` | ISO8601 | no | Turn timestamp |
 
+**Cursor never sets this.** Its IDE agent-transcript JSONL carries no
+timestamp at any level — confirmed against every local transcript observed,
+not just the absence of a field name guess. A consumer that orders or
+buckets turns by `timestamp` sees every Cursor turn as absent and must fall
+back to session-level `started_at`/`ended_at` (themselves derived from file
+mtime for this agent) rather than treating the gap as a parsing bug.
+
 ## ToolCall
 
 ```json

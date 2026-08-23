@@ -231,6 +231,18 @@ pub fn artifacts_from_tool_input(
         return Vec::new();
     };
 
+    // `ApplyPatch`/`apply_patch` payloads arrive as a raw V4A patch string,
+    // not a JSON object — every key lookup below operates on Value::Object
+    // and returns None against a Value::String, so this must be checked
+    // before any `.get()` call reaches it, not folded into the object-keyed
+    // path below.
+    if let Some(patch_text) = input.as_str() {
+        if crate::apply_patch::looks_like_v4a_patch(patch_text) {
+            let files = crate::apply_patch::parse_v4a_patch(patch_text);
+            return crate::apply_patch::artifacts_from_v4a_patch(&files, workspace_root);
+        }
+    }
+
     let lower = name.to_lowercase();
     if lower.contains("generateimage") || lower == "generate_image" {
         let path = input
@@ -349,13 +361,51 @@ fn is_shell_tool(name: &str) -> bool {
 /// Argument keys naming a file, most specific first. Shared with
 /// [`artifacts_from_tool_input`] so the two cannot disagree about which key a
 /// harness uses.
-const PATH_KEYS: &[&str] = &["path", "file_path", "file", "target", "notebook_path"];
+const PATH_KEYS: &[&str] = &[
+    "path",
+    "file_path",
+    "file",
+    "target",
+    "notebook_path",
+    "target_notebook",
+];
+
+/// Argument keys naming zero or more files as a JSON array rather than a
+/// single string — confirmed against Cursor's `ReadLints`, which takes
+/// `paths: [...]`. Multi-valued, so it resolves to a `Subject` (comma-joined)
+/// rather than `Path`: `ToolTarget` carries one value and none of the paths
+/// is more "the" target than the others.
+const PATH_ARRAY_KEYS: &[&str] = &["paths"];
+
+fn first_path_list(input: &Value, keys: &[&str]) -> Option<String> {
+    keys.iter().find_map(|key| input.get(key)).and_then(|v| {
+        let arr = v.as_array()?;
+        let joined = arr
+            .iter()
+            .filter_map(|item| item.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        (!joined.is_empty()).then_some(joined)
+    })
+}
 
 /// Argument keys naming a shell command.
 const COMMAND_KEYS: &[&str] = &["command", "cmd"];
 
 /// Argument keys carrying free text: what was searched for, asked, or fetched.
-const SUBJECT_KEYS: &[&str] = &["pattern", "query", "url", "prompt", "description"];
+/// `glob_pattern` (Cursor's `Glob`) and `search_term` (Cursor's `WebSearch`)
+/// were confirmed missing against real transcripts — both tools' calls
+/// resolved to no target at all under the object-keyed lookup, even though
+/// their argument carries exactly the kind of free text this list exists for.
+const SUBJECT_KEYS: &[&str] = &[
+    "pattern",
+    "glob_pattern",
+    "query",
+    "search_term",
+    "url",
+    "prompt",
+    "description",
+];
 
 fn first_str(input: &Value, keys: &[&str]) -> Option<String> {
     keys.iter()
@@ -379,6 +429,21 @@ pub fn tool_target(
 ) -> Option<ToolTarget> {
     let input = input?;
 
+    // Same V4A-string case as artifacts_from_tool_input: a call can name
+    // several files, so ToolTarget (single-valued) reports the first one —
+    // the fuller picture lives in the artifacts this same call produces.
+    if let Some(patch_text) = input.as_str() {
+        if crate::apply_patch::looks_like_v4a_patch(patch_text) {
+            let first = crate::apply_patch::parse_v4a_patch(patch_text)
+                .into_iter()
+                .next()?;
+            return Some(ToolTarget {
+                kind: ToolTargetKind::Path,
+                value: normalize_repo_path_unscoped(&first.path, workspace_root),
+            });
+        }
+    }
+
     // Shell tools carry a `command` that may also mention paths; the command is
     // what the caller actually invoked, so it wins for them specifically.
     if is_shell_tool(&name.to_lowercase()) {
@@ -398,6 +463,12 @@ pub fn tool_target(
         return Some(ToolTarget {
             kind: ToolTargetKind::Command,
             value: command,
+        });
+    }
+    if let Some(paths) = first_path_list(input, PATH_ARRAY_KEYS) {
+        return Some(ToolTarget {
+            kind: ToolTargetKind::Subject,
+            value: paths,
         });
     }
     first_str(input, SUBJECT_KEYS).map(|value| ToolTarget {
