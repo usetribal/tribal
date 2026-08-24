@@ -441,7 +441,7 @@ mod tests {
             turns: 3,
             started_at: at(20),
             duration: None,
-            project: Some("tribal-platform".into()),
+            project: Some("acme-app".into()),
             origin,
             prompted_by: None,
             context: None,

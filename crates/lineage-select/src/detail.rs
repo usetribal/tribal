@@ -429,7 +429,7 @@ mod tests {
             turns: 12,
             started_at: Utc.with_ymd_and_hms(2026, 8, 20, 10, 0, 0).unwrap(),
             duration: Some(Duration::minutes(95)),
-            project: Some("tribal-platform".into()),
+            project: Some("acme-app".into()),
             origin: Origin::Local,
             prompted_by: Some("Ada".into()),
             context: None,
@@ -476,8 +476,8 @@ mod tests {
         // The identity reads the same and starts at the same column; the row's
         // right-aligned counts move to the line below, which is the one
         // difference opening a session is allowed to make.
-        assert!(text(&opened[1..2]).starts_with("│ ▌ tribal-platform · Refactor the auth guard"));
-        assert!(text(&listed[1..2]).starts_with("│ ▌ tribal-platform · Refactor the auth guard"));
+        assert!(text(&opened[1..2]).starts_with("│ ▌ acme-app · Refactor the auth guard"));
+        assert!(text(&listed[1..2]).starts_with("│ ▌ acme-app · Refactor the auth guard"));
     }
 
     #[test]
@@ -515,7 +515,7 @@ mod tests {
     fn the_header_names_the_session_and_its_facts() {
         let rendered = text(&session_lines(&row(), &[], 80, "", &RowStyles::default()));
         assert!(rendered.contains("Refactor the auth guard"));
-        assert!(rendered.contains("tribal-platform"));
+        assert!(rendered.contains("acme-app"));
         assert!(rendered.contains("12 msgs"));
         assert!(rendered.contains("1h 35m"));
         assert!(rendered.contains("Ada"));

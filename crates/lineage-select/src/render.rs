@@ -442,7 +442,7 @@ mod tests {
             turns: 529,
             started_at: now() - Duration::hours(4),
             duration: Some(Duration::minutes(299)),
-            project: Some("tribal-platform".into()),
+            project: Some("acme-app".into()),
             origin: Origin::Local,
             prompted_by: Some("Ada".into()),
             context: Some("the login endpoint accepts an empty password".into()),
@@ -481,7 +481,7 @@ mod tests {
     fn a_row_is_a_header_and_a_context_line() {
         let lines = render(&row(), Purpose::Browse, 120);
         assert_eq!(lines.len(), LINES_PER_ROW);
-        assert!(lines[HEADER].contains("tribal-platform"));
+        assert!(lines[HEADER].contains("acme-app"));
         assert!(lines[HEADER].contains("Refactor the auth guard"));
         assert!(lines[HEADER].contains("529 msgs"));
         assert!(lines[HEADER].contains("4h 59m"));
@@ -705,6 +705,6 @@ mod tests {
         assert!(rendered[0].contains("Refactor the auth guard"));
         assert!(rendered[1].contains("abc123"));
         assert!(rendered[2].contains("529 msgs"));
-        assert!(rendered[2].contains("tribal-platform"));
+        assert!(rendered[2].contains("acme-app"));
     }
 }

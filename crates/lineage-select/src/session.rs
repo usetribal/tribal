@@ -98,7 +98,7 @@ mod tests {
                 .unwrap()
                 .with_timezone(&Utc),
             duration: Some(Duration::minutes(95)),
-            project: Some("tribal-platform".into()),
+            project: Some("acme-app".into()),
             origin,
             prompted_by: Some("Ada".into()),
             context: Some("the login endpoint accepts an empty password".into()),
