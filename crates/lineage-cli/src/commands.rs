@@ -439,6 +439,13 @@ pub(crate) fn list_row(s: &SessionSummary) -> String {
     ui::format_scan_row(&ScanRow::from(s))
 }
 
+/// Format a batch of rows so their columns line up against each other.
+///
+/// No caller in the binary any more: the interactive picker it used to feed
+/// (`inquire`, a flat list of pre-rendered labels) is now the `lineage-select`
+/// TUI, which lays out its own rows. Kept because the shared-column behaviour is
+/// worth a test of its own, and a future batch formatter wants exactly this.
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn list_rows(summaries: &[SessionSummary]) -> Vec<String> {
     ui::format_scan_rows(&summaries.iter().map(ScanRow::from).collect::<Vec<_>>())
 }
