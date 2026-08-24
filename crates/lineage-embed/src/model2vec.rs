@@ -47,6 +47,21 @@ impl Model2VecEmbedder {
     /// Fetches can touch the network, so callers on the hook path must treat
     /// construction as fallible and fail open, never block the agent on a
     /// download (context-injection: fail open).
+    /// Whether both model files are already on disk, without touching the
+    /// network.
+    ///
+    /// An interactive caller uses this to decide whether it can afford the
+    /// dense leg at all: [`Model2VecEmbedder::new`] downloads ~130 MB on first
+    /// use, which is the wrong thing to do in front of a user waiting for a
+    /// prompt to appear. Racy by nature — a cached model can be deleted between
+    /// the check and the load — so treat it as a hint and still handle a failed
+    /// `new`.
+    pub fn is_cached(cache_dir: &Path) -> bool {
+        [MODEL_FILE, TOKENIZER_FILE]
+            .iter()
+            .all(|file| cache_dir.join(file).exists())
+    }
+
     pub fn new(cache_dir: PathBuf) -> Result<Self> {
         let model_path = ensure_cached(&cache_dir, MODEL_FILE)?;
         let tokenizer_path = ensure_cached(&cache_dir, TOKENIZER_FILE)?;
@@ -253,6 +268,18 @@ mod tests {
         // The empty string tokenizes to no ids -> zero vector, not a panic.
         let v = embedder.embed_query("").unwrap();
         assert_eq!(v, vec![0.0, 0.0]);
+    }
+
+    #[test]
+    fn a_cache_probe_needs_both_files_and_touches_no_network() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(!Model2VecEmbedder::is_cached(dir.path()));
+
+        fs::write(dir.path().join(MODEL_FILE), b"x").unwrap();
+        assert!(!Model2VecEmbedder::is_cached(dir.path()));
+
+        fs::write(dir.path().join(TOKENIZER_FILE), b"x").unwrap();
+        assert!(Model2VecEmbedder::is_cached(dir.path()));
     }
 
     /// A tiny whitespace WordLevel tokenizer mapping "a"->0, "b"->1, "c"->2,

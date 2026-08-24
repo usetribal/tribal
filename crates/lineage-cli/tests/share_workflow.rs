@@ -298,3 +298,96 @@ fn the_url_survives_a_browser_that_will_not_open() {
     assert!(response.url.ends_with("sHaReToKeN0000000000t1"));
     assert_eq!(server.only_create().conversation_id.len(), 26);
 }
+
+/// The rows the selector would be given, and what sharing makes of them.
+///
+/// The picker itself needs a terminal, so what is checked here is everything
+/// that decides its contents: which sessions appear, and which of them sharing
+/// refuses.
+mod selection {
+    use std::path::Path;
+
+    use lineage_cli::session_rows::collect_session_rows;
+    use lineage_core::{AgentKind, Conversation, LineageId, PullOrigin, Role, Turn};
+    use lineage_git::{open_repo, persist_conversation};
+    use lineage_select::{Origin, Purpose};
+
+    use super::init_repo;
+
+    fn turn(content: &str) -> Turn {
+        Turn {
+            id: LineageId::new(),
+            role: Role::User,
+            content: content.into(),
+            tool_calls: vec![],
+            model: None,
+            timestamp: None,
+            artifacts: vec![],
+        }
+    }
+
+    fn store(dir: &Path, id: &str, pulled: bool) {
+        let repo = open_repo(dir).unwrap();
+        let mut conv = Conversation::new(AgentKind::Claude, dir.display().to_string());
+        conv.id = id.into();
+        conv.turns.push(turn(&format!("work on {id}")));
+        if pulled {
+            conv.pull_origin = Some(PullOrigin {
+                server: "https://lineage.example".into(),
+                tenant: Some("acme".into()),
+                pulled_at: chrono::Utc::now(),
+                lineage_version: "test".into(),
+            });
+        }
+        persist_conversation(repo.inner(), &conv).unwrap();
+    }
+
+    #[test]
+    fn a_pulled_session_is_offered_but_not_shareable() {
+        let dir = init_repo();
+        store(dir.path(), "local-one", false);
+        store(dir.path(), "pulled-one", true);
+
+        let rows = collect_session_rows(dir.path()).unwrap();
+        assert_eq!(rows.len(), 2);
+
+        let pulled = rows.iter().find(|r| r.id == "pulled-one").unwrap();
+        let local = rows.iter().find(|r| r.id == "local-one").unwrap();
+        assert_eq!(pulled.origin, Origin::Received);
+        assert_eq!(local.origin, Origin::Local);
+
+        // Shown, so the user knows it is there, but refused with a reason
+        // rather than offered and rejected a step later.
+        assert!(Purpose::Share.eligibility(pulled).is_some());
+        assert!(Purpose::Share.eligibility(local).is_none());
+    }
+
+    #[test]
+    fn forking_can_choose_a_session_sharing_cannot() {
+        let dir = init_repo();
+        store(dir.path(), "pulled-one", true);
+
+        let rows = collect_session_rows(dir.path()).unwrap();
+        let pulled = &rows[0];
+        assert!(Purpose::Browse.eligibility(pulled).is_none());
+        assert!(Purpose::Share.eligibility(pulled).is_some());
+    }
+
+    #[test]
+    fn rows_are_newest_first() {
+        let dir = init_repo();
+        let repo = open_repo(dir.path()).unwrap();
+        for (id, day) in [("older", 1u32), ("newer", 2)] {
+            let mut conv = Conversation::new(AgentKind::Claude, dir.path().display().to_string());
+            conv.id = id.into();
+            conv.started_at =
+                chrono::TimeZone::with_ymd_and_hms(&chrono::Utc, 2026, 8, day, 10, 0, 0).unwrap();
+            conv.turns.push(turn("hello"));
+            persist_conversation(repo.inner(), &conv).unwrap();
+        }
+
+        let rows = collect_session_rows(dir.path()).unwrap();
+        let ids: Vec<&str> = rows.iter().map(|r| r.id.as_str()).collect();
+        assert_eq!(ids, vec!["newer", "older"]);
+    }
+}

@@ -20,12 +20,26 @@ use lineage_core::{
 use serde_json::Value;
 
 const SKIP_TYPES: &[&str] = &[
+    "ai-title",
     "file-history-snapshot",
     "progress",
     "queue-operation",
     "summary",
     "system",
 ];
+
+/// The session's own title from a record that carries one, if it has text.
+///
+/// `summary`/`summary` is the older shape, `ai-title`/`aiTitle` the current one.
+fn session_title(entry_type: &str, value: &Value) -> Option<String> {
+    let field = match entry_type {
+        "summary" => "summary",
+        "ai-title" => "aiTitle",
+        _ => return None,
+    };
+    let text = value.get(field).and_then(|s| s.as_str())?.trim();
+    (!text.is_empty()).then(|| text.to_string())
+}
 
 /// The metadata key this adapter records Claude's own session id under. Named so
 /// the import that writes it and the resume that reads it cannot drift apart.
@@ -191,13 +205,16 @@ impl SessionReader for ClaudeAdapter {
             }
 
             let entry_type = v.get("type").and_then(|t| t.as_str()).unwrap_or("");
-            if entry_type == "summary" {
-                if let Some(text) = v.get("summary").and_then(|s| s.as_str()) {
-                    let trimmed = text.trim();
-                    if !trimmed.is_empty() {
-                        session_summary = Some(trimmed.to_string());
-                    }
-                }
+            // Two spellings of the same thing: Claude Code wrote `summary`
+            // records historically and `ai-title` records now, and a machine
+            // with both old and new transcripts has some of each. Last one wins
+            // either way — the harness retitles a session as it goes, so the
+            // final record is the one that describes it.
+            if let Some(title) = session_title(entry_type, &v) {
+                session_summary = Some(title);
+                continue;
+            }
+            if matches!(entry_type, "summary" | "ai-title") {
                 continue;
             }
             if SKIP_TYPES.contains(&entry_type) {
@@ -374,7 +391,7 @@ fn home_dir() -> Option<PathBuf> {
 mod tests {
     use super::*;
     use lineage_agent::{AgentSource, SessionReader, SessionRef};
-    use lineage_core::ToolCall;
+    use lineage_core::{display_title, ToolCall};
 
     #[test]
     fn reads_claude_fixture_with_tool_use() {
@@ -436,5 +453,65 @@ mod tests {
             Some("Lineage RLS audit")
         );
         assert_eq!(conv.turns.len(), 1);
+    }
+
+    #[test]
+    fn captures_the_last_ai_title_as_metadata() {
+        let dir = tempfile::tempdir().unwrap();
+        let transcript = dir.path().join("session.jsonl");
+        // The current Claude Code shape: `ai-title` records, repeated and
+        // revised as the session goes on, with no `summary` record at all.
+        fs::write(
+            &transcript,
+            r#"{"type":"ai-title","aiTitle":"Early guess","sessionId":"abc"}
+{"type":"user","sessionId":"abc","cwd":".","message":{"role":"user","content":[{"type":"text","text":"hello"}]},"timestamp":"2026-06-06T10:01:00Z"}
+{"type":"ai-title","aiTitle":"Tribal share session selector","sessionId":"abc"}
+"#,
+        )
+        .unwrap();
+        let adapter = ClaudeAdapter::new(dir.path());
+        let session = SessionRef {
+            id_hint: "abc".into(),
+            agent: AgentKind::Claude,
+            source_path: transcript,
+            started_at: Some(Utc::now()),
+        };
+        let conv = adapter.read(&session).unwrap();
+        assert_eq!(
+            conv.metadata
+                .get(SESSION_SUMMARY_KEY)
+                .and_then(|v| v.as_str()),
+            Some("Tribal share session selector")
+        );
+        assert_eq!(display_title(&conv), "Tribal share session selector");
+        assert_eq!(conv.turns.len(), 1);
+    }
+
+    #[test]
+    fn a_blank_title_never_replaces_a_real_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let transcript = dir.path().join("session.jsonl");
+        fs::write(
+            &transcript,
+            r#"{"type":"ai-title","aiTitle":"Real title","sessionId":"abc"}
+{"type":"user","sessionId":"abc","cwd":".","message":{"role":"user","content":[{"type":"text","text":"hello"}]},"timestamp":"2026-06-06T10:01:00Z"}
+{"type":"ai-title","aiTitle":"   ","sessionId":"abc"}
+"#,
+        )
+        .unwrap();
+        let adapter = ClaudeAdapter::new(dir.path());
+        let session = SessionRef {
+            id_hint: "abc".into(),
+            agent: AgentKind::Claude,
+            source_path: transcript,
+            started_at: Some(Utc::now()),
+        };
+        let conv = adapter.read(&session).unwrap();
+        assert_eq!(
+            conv.metadata
+                .get(SESSION_SUMMARY_KEY)
+                .and_then(|v| v.as_str()),
+            Some("Real title")
+        );
     }
 }

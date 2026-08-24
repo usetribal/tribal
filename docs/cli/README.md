@@ -205,7 +205,7 @@ injections), so read it from `.git/lineage/events.jsonl` directly.
 | `tribal push [--server URL] [--token TOKEN] [--remote origin]` | Push only — the one-way half of `sync` |
 | `tribal pull [--server URL] [--token TOKEN] [--remote origin] [--dry-run]` | Pull only — the other half (see [Pull teammates' sessions](#pull-teammates-sessions)) |
 
-| `tribal share [--session ID] [--server URL] [--token TOKEN] [--remote origin] [--no-open]` | Share one session as a link anyone can open (see [Share a session as a link](#share-a-session-as-a-link)) |
+| `tribal share [--session ID] [--query TEXT] [--pick N] [--server URL] [--token TOKEN] [--remote origin] [--no-open]` | Share one session as a link anyone can open (see [Share a session as a link](#share-a-session-as-a-link)) |
 
 `sync` is the one to reach for; `push` and `pull` stay addressable for a
 one-directional run and are hidden from `tribal -h`.
@@ -352,15 +352,35 @@ rules run before anything crosses the wire, and what is pushed is an ordinary
 `--remote` resolve exactly as they do for `sync`. Implements
 [share-v0](../../specs/share-v0.md).
 
-**Which session gets shared.** With no arguments, the most recently modified
-agent transcript for this working directory — the one you are almost certainly
-in. `--session` overrides it and takes the same id forms as `fork`: a lineage id,
-an id prefix, or the harness UUID you can copy out of your terminal.
+**Which session gets shared.** With no arguments and a terminal attached, a
+selector opens over the sessions this repository holds, newest first. Type to
+search what was said in them; the arrow keys move, `enter` chooses, and `esc`
+backs out without sharing. Sessions that came from another server are listed but
+cannot be chosen — the server that holds one is the server to share it from — and
+each says so on its row.
+
+Sessions are imported before the list opens, so a session you have only just
+finished is on it.
+
+`--session` skips the selector and takes the same id forms as `fork`: a lineage
+id, an id prefix, or the harness UUID you can copy out of your terminal.
 
 ```bash
 tribal share --session 01HQZX8K9V2M3N4P5Q6R7S8T9U
 tribal share --session 550e8400-e29b-41d4-a716-446655440000
 ```
+
+`--query` searches without opening the selector, which is how a script or an
+agent picks a session. A query matching one session shares it; a query matching
+several lists them and asks for `--pick N`.
+
+```bash
+tribal share --query "auth middleware"
+tribal share --query "auth middleware" --pick 2
+```
+
+Without a terminal and without `--query`, the command asks for a session rather
+than guessing at one.
 
 **A private session is refused, never stripped.** Sharing a session your repo
 config marks private fails with the session named and nothing is uploaded.
@@ -425,6 +445,11 @@ Then fork it:
 ```bash
 tribal fork 01HQZX8K9V2M3N4P5Q6R7S8T9U
 ```
+
+With no id and a terminal attached, `tribal fork` opens the same selector
+`tribal share` uses — type to search session content, `enter` to choose. Every
+session is choosable here, including ones pulled from a teammate: continuing
+someone else's session is what fork is for.
 
 ```text
 Alice Chen's claude session, 26 July 2026

@@ -7,12 +7,14 @@
 //! one conversation. Nothing new about a share reaches the server except the
 //! create call at the end.
 //!
-//! Which session "the one you are in" means is a guess, and it is deliberately
-//! confined to [`resolve_current_session`] so it can be replaced without
-//! touching anything downstream of it.
+//! Which session to share is answered by the selector when a terminal is
+//! attached, and by an explicit id otherwise. [`resolve_current_session`] turns
+//! that answer into the transcript to refresh.
 
+use std::io::{self, IsTerminal};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::{mpsc, Arc};
 use std::time::Duration;
 
 use chrono::Utc;
@@ -26,10 +28,12 @@ use lineage_git::{
 use lineage_policy::{
     apply_policy, is_private_session, policy_from_repo_config, prepare_for_export, PolicyConfig,
 };
+use lineage_select::Purpose;
 use serde::{Deserialize, Serialize};
 
 use crate::auth;
 use crate::events::{EventLog, Outcome};
+use crate::session_pick;
 use crate::ui;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -126,12 +130,9 @@ pub struct CurrentSession {
 /// id prefix, harness UUID) resolve against the stored refs, and the transcript
 /// that produced that session is the one refreshed.
 ///
-/// Without one it is a heuristic — the most recently modified harness transcript
-/// discovered for this working directory's project. That guess is wrong for
-/// anyone running `share` from a second terminal while another session writes,
-/// which is exactly why it lives alone in this function: replacing it (a harness
-/// that reports its own session, an environment variable, a hook) means
-/// rewriting this body and nothing else.
+/// Without one, a terminal gets the session selector — a human never knows a
+/// session id, so asking for one was never a real answer. Off a terminal there
+/// is nobody to ask, so the caller must name the session.
 pub fn resolve_current_session(
     repo: &LineageRepo,
     session_id: Option<&str>,
@@ -280,15 +281,31 @@ pub struct ShareRequest {
     pub token: Option<String>,
     pub remote: String,
     pub session_id: Option<String>,
+    /// Search by topic instead of opening the selector.
+    pub query: Option<String>,
+    /// Which search result to take when `query` matches several.
+    pub pick: Option<usize>,
     /// Print the URL without opening a browser.
     pub no_open: bool,
+    /// Whether progress may be written to stdout. False while a full-screen
+    /// picker owns the terminal.
+    pub announce: bool,
 }
 
 pub fn share(repo_path: &Path, request: &ShareRequest) -> Result<()> {
-    let server = auth::resolve_server(request.server.as_deref())?;
-    let token = auth::resolve_token(&server, request.token.as_deref())?;
-    let transport = HttpTransport::new(&server, &token);
-    let response = run_share(repo_path, &transport, request)?;
+    let response = match interactive_share(repo_path, request)? {
+        Some(response) => response,
+        None => {
+            let request = &ShareRequest {
+                announce: true,
+                ..with_chosen_session(repo_path, request)?
+            };
+            let server = auth::resolve_server(request.server.as_deref())?;
+            let token = auth::resolve_token(&server, request.token.as_deref())?;
+            let transport = HttpTransport::new(&server, &token);
+            run_share(repo_path, &transport, request)?
+        }
+    };
 
     ui::hero(&response.url);
     ui::action(format!(
@@ -300,6 +317,92 @@ pub fn share(repo_path: &Path, request: &ShareRequest) -> Result<()> {
         open_in_browser(&response.url);
     }
     Ok(())
+}
+
+/// The selector's own path: pick a session, confirm it, and share it while the
+/// confirmation animates.
+///
+/// Signing in happens before the picker opens, so the share the confirmation
+/// commits to is a single network call under the animation rather than a login
+/// prompt appearing behind a modal. Returns `None` when this is not the
+/// interactive path, leaving the caller to run the plain flow.
+fn interactive_share(
+    repo_path: &Path,
+    request: &ShareRequest,
+) -> Result<Option<ShareCreateResponse>> {
+    if request.session_id.is_some() || request.query.is_some() || !io::stdin().is_terminal() {
+        return Ok(None);
+    }
+
+    let server = auth::resolve_server(request.server.as_deref())?;
+    let token = auth::resolve_token(&server, request.token.as_deref())?;
+    let transport = HttpTransport::new(&server, &token);
+
+    // The share runs on a worker while the confirmation animates, so it must own
+    // everything it touches and report back over a channel rather than writing
+    // into a cell this thread holds.
+    let (tx, rx) = mpsc::channel();
+    let repo = repo_path.to_path_buf();
+    let base = request.clone();
+    // Behind an Arc so the job is cheap to clone onto the worker: the transport
+    // it holds is not itself cloneable, and copying one per share would open a
+    // second connection for no reason.
+    let job = Arc::new(move |session_id: &str| {
+        let attempt = ShareRequest {
+            session_id: Some(session_id.to_string()),
+            // The selector owns the terminal: anything printed here lands on
+            // the alternate screen and paints over the modal.
+            announce: false,
+            ..base.clone()
+        };
+        match run_share(&repo, &transport, &attempt) {
+            Ok(response) => {
+                let _ = tx.send(response);
+                Ok(())
+            }
+            Err(error) => Err(error.to_string()),
+        }
+    });
+    session_pick::pick_interactively_with(repo_path, Purpose::Share, move |session_id| {
+        job(session_id)
+    })?;
+
+    let response = rx.try_recv().map_err(|_| "no session was shared")?;
+    Ok(Some(response))
+}
+
+/// Fill in the session when the caller did not name one.
+///
+/// A human never knows a session id, so with a terminal attached the selector
+/// answers the question instead. Sessions that came from another server are
+/// shown greyed rather than hidden: the user knows they exist, and hiding them
+/// would read as the session having been lost.
+///
+/// Off a terminal there is nobody to ask, so the existing behaviour stands and
+/// the error names every way out.
+fn with_chosen_session(repo_path: &Path, request: &ShareRequest) -> Result<ShareRequest> {
+    if request.session_id.is_some() {
+        return Ok(request.clone());
+    }
+    // `--query` is the non-interactive way in, so it is honoured whether or not
+    // a terminal is attached; without it and without a terminal there is nobody
+    // to ask, and `resolve_current_session` reports that.
+    if request.query.is_none() && !io::stdin().is_terminal() {
+        return Ok(request.clone());
+    }
+    let chosen = session_pick::pick_fork_session(
+        repo_path,
+        &session_pick::ForkPickOptions {
+            session_id: None,
+            query: request.query.clone(),
+            pick: request.pick,
+            purpose: Purpose::Share,
+        },
+    )?;
+    Ok(ShareRequest {
+        session_id: Some(chosen.session_id),
+        ..request.clone()
+    })
 }
 
 /// The whole flow with the transport injected: resolve, refresh, prepare, push
@@ -326,10 +429,14 @@ pub fn run_share(
         )
         .into());
     }
-    ui::action(format!(
-        "sharing session {conversation_id} ({} turn(s))",
-        batch.conversations[0].turns.len()
-    ));
+    // Only when this command owns the terminal. Under the selector the alternate
+    // screen is up, and any line written here is painted over the modal.
+    if request.announce {
+        ui::action(format!(
+            "sharing session {conversation_id} ({} turn(s))",
+            batch.conversations[0].turns.len()
+        ));
+    }
     transport.push(&repo, &batch)?;
 
     let response = transport.create(&ShareCreateRequest {

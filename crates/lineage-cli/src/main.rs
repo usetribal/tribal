@@ -345,10 +345,16 @@ enum Commands {
         /// Git remote whose URL identifies the repo to the server
         #[arg(long, default_value = "origin")]
         remote: String,
-        /// Session to share — lineage id, id prefix, or harness UUID; defaults
-        /// to the most recently active session for this directory
+        /// Session to share — lineage id, id prefix, or harness UUID; with a
+        /// terminal attached, omitting it opens the session selector
         #[arg(long)]
         session: Option<String>,
+        /// Search local sessions by topic instead of opening the selector
+        #[arg(long)]
+        query: Option<String>,
+        /// Pick the Nth search result (1-based) when --query matches several
+        #[arg(long)]
+        pick: Option<usize>,
         /// Print the link without opening a browser
         #[arg(long)]
         no_open: bool,
@@ -792,6 +798,9 @@ fn main() -> ExitCode {
                     session_id,
                     query,
                     pick,
+                    // Forking a session received from another server is exactly
+                    // what fork is for, so nothing is out of bounds here.
+                    purpose: lineage_select::Purpose::Browse,
                 },
                 force_fork: new_session,
                 brief,
@@ -934,6 +943,8 @@ fn main() -> ExitCode {
             token,
             remote,
             session,
+            query,
+            pick,
             no_open,
         } => share_cmd::share(
             &repo_path,
@@ -942,7 +953,11 @@ fn main() -> ExitCode {
                 token,
                 remote,
                 session_id: session,
+                query,
+                pick,
                 no_open,
+                // The plain path owns the terminal, so progress may be printed.
+                announce: true,
             },
         ),
         Commands::Pull {

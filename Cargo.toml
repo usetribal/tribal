@@ -11,6 +11,7 @@ members = [
     "crates/lineage-search",
     "crates/lineage-embed",
     "crates/lineage-retrieval",
+    "crates/lineage-select",
     "crates/lineage-mcp",
 ]
 
@@ -38,6 +39,7 @@ lineage-adapters = { path = "crates/lineage-adapters" }
 lineage-search = { path = "crates/lineage-search" }
 lineage-embed = { path = "crates/lineage-embed" }
 lineage-retrieval = { path = "crates/lineage-retrieval" }
+lineage-select = { path = "crates/lineage-select" }
 lineage-cli = { path = "crates/lineage-cli" }
 
 chrono = { version = "0.4", features = ["serde"] }
@@ -63,6 +65,10 @@ ulid = { version = "1", features = ["serde"] }
 walkdir = "2"
 glob = "0.3"
 inquire = "0.7"
+# The session selector needs per-row styling and unselectable rows, which
+# inquire's string-list prompt cannot express; ratatui owns that surface.
+ratatui = "0.29"
+crossterm = "0.28"
 indicatif = "0.17"
 anstyle = "1"
 anstream = "1"

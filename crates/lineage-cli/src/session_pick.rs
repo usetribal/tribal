@@ -3,22 +3,38 @@
 use std::io::{self, IsTerminal};
 use std::path::Path;
 
-use inquire::Select;
 use lineage_core::{display_title, LineageId};
 use lineage_git::{open_repo, resolve_session, ResolveError, SessionCandidate};
 use lineage_search::{LineageIndex, SearchHit};
+use lineage_select::{Outcome, Purpose};
 
-use crate::commands;
-use crate::init_cmd::inquire_render_config;
+use crate::flush::flush_sessions;
+use crate::session_rows::collect_session_rows;
+use crate::session_search::RepoSessionSearch;
+use crate::session_transcript::load_session_entries;
 use crate::ui;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct ForkPickOptions {
     pub session_id: Option<String>,
     pub query: Option<String>,
     pub pick: Option<usize>,
+    /// What the chosen session is for. Travels to the selector, which decides
+    /// what that makes unavailable and how to say so.
+    pub purpose: Purpose,
+}
+
+impl Default for ForkPickOptions {
+    fn default() -> Self {
+        Self {
+            session_id: None,
+            query: None,
+            pick: None,
+            purpose: Purpose::Browse,
+        }
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -69,31 +85,69 @@ pub fn pick_fork_session(repo_path: &Path, options: &ForkPickOptions) -> Result<
     }
 
     if stdin_is_tty() {
-        let summaries = commands::collect_session_summaries(repo_path)?;
-        if summaries.is_empty() {
-            return Err("no sessions in this repository — import or pull one first".into());
-        }
-        let labels = commands::list_rows(&summaries);
-        ui::action("Choose a session to fork:");
-        let selected = Select::new("", labels.clone())
-            .with_render_config(inquire_render_config())
-            .prompt()?;
-        let index = labels
-            .iter()
-            .position(|label| label == &selected)
-            .ok_or_else(|| format!("unknown selection: {selected}"))?;
-        let chosen = &summaries[index];
-        return Ok(ForkPickResult {
-            session_id: chosen.id().to_string(),
-            title: chosen.title().to_string(),
-            candidates: vec![],
-        });
+        return pick_interactively(repo_path, options.purpose);
     }
 
     Err(
         "session id required — pass one, use --query to search, or run from a terminal to pick"
             .into(),
     )
+}
+
+/// Open the selector over this repository's sessions.
+///
+/// Flushes first so a session the user has just finished is on the list: the
+/// transcript is on disk continuously but only reaches refs at import, and a
+/// picker that cannot offer the session someone just left is the whole problem
+/// this replaced.
+pub fn pick_interactively(repo_path: &Path, purpose: Purpose) -> Result<ForkPickResult> {
+    pick_interactively_with(repo_path, purpose, |_| Ok(()))
+}
+
+/// As [`pick_interactively`], with `share` performing the work the confirmation
+/// commits to, so it runs under the animation rather than after it.
+pub fn pick_interactively_with<W>(
+    repo_path: &Path,
+    purpose: Purpose,
+    share: W,
+) -> Result<ForkPickResult>
+where
+    W: Fn(&str) -> std::result::Result<(), String> + Clone + Send + 'static,
+{
+    let _ = flush_sessions(repo_path, &mut |_, _| {})?;
+
+    let rows = collect_session_rows(repo_path)?;
+    if rows.is_empty() {
+        return Err("no sessions in this repository — import or pull one first".into());
+    }
+
+    let search = RepoSessionSearch::open(repo_path)?;
+    let leg = if search.is_fused() { "fused" } else { "lex" };
+    let outcome = lineage_select::select_with(
+        rows.clone(),
+        purpose,
+        search,
+        leg,
+        |session_id| {
+            // A session that cannot be read shows as empty rather than failing
+            // the pick: the list is still usable, and the pane says so.
+            load_session_entries(repo_path, session_id).unwrap_or_default()
+        },
+        share,
+    )?;
+    let Outcome::Chose(session_id) = outcome else {
+        return Err("no session chosen".into());
+    };
+    let title = rows
+        .iter()
+        .find(|row| row.id == session_id)
+        .map(|row| row.title.clone())
+        .unwrap_or_default();
+    Ok(ForkPickResult {
+        session_id,
+        title,
+        candidates: vec![],
+    })
 }
 
 fn search_candidates(

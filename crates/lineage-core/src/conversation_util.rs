@@ -321,20 +321,93 @@ pub fn display_title(conv: &Conversation) -> String {
     id_prefix(conv.id.as_str())
 }
 
-/// The first non-empty user turn, flattened and truncated — the session's own
-/// data, not an LLM summary.
+/// Elements a harness writes around a slash command and its echoed output.
+/// Recognised by element name because the payload inside varies per command.
+const PLUMBING_TAGS: &[&str] = &[
+    "command-name",
+    "command-message",
+    "command-args",
+    "local-command-stdout",
+    "local-command-stderr",
+];
+
+/// The first user turn that says something, flattened and truncated — the
+/// session's own data, not an LLM summary.
+///
+/// Turns that are nothing but harness plumbing are skipped: a session opened
+/// with `/prime` records the invocation as markup, and showing that markup
+/// describes every such session identically while describing none of them. A
+/// turn carrying prose beside a command is content and is kept.
 pub fn opening_ask(conv: &Conversation, max_chars: usize) -> Option<String> {
     let first = conv
         .turns
         .iter()
-        .find(|turn| turn.role == Role::User && !turn.content.trim().is_empty())?;
-    let flat = first
-        .content
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
-    let clean = usable_title(&flat)?;
-    Some(truncate_line(&clean, max_chars))
+        .filter(|turn| turn.role == Role::User)
+        // Plumbing first, then the broader noise filter: `without_plumbing`
+        // drops a harness element *with* its payload, which `strip_markup`
+        // cannot do — it keeps the text inside, so a `/prime` turn would
+        // otherwise be titled "prime /prime".
+        .map(|turn| without_plumbing(&turn.content))
+        .find_map(|content| usable_title(&content))?;
+    Some(truncate_line(&first, max_chars))
+}
+
+/// The slash command a turn invoked, when the turn is nothing but that
+/// invocation.
+///
+/// Invoking a skill is the user asking for something — `/prime` is why
+/// everything after it happened — but the transcript records it as markup. A
+/// surface that shows the session itself renders this in place of the markup,
+/// rather than dropping the turn and starting the session mid-thought.
+/// Summarising surfaces (a list row, a title) skip it instead, because the
+/// command names every primed session identically.
+pub fn invoked_command(content: &str) -> Option<String> {
+    let open = content.find("<command-name>")? + "<command-name>".len();
+    let rest = &content[open..];
+    let close = rest.find("</command-name>")?;
+    let name = rest[..close].trim();
+    if name.is_empty() {
+        return None;
+    }
+    if name.starts_with('/') {
+        return Some(name.to_string());
+    }
+    Some(format!("/{name}"))
+}
+
+/// `content` with every plumbing element and its payload removed, whitespace
+/// flattened to single spaces.
+///
+/// Removing the element *and* what it wraps, rather than stripping tags: the
+/// text inside `<command-message>prime</command-message>` is the command's own
+/// name, not something the user wrote.
+pub fn without_plumbing(content: &str) -> String {
+    let mut out = String::with_capacity(content.len());
+    let mut rest = content;
+    while let Some(open) = rest.find('<') {
+        let Some(close) = rest[open..].find('>') else {
+            break;
+        };
+        let tag = &rest[open + 1..open + close];
+        let closing = format!("</{tag}>");
+        let after_open = open + close + 1;
+        // Only a balanced plumbing element is dropped. Anything else — prose
+        // with a stray angle bracket, an unclosed tag — is left as written.
+        if !PLUMBING_TAGS.contains(&tag) {
+            out.push_str(&rest[..after_open]);
+            rest = &rest[after_open..];
+            continue;
+        }
+        let Some(end) = rest[after_open..].find(&closing) else {
+            out.push_str(&rest[..after_open]);
+            rest = &rest[after_open..];
+            continue;
+        };
+        out.push_str(&rest[..open]);
+        rest = &rest[after_open + end + closing.len()..];
+    }
+    out.push_str(rest);
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// Short lineage id for secondary labels (`019fa49d…`).
@@ -437,12 +510,9 @@ fn metadata_line(conv: &Conversation, key: &str) -> Option<String> {
 
 /// Heuristic architecture/decision summary from session content (no LLM).
 pub fn generate_architecture_summary(conv: &Conversation) -> String {
-    let title = conv
-        .turns
-        .iter()
-        .find(|t| t.role == Role::User)
-        .map(|t| truncate_line(&t.content, 200))
-        .unwrap_or_else(|| "Agent session".into());
+    // The same opening the rest of the UI shows, so a summary written at import
+    // never disagrees with the title derived from the turns later.
+    let title = opening_ask(conv, 200).unwrap_or_else(|| "Agent session".into());
 
     let files = files_touched(conv);
     let file_line = if files.is_empty() {
@@ -562,6 +632,75 @@ mod tests {
         });
         assert!(turn_modified_code(&c.turns[0]));
         assert_eq!(files_touched(&c), vec!["src/lib.rs"]);
+    }
+
+    #[test]
+    fn plumbing_only_turns_are_skipped_when_summarising_the_opening() {
+        let mut c = Conversation::new(AgentKind::Claude, "/tmp/repo");
+        c.turns.push(user_turn(
+            "<command-message>prime</command-message> <command-name>/prime</command-name>",
+        ));
+        c.turns.push(user_turn("fix the auth guard"));
+        assert_eq!(
+            opening_ask(&c, 80).as_deref(),
+            Some("fix the auth guard"),
+            "the invocation describes every primed session identically"
+        );
+    }
+
+    #[test]
+    fn prose_beside_a_command_is_content_and_survives() {
+        let mut c = Conversation::new(AgentKind::Claude, "/tmp/repo");
+        c.turns.push(user_turn(
+            "<command-name>/prime</command-name> then fix the auth guard",
+        ));
+        assert_eq!(
+            opening_ask(&c, 80).as_deref(),
+            Some("then fix the auth guard")
+        );
+    }
+
+    #[test]
+    fn a_session_that_is_only_plumbing_has_no_opening_ask() {
+        let mut c = Conversation::new(AgentKind::Claude, "/tmp/repo");
+        c.turns
+            .push(user_turn("<command-name>/model</command-name>"));
+        assert_eq!(opening_ask(&c, 80), None);
+    }
+
+    #[test]
+    fn an_invocation_names_the_command_it_ran() {
+        assert_eq!(
+            invoked_command(
+                "<command-message>prime</command-message> <command-name>/prime</command-name>"
+            )
+            .as_deref(),
+            Some("/prime")
+        );
+        // A name recorded without its slash still reads as a command.
+        assert_eq!(
+            invoked_command("<command-name>model</command-name>").as_deref(),
+            Some("/model")
+        );
+        assert_eq!(invoked_command("just prose"), None);
+        assert_eq!(invoked_command("<command-name>  </command-name>"), None);
+    }
+
+    #[test]
+    fn prose_with_an_unbalanced_angle_bracket_is_left_alone() {
+        assert_eq!(
+            without_plumbing("use Vec<String> for the ids"),
+            "use Vec<String> for the ids"
+        );
+        assert_eq!(without_plumbing("a < b and c > d"), "a < b and c > d");
+    }
+
+    #[test]
+    fn a_non_plumbing_element_is_kept_whole() {
+        assert_eq!(
+            without_plumbing("<thinking>weigh it up</thinking>"),
+            "<thinking>weigh it up</thinking>"
+        );
     }
 
     #[test]

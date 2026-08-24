@@ -1,0 +1,15 @@
+[package]
+name = "lineage-select"
+description = "Terminal session selector for lineage: renders a searchable session list and one session's detail"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+chrono = { workspace = true }
+crossterm = { workspace = true }
+ratatui = { workspace = true }
+thiserror = { workspace = true }

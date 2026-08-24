@@ -305,16 +305,6 @@ pub struct SessionSummary {
     prompted_by_name: Option<String>,
 }
 
-impl SessionSummary {
-    pub(crate) fn id(&self) -> &str {
-        &self.id
-    }
-
-    pub(crate) fn title(&self) -> &str {
-        &self.title
-    }
-}
-
 #[derive(serde::Serialize)]
 struct CommitSessionSummary {
     commit_sha: String,

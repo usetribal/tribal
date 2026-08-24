@@ -631,7 +631,7 @@ pub fn embed_all_sessions(
 /// once and is shared across repos, then runs offline. Overridable via
 /// `LINEAGE_EMBED_CACHE`; falls back to `~/.cache/lineage/embed`, or the current
 /// dir if home is unknown.
-fn embed_cache_dir() -> std::path::PathBuf {
+pub(crate) fn embed_cache_dir() -> std::path::PathBuf {
     if let Ok(dir) = std::env::var("LINEAGE_EMBED_CACHE") {
         return std::path::PathBuf::from(dir);
     }

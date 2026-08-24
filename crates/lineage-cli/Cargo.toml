@@ -32,6 +32,7 @@ lineage-retrieval = { workspace = true }
 lineage-embed = { workspace = true }
 lineage-policy = { workspace = true }
 lineage-search = { workspace = true }
+lineage-select = { workspace = true }
 serde = { workspace = true }
 sha2 = { workspace = true }
 serde_json = { workspace = true }
