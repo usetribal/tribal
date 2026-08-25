@@ -11,7 +11,6 @@
 //! attached, and by an explicit id otherwise. [`resolve_current_session`] turns
 //! that answer into the transcript to refresh.
 
-use std::io::{self, IsTerminal};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{mpsc, Arc};
@@ -33,6 +32,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::auth;
 use crate::events::{EventLog, Outcome};
+use crate::interactive::interactive;
 use crate::session_pick;
 use crate::ui;
 
@@ -330,7 +330,7 @@ fn interactive_share(
     repo_path: &Path,
     request: &ShareRequest,
 ) -> Result<Option<ShareCreateResponse>> {
-    if request.session_id.is_some() || request.query.is_some() || !io::stdin().is_terminal() {
+    if request.session_id.is_some() || request.query.is_some() || !interactive() {
         return Ok(None);
     }
 
@@ -387,7 +387,7 @@ fn with_chosen_session(repo_path: &Path, request: &ShareRequest) -> Result<Share
     // `--query` is the non-interactive way in, so it is honoured whether or not
     // a terminal is attached; without it and without a terminal there is nobody
     // to ask, and `resolve_current_session` reports that.
-    if request.query.is_none() && !io::stdin().is_terminal() {
+    if request.query.is_none() && !interactive() {
         return Ok(request.clone());
     }
     let chosen = session_pick::pick_fork_session(

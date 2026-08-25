@@ -21,16 +21,27 @@ Tribal stores **AI agent session provenance** in git (`refs/lineage/*`, `refs/no
 - Sharing context with teammates or reviewing what would leave the repo
 - Continuing a prior agent session (Claude Code, Codex; VS Code extension)
 
-## Retrieve context (prefer `--json`)
+## Always pass `--no-interactive`
+
+You are not at a terminal. `--no-interactive` is global — every command takes it —
+and guarantees no command opens a session selector or asks you a question. Without
+it, `tribal list` and `tribal show` open a TUI for a human.
+
+Add `--json` on top when you need to parse the output. `--no-interactive` says you
+are a machine; `--json` pins the shape. Use both when you parse, `--no-interactive`
+alone when you only need to read.
 
 ```bash
-tribal context query "authentication middleware"
-tribal list --json
-tribal list --commit <sha> --json
-tribal show <session-id> --json
-tribal blame path/to/file.rs:42 --json
+tribal context query "authentication middleware" --no-interactive
+tribal list --no-interactive --json
+tribal list --commit <sha> --no-interactive --json
+tribal show <session-id> --no-interactive --json
+tribal blame path/to/file.rs:42 --no-interactive --json
 tribal export --redact --format jsonl
 ```
+
+`tribal --discover` prints the whole command surface as JSON, including commands
+that are hidden from `--help`. Read it when you need a verb you cannot guess.
 
 **Workflow:** query by topic, then blame for a specific line, then `show` the best session. Cite `session_id` and turn content. Do not invent history if lineage returns nothing.
 
@@ -67,7 +78,7 @@ Rewritten SHAs orphan lineage notes. Recovery:
 tribal remap
 ```
 
-Uses patch-id metadata on git notes to match rewritten commits, then re-materializes line objects. Run after interactive rebase or history rewrite; verify with `tribal list --commit <new-sha>`.
+Uses patch-id metadata on git notes to match rewritten commits, then re-materializes line objects. Run after interactive rebase or history rewrite; verify with `tribal list --commit <new-sha> --no-interactive --json`.
 
 ## Hooks and ongoing import
 

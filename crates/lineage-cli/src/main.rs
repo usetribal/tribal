@@ -4,8 +4,8 @@ use std::path::PathBuf;
 
 use chrono::Utc;
 use lineage_cli::{
-    commands, context_cmd, digest, doctor_cmd, fork_cmd, hooks_cmd, init_cmd, migrate, pull_cmd,
-    repo_registry, retrieval_cmd, session_pick, share_cmd, skill_cmd, ui, update_check,
+    commands, context_cmd, digest, doctor_cmd, fork_cmd, hooks_cmd, init_cmd, interactive, migrate,
+    pull_cmd, repo_registry, retrieval_cmd, session_pick, share_cmd, skill_cmd, ui, update_check,
 };
 use lineage_retrieval::{DEFAULT_AROUND_RADIUS, DEFAULT_TRAVERSAL_LIMIT};
 use std::process::ExitCode;
@@ -36,8 +36,8 @@ const COMMAND_GROUPS: &[(&str, &[(&str, &str)])] = &[
         "Sessions",
         &[
             ("import", "Import agent sessions into lineage refs"),
-            ("list", "List imported sessions"),
-            ("show", "Show a session"),
+            ("list", "Browse sessions — search, read, and pick one"),
+            ("show", "Open one session, with the list behind it"),
             (
                 "fork",
                 "Continue a session — reopens yours, writes out anyone else's",
@@ -62,7 +62,6 @@ const COMMAND_GROUPS: &[(&str, &[(&str, &str)])] = &[
         &[
             ("doctor", "Check lineage health in this repository"),
             ("rebuild", "Rebuild derived state from stored sessions"),
-            ("upgrade", "Bring state stored by older versions up to date"),
         ],
     ),
 ];
@@ -117,6 +116,15 @@ struct Cli {
     #[arg(long, exclusive = true)]
     discover: bool,
 
+    /// Never open a selector or ask a question — for agents, hooks, and CI
+    ///
+    /// The machine entry point to the whole CLI: each command answers it with
+    /// whatever suits a machine best, which is not always JSON. Use `--json`
+    /// alongside it to pin a command to a fixed shape. Implied when stdin or
+    /// stdout is not a terminal.
+    #[arg(long, global = true)]
+    no_interactive: bool,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -129,6 +137,10 @@ enum Commands {
     /// retired git-config key, hooks and agent skills naming a former command —
     /// and converts it. Safe to run at any time: a step with nothing to do says
     /// so, and re-running after a failure resumes from where it stopped.
+    ///
+    /// Off the headline help deliberately: every command runs this first, so
+    /// reaching for it by hand is the exception rather than the routine. It
+    /// keeps its `--help` and its `--discover` entry under "advanced".
     Upgrade {
         /// Report what would run, without changing anything
         #[arg(long)]
@@ -192,14 +204,24 @@ enum Commands {
         #[arg(long)]
         incremental: bool,
     },
-    /// List imported sessions
+    /// Browse this repository's sessions
+    ///
+    /// With a terminal this opens the selector: the list, searchable by what
+    /// was said in the sessions, with `enter` to read one and `esc` to come
+    /// back. `--commit` asks a narrower question and keeps its printed answer,
+    /// as do `--no-interactive` and `--json`.
     List {
         #[arg(long)]
         commit: Option<String>,
         #[arg(long)]
         json: bool,
     },
-    /// Show a session by ID
+    /// Open one session by ID
+    ///
+    /// The same screen `list` opens, on the session named — so backing out
+    /// lands on the list rather than exiting, and finding the wrong session
+    /// costs a keystroke instead of another command. `--no-interactive` and
+    /// `--json` print it instead.
     Show {
         session_id: String,
         #[arg(long)]
@@ -696,6 +718,9 @@ fn main() -> ExitCode {
             error.exit();
         }
     };
+
+    // Before any command runs, so every interactivity check sees the flag.
+    interactive::set_no_interactive(cli.no_interactive);
 
     if cli.discover {
         let surface = discover(&cli_command());

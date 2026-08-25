@@ -68,6 +68,34 @@ fn commands_carry_their_help_group() {
     assert_eq!(command(&surface, "gc")["group"], "advanced");
 }
 
+/// `upgrade` runs before every command already, so it is off the headline help.
+/// It still has to be discoverable and runnable — demoting a command must not
+/// be the same as retiring it, or an agent loses the one verb that repairs
+/// state an older version wrote.
+#[test]
+fn upgrade_is_discoverable_but_off_the_front_page() {
+    let surface = discover();
+    let upgrade = command(&surface, "upgrade");
+    assert_eq!(upgrade["group"], "advanced");
+    assert_eq!(
+        upgrade["hidden"],
+        Value::Bool(false),
+        "demoted, not hidden — it is still a verb a person may reach for"
+    );
+}
+
+/// The switch a machine caller is told to use has to be on the surface it reads,
+/// or the instruction and the binary disagree.
+#[test]
+fn the_headless_switch_is_global_and_discoverable() {
+    let output = Command::new(env!("CARGO_BIN_EXE_tribal"))
+        .args(["list", "--help"])
+        .output()
+        .unwrap();
+    let help = String::from_utf8_lossy(&output.stdout);
+    assert!(help.contains("--no-interactive"), "{help}");
+}
+
 /// An agent composing a call needs to know a value follows the flag, and that a
 /// bare argument is expected — getting either wrong produces an invalid command.
 #[test]

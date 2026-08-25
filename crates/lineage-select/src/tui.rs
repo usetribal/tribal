@@ -117,8 +117,42 @@ where
     L: Fn(&str) -> Vec<Entry>,
     W: Fn(&str) -> Result<(), String> + Clone + Send + 'static,
 {
+    select_opening_on(rows, purpose, search, leg, load, share, None)
+}
+
+/// As [`select_with`], opening straight into `open_on`'s session when it names
+/// one this list holds.
+///
+/// How `show <id>` reaches the same screen `list` does. It opens on the session
+/// but keeps the whole list behind it, so backing out lands on the list rather
+/// than exiting — someone who opened the wrong session wants to go looking for
+/// the right one, not to start the command again.
+#[allow(clippy::too_many_arguments)]
+pub fn select_opening_on<S, L, W>(
+    rows: Vec<SessionRow>,
+    purpose: Purpose,
+    search: S,
+    leg: &str,
+    load: L,
+    share: W,
+    open_on: Option<&str>,
+) -> io::Result<Outcome>
+where
+    S: SessionSearch + Send + 'static,
+    L: Fn(&str) -> Vec<Entry>,
+    W: Fn(&str) -> Result<(), String> + Clone + Send + 'static,
+{
     let leg = leg.to_string();
     let mut selector = Selector::new(rows, purpose);
+    // Opening the session needs its turns, which is exactly what `load` is for;
+    // a session the list does not hold leaves the cursor where it was and the
+    // selector opens on the list.
+    if let Some(session_id) = open_on {
+        if selector.focus(session_id) {
+            let entries = load(session_id);
+            selector.read(entries);
+        }
+    }
     let mut worker = SearchWorker::spawn(search);
     let mut guard = TerminalGuard::enter()?;
     let mut pending_since: Option<Instant> = None;

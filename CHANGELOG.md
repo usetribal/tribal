@@ -7,8 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-25
+
 ### Added
 
+- **`--no-interactive` is the one way to run tribal without a terminal.** Global, so every command takes it, and it means what it says: no command opens a selector or asks a question. It is a statement about the caller rather than a request for a format — each command answers with whatever suits a machine — so an agent can be taught one flag and keep it as commands change what they return. `--json` stays alongside it for a caller that has to parse a fixed shape; use both when you parse, `--no-interactive` alone when you only read. Both are implied when stdin or stdout is not a terminal, because a selector has to draw to one and read keys from the other, and either being redirected leaves it undriveable. The bundled agent skill now teaches this, and an installed skill that predates it is rewritten on the first `0.6.0` command
+- **`tribal show <id>` opens the session with the list behind it.** The same screen `tribal list` opens, on the session named, so `esc` goes back to browsing rather than exiting — opening the wrong session costs a keystroke instead of another command. The id is still resolved first, so naming one that does not exist is an error rather than a selector that quietly opened on the list
 - **Root `tribal` / `--help` and interactive `init` show the Tribal mark.** Thresholded from the product PNG and printed as nearest-neighbour half-blocks so the interlocking edges stay hard. The title sits in a collar under the mark (`Provenance for every agent session`). Hidden off a TTY and under `NO_COLOR`.
 - **Every human command uses the same colour language.** Action lines are bold; ids, dates, and secondary columns are dim; search / blame / doctor / chain / init wizard highlight the part you scan first. `--help` headings and command names match. Piped output and `NO_COLOR` stay plain.
 - **`tribal share` opens a session selector instead of guessing.** Run it with no arguments and a list of this repository's sessions appears, newest first; type to search what was actually said in them, `enter` opens one to read, and `enter` again asks before sharing. Previously it took the most recently modified transcript on disk and offered `--session <id>` as the alternative, which is not an alternative — nobody knows a session id by heart. Sessions pulled from another server are listed but greyed out with the reason on the row, because the server that holds one is the server to share it from; hiding them would read as the session having gone missing. Sessions are imported before the list opens, so one you have only just finished is on it. `--query TEXT` (with `--pick N`) searches without opening the selector, which is how a script or an agent chooses; off a terminal and without `--query`, the command asks for a session rather than guessing at one
@@ -16,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`tribal list` opens the selector rather than printing a list.** Scanning sessions and reading one are the same activity, and printing a list someone then has to re-run a command against is the seam the selector removed — so `list` is now the selector's front door and `show` its detail view. `--commit` asks a narrower question and keeps its printed answer, as do `--no-interactive` and `--json`
+- **`tribal upgrade` is off the headline help.** Every command already runs it first, so reaching for it by hand is the exception; it keeps its `--help` and is still reported by `--discover`, under `advanced`. Demoted, not hidden
+- **Whether a terminal is attached is now decided once, for the whole CLI.** The checks were split between stdin and stdout, so `tribal list | less` and `tribal list < /dev/null` disagreed about whether a selector could open — one of them wrong either way. A selector needs both streams, so both are now required, and every command consults the same answer
 - **Human-facing CLI output is now aligned and consistent.** `list` prints title-first columns that line up across a mixed-length list; `show` uses labeled fields and `user`/`assistant` rather than Rust Debug dumps; doctor, blame, context verbs, and action reports share the same heading / key-value / indent chrome. Colour (bright cyan + dim) appears only on a TTY and respects `NO_COLOR`. `--json`, `--discover`, `context hook`, and `fork --brief` are unchanged.
 - **Session content search backs the picker.** Typing filters on the turn text itself through the same retrieval `tribal context query` uses, not on the titles in the list. When an embedding model is already cached the search is fused lexical and semantic; when it is not, it is lexical only and no model is downloaded — a picker must not stall behind a 130 MB fetch on first use
 
@@ -339,7 +346,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Schema specifications v0 (conversation, line-object, git-notes)
 - CI workflow (test, clippy, fmt)
 
-[Unreleased]: https://github.com/usetribal/tribal/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/usetribal/tribal/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/usetribal/tribal/compare/v0.5.1...v0.6.0
+[0.5.1]: https://github.com/usetribal/tribal/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/usetribal/tribal/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/usetribal/tribal/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/usetribal/tribal/compare/v0.2.0...v0.3.0

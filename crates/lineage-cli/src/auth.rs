@@ -7,9 +7,10 @@
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::time::Duration;
+
+use crate::interactive::interactive;
 
 use serde::{Deserialize, Serialize};
 
@@ -310,7 +311,7 @@ impl std::error::Error for NotAuthenticated {}
 /// `sign_in` runs only when nothing is stored or the server rejected what was,
 /// and only on a terminal — see [`resolve_token_with`].
 pub fn resolve_token(server: &str, token: Option<&str>) -> Result<String> {
-    resolve_token_with(server, token, std::io::stdin().is_terminal(), |server| {
+    resolve_token_with(server, token, interactive(), |server| {
         crate::commands::login(Some(server))
     })
 }

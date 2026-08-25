@@ -66,6 +66,33 @@ tribal --discover | jq '.commands[] | select(.hidden) | .name'
 Intended for an agent deciding what to call: `--help` shows what a person should
 reach for first, `--discover` shows everything that exists.
 
+## Running without a terminal
+
+`--no-interactive` is the switch for agents, hooks, and CI. It is global — every
+command takes it — and it means *never open a selector and never ask a question*:
+each command answers with whatever suits a machine, which is not always JSON.
+
+```bash
+tribal list --no-interactive          # the session list, printed
+tribal show <id> --no-interactive     # one session, printed
+```
+
+Add `--json` when the caller has to parse a fixed shape:
+
+```bash
+tribal list --no-interactive --json
+```
+
+The two are separate on purpose. `--no-interactive` says *what you are* — a
+machine — and leaves each command free to change what it hands back. `--json`
+pins the format for a script that would break if it changed. An agent should
+reach for `--no-interactive` and add `--json` only when it parses the output.
+
+Both are implied when stdin or stdout is not a terminal, so a piped or
+redirected `tribal` never blocks on a TUI it cannot draw. A selector needs to
+draw to stdout *and* read keys from stdin, so either one being redirected is
+enough to fall back.
+
 ## Command reference
 
 ### Setup and health
@@ -93,8 +120,8 @@ See [Import](../import.md).
 
 | Command | Description |
 |---------|-------------|
-| `tribal list [--commit SHA] [--json]` | List sessions or sessions at commit |
-| `tribal show <id> [--json] [--hydrate-images]` | Show conversation |
+| `tribal list [--commit SHA] [--json] [--no-interactive]` | Browse sessions in the selector; prints the list with `--commit`, `--json`, or `--no-interactive` |
+| `tribal show <id> [--json] [--hydrate-images] [--no-interactive]` | Open one session in the selector, with the list behind it; prints it with `--json` or `--no-interactive` |
 | `tribal blame <path>[:line] [--json]` | Tribal for a file line |
 | `tribal fork [<session-id>] [--query <text>] [--pick N] [--new] [--json]` | Continue a session: reopens one this machine holds, writes out any other. `--new` writes one out even when it could be reopened (see [Fork a session](#fork-a-session)) |
 | `tribal fork <share-url> [--into DIR] [--no-open] [--server URL]` | Continue a session from a share link — clones the repo if needed and opens the harness (see [Fork a session](#fork-a-session)) |
@@ -432,8 +459,11 @@ that publishes nothing falls back to rewriting `app.<domain>` to `api.<domain>`,
 which is why a deployment serving its API under a path prefix needs either the
 document or `--server`.
 
-Find one with `tribal list`, which shows title first, then id, turn count, date,
-agent, model, and who ran it, newest first. Columns align across the list:
+Find one with `tribal list`, which opens the selector over this repository's
+sessions — type to search what was said in them, `enter` to read one, `esc` to
+come back to the list. Printed instead (`--no-interactive`, `--json`, or off a
+terminal), it shows title first, then id, turn count, date, agent, model, and
+who ran it, newest first. Columns align across the list:
 
 ```text
 the login endpoint accepts an empty password   01HQZX8K9V2M3N4P5Q6R7S8T9U   8 turns  2026-07-26  claude  Alice Chen

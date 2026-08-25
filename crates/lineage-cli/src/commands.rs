@@ -24,7 +24,9 @@ use lineage_search::{LineageIndex, SearchHit};
 
 use crate::auth;
 use crate::events::{EventLog, Outcome};
+use crate::interactive::interactive;
 use crate::migrate;
+use crate::session_pick;
 use crate::ui::{self, ScanRow};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -311,7 +313,18 @@ struct CommitSessionSummary {
     session_ids: Vec<String>,
 }
 
+/// List sessions, or open the selector over them.
+///
+/// With a terminal and no narrowing flag this is the selector: scanning a list
+/// and reading one session are the same activity, and printing a list someone
+/// then has to re-run a command against is the seam that removed. `--commit`
+/// asks a different question — which sessions touched this sha — so it keeps
+/// its printed answer.
 pub fn list(repo_path: &Path, commit: Option<&str>, json: bool) -> Result<()> {
+    if commit.is_none() && !json && interactive() {
+        return session_pick::browse(repo_path, None).map_err(|error| error.to_string().into());
+    }
+
     let repo = open_repo(repo_path)?;
     let inner = repo.inner();
 
@@ -433,26 +446,30 @@ impl From<&SessionSummary> for ScanRow {
 
 /// One row a person can choose from. The title is what makes a list of 100
 /// sessions navigable; the id stays visible for copy/paste and fork hints.
-/// Test helper: production prints through `list_rows` so columns share widths.
+/// Test helper: production prints through `ui::print_scan_rows`, which shares
+/// column widths across the batch.
 #[cfg(test)]
 pub(crate) fn list_row(s: &SessionSummary) -> String {
     ui::format_scan_row(&ScanRow::from(s))
 }
 
-/// Format a batch of rows so their columns line up against each other.
+/// Show one session, or open the selector on it.
 ///
-/// No caller in the binary any more: the interactive picker it used to feed
-/// (`inquire`, a flat list of pre-rendered labels) is now the `lineage-select`
-/// TUI, which lays out its own rows. Kept because the shared-column behaviour is
-/// worth a test of its own, and a future batch formatter wants exactly this.
-#[cfg_attr(not(test), allow(dead_code))]
-pub(crate) fn list_rows(summaries: &[SessionSummary]) -> Vec<String> {
-    ui::format_scan_rows(&summaries.iter().map(ScanRow::from).collect::<Vec<_>>())
-}
-
+/// The id is resolved either way, so naming a session that does not exist is an
+/// error rather than a selector that quietly opens on the list. Interactively
+/// the whole list stays behind the session, so backing out goes to browsing
+/// rather than exiting.
 pub fn show(repo_path: &Path, session_hint: &str, json: bool, hydrate_images: bool) -> Result<()> {
     let repo = open_repo(repo_path)?;
     let id = resolve_session(repo.inner(), session_hint).map_err(|error| error.to_string())?;
+
+    if !json && !hydrate_images && interactive() {
+        let session_id = id.to_string();
+        drop(repo);
+        return session_pick::browse(repo_path, Some(&session_id))
+            .map_err(|error| error.to_string().into());
+    }
+
     let mut conv = read_conversation(repo.inner(), &id)?
         .ok_or_else(|| format!("session not found: {session_hint}"))?;
 
@@ -1377,7 +1394,7 @@ mod tests {
         let mut long = summary();
         long.title = "A much longer session title than the first one can hold".into();
         long.id = "01LONG".into();
-        let rows = list_rows(&[short, long]);
+        let rows = ui::format_scan_rows(&[ScanRow::from(&short), ScanRow::from(&long)]);
         let day_at: Vec<usize> = rows
             .iter()
             .map(|line| {

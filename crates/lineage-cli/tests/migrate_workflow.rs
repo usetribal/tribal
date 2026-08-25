@@ -302,6 +302,31 @@ fn stale_agent_skills_are_rewritten() {
     );
 }
 
+/// A skill installed before 0.6 tells an agent to prefer `--json` and never
+/// mentions `--no-interactive`, so `tribal list` opens a TUI the agent cannot
+/// drive. Detected by what the copy lacks rather than a retired string: the old
+/// advice was not wrong, it was incomplete.
+#[test]
+fn skills_predating_the_headless_switch_are_updated() {
+    let (_home, home) = HomeGuard::new();
+    let repo = init_repo(&home);
+    let skill = repo.join(".claude/skills/lineage/SKILL.md");
+    fs::create_dir_all(skill.parent().unwrap()).unwrap();
+    fs::write(
+        &skill,
+        "---\nname: lineage\n---\nRetrieve context (prefer `--json`): `tribal list --json`.\n",
+    )
+    .unwrap();
+
+    migrate::apply_pending(&repo_context(&repo)).unwrap();
+
+    let rewritten = fs::read_to_string(&skill).unwrap();
+    assert!(
+        rewritten.contains("--no-interactive"),
+        "the agent must be told the headless switch: {rewritten}"
+    );
+}
+
 /// The skills step must not install into a repository that never opted in —
 /// only the agent directories that already hold a stale copy are rewritten.
 #[test]

@@ -502,6 +502,68 @@ fn apply_hooks(context: &Context) -> Result<Outcome> {
 }
 
 /// Agent skill files this CLI installed, that still name the old command.
+/// Installed skills that predate the headless switch.
+///
+/// Detected by absence rather than by a retired string: the 0.5 skill told an
+/// agent to prefer `--json`, which is still valid advice, so there is nothing
+/// stale to match on. What a pre-0.6 copy lacks is any mention of
+/// `--no-interactive`, and an agent reading one will open a TUI it cannot drive.
+fn skills_without_headless_switch(repo_path: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    for dir in [".cursor/skills", ".claude/skills", ".agents/skills"] {
+        let path = repo_path.join(dir).join("lineage").join("SKILL.md");
+        let Ok(content) = fs::read_to_string(&path) else {
+            continue;
+        };
+        if !content.contains("--no-interactive") {
+            out.push(path);
+        }
+    }
+    out
+}
+
+fn detect_headless_skills(context: &Context) -> Result<bool> {
+    Ok(repos_to_stamp(context)
+        .iter()
+        .any(|path| !skills_without_headless_switch(path).is_empty()))
+}
+
+/// Reinstall the lineage skill wherever it predates `--no-interactive`.
+///
+/// Forced for the same reason the rename step is: the detector has already
+/// established these copies are ours and out of date.
+fn apply_headless_skills(context: &Context) -> Result<Outcome> {
+    let mut stamped = 0usize;
+
+    for path in repos_to_stamp(context) {
+        let stale = skills_without_headless_switch(&path);
+        if stale.is_empty() {
+            continue;
+        }
+        let targets: Vec<String> = stale
+            .iter()
+            .filter_map(|p| target_of(&path, p))
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
+
+        match crate::skill_cmd::init_skill_quiet(&path, &targets, true) {
+            Ok(()) => stamped += 1,
+            Err(error) => tracing::warn!("could not restamp skills in {}: {error}", path.display()),
+        }
+    }
+
+    if stamped == 0 {
+        return Ok(Outcome::Skipped(
+            "installed skills already document --no-interactive".into(),
+        ));
+    }
+    Ok(Outcome::Applied(format!(
+        "updated agent skills for --no-interactive in {}",
+        repository_count(stamped)
+    )))
+}
+
 fn stale_skills(repo_path: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
     for dir in [".cursor/skills", ".claude/skills", ".agents/skills"] {
@@ -576,29 +638,40 @@ fn target_of(repo_path: &Path, skill_path: &Path) -> Option<String> {
 
 /// Every migration, oldest first. Order within a migration is the order its
 /// steps run in, so the riskiest work happens while the least has been changed.
-pub const MIGRATIONS: &[Migration] = &[Migration {
-    id: "0001-tribal-rename",
-    introduced_in: "0.5.0",
-    steps: &[
-        Step {
-            id: "config-dir",
-            detect: detect_config_dir,
-            apply: apply_config_dir,
-        },
-        Step {
-            id: "git-config",
-            detect: detect_git_config,
-            apply: apply_git_config,
-        },
-        Step {
-            id: "hooks",
-            detect: detect_hooks,
-            apply: apply_hooks,
-        },
-        Step {
-            id: "skills",
-            detect: detect_skills,
-            apply: apply_skills,
-        },
-    ],
-}];
+pub const MIGRATIONS: &[Migration] = &[
+    Migration {
+        id: "0001-tribal-rename",
+        introduced_in: "0.5.0",
+        steps: &[
+            Step {
+                id: "config-dir",
+                detect: detect_config_dir,
+                apply: apply_config_dir,
+            },
+            Step {
+                id: "git-config",
+                detect: detect_git_config,
+                apply: apply_git_config,
+            },
+            Step {
+                id: "hooks",
+                detect: detect_hooks,
+                apply: apply_hooks,
+            },
+            Step {
+                id: "skills",
+                detect: detect_skills,
+                apply: apply_skills,
+            },
+        ],
+    },
+    Migration {
+        id: "0002-headless-switch",
+        introduced_in: "0.6.0",
+        steps: &[Step {
+            id: "skills-headless",
+            detect: detect_headless_skills,
+            apply: apply_headless_skills,
+        }],
+    },
+];

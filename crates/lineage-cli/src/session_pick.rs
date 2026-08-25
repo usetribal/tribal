@@ -1,6 +1,5 @@
 //! Pick a session for fork when the id is not supplied up front.
 
-use std::io::{self, IsTerminal};
 use std::path::Path;
 
 use lineage_core::{display_title, LineageId};
@@ -9,12 +8,18 @@ use lineage_search::{LineageIndex, SearchHit};
 use lineage_select::{Outcome, Purpose};
 
 use crate::flush::flush_sessions;
+use crate::interactive::interactive;
 use crate::session_rows::collect_session_rows;
 use crate::session_search::RepoSessionSearch;
 use crate::session_transcript::load_session_entries;
 use crate::ui;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+/// Backing out of the selector. An error for a caller that needed a session,
+/// and an ordinary exit for one that was only browsing — so the two agree on
+/// the wording rather than each inventing it.
+const NO_SESSION_CHOSEN: &str = "no session chosen";
 
 #[derive(Debug, Clone)]
 pub struct ForkPickOptions {
@@ -104,12 +109,42 @@ pub fn pick_interactively(repo_path: &Path, purpose: Purpose) -> Result<ForkPick
     pick_interactively_with(repo_path, purpose, |_| Ok(()))
 }
 
+/// Open the selector to look through sessions, with no follow-on action.
+///
+/// What `list` and `show` run. `open_on` names the session to open for reading;
+/// with none, the selector opens on the list. Backing out is an ordinary exit
+/// here rather than a cancelled choice — browsing has nothing to cancel.
+pub fn browse(repo_path: &Path, open_on: Option<&str>) -> Result<()> {
+    match browse_with(repo_path, open_on) {
+        Ok(()) => Ok(()),
+        Err(error) if error.to_string() == NO_SESSION_CHOSEN => Ok(()),
+        Err(error) => Err(error),
+    }
+}
+
+fn browse_with(repo_path: &Path, open_on: Option<&str>) -> Result<()> {
+    open_selector(repo_path, Purpose::Browse, |_| Ok(()), open_on).map(|_| ())
+}
+
 /// As [`pick_interactively`], with `share` performing the work the confirmation
 /// commits to, so it runs under the animation rather than after it.
 pub fn pick_interactively_with<W>(
     repo_path: &Path,
     purpose: Purpose,
     share: W,
+) -> Result<ForkPickResult>
+where
+    W: Fn(&str) -> std::result::Result<(), String> + Clone + Send + 'static,
+{
+    open_selector(repo_path, purpose, share, None)
+}
+
+/// The one path that assembles rows, opens the search, and runs the selector.
+fn open_selector<W>(
+    repo_path: &Path,
+    purpose: Purpose,
+    share: W,
+    open_on: Option<&str>,
 ) -> Result<ForkPickResult>
 where
     W: Fn(&str) -> std::result::Result<(), String> + Clone + Send + 'static,
@@ -123,7 +158,7 @@ where
 
     let search = RepoSessionSearch::open(repo_path)?;
     let leg = if search.is_fused() { "fused" } else { "lex" };
-    let outcome = lineage_select::select_with(
+    let outcome = lineage_select::select_opening_on(
         rows.clone(),
         purpose,
         search,
@@ -134,9 +169,10 @@ where
             load_session_entries(repo_path, session_id).unwrap_or_default()
         },
         share,
+        open_on,
     )?;
     let Outcome::Chose(session_id) = outcome else {
-        return Err("no session chosen".into());
+        return Err(NO_SESSION_CHOSEN.into());
     };
     let title = rows
         .iter()
@@ -240,7 +276,7 @@ fn format_resolve_error(error: ResolveError) -> Box<dyn std::error::Error> {
 }
 
 fn stdin_is_tty() -> bool {
-    io::stdin().is_terminal()
+    interactive()
 }
 
 #[cfg(test)]

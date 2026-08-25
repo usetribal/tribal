@@ -2,7 +2,6 @@
 //! non-wizard lines go through [`crate::ui`].
 #![allow(clippy::print_stdout)]
 
-use std::io::{self, IsTerminal};
 use std::path::Path;
 
 use chrono::Utc;
@@ -10,6 +9,7 @@ use inquire::ui::{Color, RenderConfig, StyleSheet, Styled};
 use inquire::{Confirm, MultiSelect};
 
 use crate::events::{EventLog, Outcome};
+use crate::interactive::interactive;
 use crate::ui;
 use crate::{commands, context_cmd, hooks_cmd, skill_cmd};
 
@@ -461,7 +461,7 @@ pub(crate) fn inquire_render_config() -> RenderConfig<'static> {
 }
 
 fn stdin_is_tty() -> bool {
-    io::stdin().is_terminal()
+    interactive()
 }
 
 #[cfg(test)]

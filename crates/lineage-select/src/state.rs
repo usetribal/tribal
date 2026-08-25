@@ -130,6 +130,25 @@ impl Selector {
         self.visible.is_empty()
     }
 
+    /// Move the cursor to a session by id, so a caller that already knows which
+    /// session it wants can open the selector on it.
+    ///
+    /// Returns whether the id was found. A caller that named a session the list
+    /// does not hold gets the list rather than an error: the session still
+    /// exists as far as the user is concerned, and the list is where they would
+    /// go looking for it.
+    pub fn focus(&mut self, session_id: &str) -> bool {
+        let Some(position) = self
+            .visible
+            .iter()
+            .position(|&i| self.rows[i].id == session_id)
+        else {
+            return false;
+        };
+        self.selected = position;
+        true
+    }
+
     pub fn push_query_char(&mut self, c: char) {
         self.query.push(c);
         self.listing = Listing::Searching;
@@ -753,5 +772,48 @@ mod tests {
             selector.move_down();
         }
         assert_eq!(selector.selected_position(), 2);
+    }
+
+    /// How `show <id>` opens on a session: the cursor moves to it, and reading
+    /// leaves the whole list behind so backing out returns to browsing.
+    #[test]
+    fn focusing_a_session_moves_the_cursor_and_keeps_the_list_behind_it() {
+        let mut selector = Selector::new(
+            vec![
+                row("a", Origin::Local),
+                row("b", Origin::Local),
+                row("c", Origin::Local),
+            ],
+            Purpose::Browse,
+        );
+
+        assert!(selector.focus("c"));
+        assert_eq!(selector.selected_row().map(|r| r.id.as_str()), Some("c"));
+
+        selector.read(vec![]);
+        assert!(selector.is_reading());
+
+        selector.back();
+        assert!(!selector.is_reading());
+        assert_eq!(
+            selector.rows().len(),
+            3,
+            "the list is still there to return to"
+        );
+    }
+
+    /// A session the list does not hold leaves the cursor alone rather than
+    /// failing: the caller opens on the list, which is where someone would go
+    /// looking for it anyway.
+    #[test]
+    fn focusing_an_unknown_session_reports_it_and_changes_nothing() {
+        let mut selector = Selector::new(
+            vec![row("a", Origin::Local), row("b", Origin::Local)],
+            Purpose::Browse,
+        );
+        let before = selector.selected_position();
+
+        assert!(!selector.focus("missing"));
+        assert_eq!(selector.selected_position(), before);
     }
 }

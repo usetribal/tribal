@@ -430,3 +430,52 @@ fn indexing_persisted_sessions_makes_them_searchable() {
     assert_eq!(hits.len(), 1, "the session should now be findable");
     assert_eq!(hits[0].session_id, conv.id.to_string());
 }
+
+/// `--no-interactive` is what agents, hooks, and CI are told to pass, so it has
+/// to produce output rather than a selector — through the built binary, because
+/// the flag is parsed there and a library call would bypass the thing under
+/// test.
+#[test]
+fn no_interactive_list_and_show_print_instead_of_opening_the_selector() {
+    let dir = init_repo();
+    let session_id = seed_session(&dir);
+
+    for args in [
+        vec!["list", "--no-interactive"],
+        vec!["show", &session_id, "--no-interactive"],
+    ] {
+        let output = Command::new(env!("CARGO_BIN_EXE_tribal"))
+            .args(&args)
+            .arg("--repo")
+            .arg(dir.path())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{args:?} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            stdout.contains("authentication middleware"),
+            "{args:?} printed nothing about the session: {stdout}"
+        );
+    }
+}
+
+/// Naming a session that does not exist is an error either way. The interactive
+/// path resolves the id before opening anything, so a typo cannot read as a
+/// selector that simply opened on the list.
+#[test]
+fn show_rejects_an_unknown_session_under_no_interactive() {
+    let dir = init_repo();
+    seed_session(&dir);
+
+    let output = Command::new(env!("CARGO_BIN_EXE_tribal"))
+        .args(["show", "definitely-not-a-session", "--no-interactive"])
+        .arg("--repo")
+        .arg(dir.path())
+        .output()
+        .unwrap();
+    assert!(!output.status.success(), "an unknown id must not succeed");
+}
