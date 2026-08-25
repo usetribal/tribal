@@ -316,6 +316,14 @@ pub fn run_pending_for_version(context: &Context, current: &str) -> Result<AutoU
     let Some(previous) = previous else {
         return Ok(AutoUpgrade::UpToDate);
     };
+    // Running an older binary after a newer one is a version *change*, not an
+    // upgrade: the steps still run, because state a newer version wrote may
+    // need them, but calling it "upgrading from v0.6.0 to v0.5.1" is a lie
+    // about the direction. Silence is the honest report — there is no upgrade
+    // to announce.
+    if !crate::update_check::is_newer(current, &previous) {
+        return Ok(AutoUpgrade::UpToDate);
+    }
     Ok(AutoUpgrade::Upgraded {
         from: previous,
         to: current.to_string(),

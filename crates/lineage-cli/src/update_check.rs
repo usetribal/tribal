@@ -147,7 +147,7 @@ fn latest_version(now: DateTime<Utc>) -> Option<String> {
 /// upgrade from the release it is a candidate for. A component that is not a
 /// number counts as zero, which keeps an unrecognised tag from ever looking
 /// newer than a real version.
-fn is_newer(latest: &str, current: &str) -> bool {
+pub(crate) fn is_newer(latest: &str, current: &str) -> bool {
     let parts = |version: &str| -> Vec<u64> {
         version
             .split(['-', '+'])

@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Human-facing CLI output is now aligned and consistent.** `list` prints title-first columns that line up across a mixed-length list; `show` uses labeled fields and `user`/`assistant` rather than Rust Debug dumps; doctor, blame, context verbs, and action reports share the same heading / key-value / indent chrome. Colour (bright cyan + dim) appears only on a TTY and respects `NO_COLOR`. `--json`, `--discover`, `context hook`, and `fork --brief` are unchanged.
 - **Session content search backs the picker.** Typing filters on the turn text itself through the same retrieval `tribal context query` uses, not on the titles in the list. When an embedding model is already cached the search is fused lexical and semantic; when it is not, it is lexical only and no model is downloaded — a picker must not stall behind a 130 MB fetch on first use
 
+### Fixed
+
+- **Running an older binary after a newer one no longer announces itself as an upgrade.** The automatic migration compared the stamped version to the running one as strings, so any change read as a step forward and an older build would print `upgrading from v0.6.0 to v0.5.1`. The steps still run — state a newer version wrote may need them — but the direction is now checked with the same numeric comparison the update notice uses, and a downgrade reports nothing rather than a claim that is backwards
+
 ## [0.5.1] - 2026-08-23
 
 ### Added

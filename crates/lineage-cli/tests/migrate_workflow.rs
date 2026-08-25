@@ -450,3 +450,20 @@ fn a_version_change_with_nothing_to_migrate_still_stamps() {
     let third = migrate::run_pending_for_version(&context(), "0.6.0").unwrap();
     assert!(matches!(third, migrate::AutoUpgrade::UpToDate));
 }
+
+/// Running an older binary after a newer one is a version change, not an
+/// upgrade. The steps still run — state a newer version wrote may need them —
+/// but announcing "upgrading from v0.6.0 to v0.5.1" states the direction
+/// backwards, so there is nothing to report.
+#[test]
+fn an_older_binary_after_a_newer_one_reports_no_upgrade() {
+    let (_home, _path) = HomeGuard::new();
+    migrate::run_pending_for_version(&context(), "0.6.0").unwrap();
+
+    let outcome = migrate::run_pending_for_version(&context(), "0.5.1").unwrap();
+
+    assert!(
+        matches!(outcome, migrate::AutoUpgrade::UpToDate),
+        "a downgrade must not announce itself as an upgrade"
+    );
+}
