@@ -93,7 +93,7 @@ const LOGO_PNG: &[u8] = include_bytes!("../assets/tribal-logo.png");
 /// survive nearest-neighbour, not so wide that help falls off the screen.
 const BANNER_WIDTH: u32 = 48;
 const TITLE: &str = "tribal";
-const TAGLINE: &str = "Provenance for every agent session";
+const TAGLINE: &str = "History for every agent session";
 const MARK: Style = Style::new()
     .fg_color(Some(Color::Ansi(AnsiColor::BrightWhite)))
     .bg_color(Some(Color::Ansi(AnsiColor::BrightWhite)));
@@ -577,7 +577,7 @@ mod tests {
     #[test]
     fn tagline_does_not_mention_git() {
         assert!(!TAGLINE.to_lowercase().contains("git"));
-        assert_eq!(TAGLINE, "Provenance for every agent session");
+        assert_eq!(TAGLINE, "History for every agent session");
     }
 
     #[test]

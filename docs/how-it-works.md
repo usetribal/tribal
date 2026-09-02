@@ -2,7 +2,7 @@
 
 [← Documentation index](README.md) · [Architecture](ARCHITECTURE.md) · [Schemas](schemas.md)
 
-Tribal stores agent provenance inside your git object database. No separate Tribal server holds your conversations — refs and notes travel with `git push`.
+Tribal stores agent session history inside your git object database. No separate Tribal server holds your conversations — refs and notes travel with `git push`.
 
 ## Three persisted layers
 

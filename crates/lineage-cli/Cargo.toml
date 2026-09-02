@@ -1,6 +1,6 @@
 [package]
 name = "lineage-cli"
-description = "tribal command-line tool for AI agent provenance"
+description = "tribal command-line tool for AI agent session history"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

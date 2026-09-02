@@ -1,6 +1,6 @@
 # Documentation
 
-Tribal stores AI agent session provenance in your git repository. These guides cover setup, day-to-day use, and contributing to the project.
+Tribal stores AI agent session history in your git repository. These guides cover setup, day-to-day use, and contributing to the project.
 
 [← Back to README](../README.md)
 

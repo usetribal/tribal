@@ -99,7 +99,7 @@ fn group_of(command: &str) -> &'static str {
 #[derive(Parser)]
 #[command(
     name = "tribal",
-    about = "Provenance for every agent session",
+    about = "History for every agent session",
     version,
     help_template = "\
 {usage-heading} {usage}

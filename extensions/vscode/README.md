@@ -2,7 +2,7 @@
 
 [← Back to README](../../README.md) · [Full documentation](../../docs/vscode.md)
 
-Git-native AI agent provenance in VS Code and Cursor.
+AI agent session history in VS Code and Cursor.
 
 User guide, commands, settings, and troubleshooting: **[docs/vscode.md](../../docs/vscode.md)**.
 

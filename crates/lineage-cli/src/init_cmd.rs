@@ -284,7 +284,7 @@ fn install_claude_agent_hook_for_targets(
         "context hook already present in .claude/settings.json"
     };
     if interactive {
-        step_heading("Context hook", Some("inject provenance on file reads"));
+        step_heading("Context hook", Some("show session history on file reads"));
         step_item(false, message);
         println!();
     } else {

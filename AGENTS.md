@@ -1,6 +1,6 @@
 # Agent guide
 
-Tribal is a Rust monorepo for **git-native AI agent provenance**: it imports sessions from Cursor, Claude Code, and Codex into git refs and notes, links them to commits and lines, and exposes that context through a CLI, MCP server, and VS Code extension. No external database — data lives in `refs/lineage/*` and `refs/notes/lineage`.
+Tribal is a Rust monorepo for **git-native AI agent session history**: it imports sessions from Cursor, Claude Code, and Codex into git refs and notes, links them to commits and lines, and exposes that context through a CLI, MCP server, and VS Code extension. No external database — data lives in `refs/lineage/*` and `refs/notes/lineage`.
 
 Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for crate boundaries and import flow before changing behavior — including its **Invariants**, which are rules a change must not break: the provenance graph is deterministic and backfillable, and rendering decides how to show, never what to show. If a change seems to need an exception, the model needs extending instead. **Release status: pre-release, unpublished — simplicity beats backwards compatibility; no data migrations or deprecation aliases required (re-import/rebuild is the upgrade path). The full policy lives in the enclosing workspace until publication.** `lineage-core` has no `git2`; git I/O stays in `lineage-git`.
 

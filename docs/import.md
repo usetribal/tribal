@@ -2,7 +2,7 @@
 
 [← Documentation index](README.md) · [Agent paths](agent-paths.md) · [Configuration](configuration.md)
 
-Import discovers agent transcripts on disk, normalizes them to Tribal conversations, applies policy, and writes git refs. This is the primary way session provenance enters your repository.
+Import discovers agent transcripts on disk, normalizes them to Tribal conversations, applies policy, and writes git refs. This is the primary way session history enters your repository.
 
 ## Quick start
 

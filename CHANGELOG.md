@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Root `tribal` / `--help` and interactive `init` say "History for every agent session".** The old collar used "provenance", which first-time users did not know. The context-hook step in `init` now says it shows session history on file reads.
+
 ## [0.6.0] - 2026-08-25
 
 ### Added

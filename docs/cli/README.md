@@ -2,7 +2,7 @@
 
 [← Documentation index](../README.md) · [Setup](../../README.md#setup)
 
-`tribal` is the primary interface for importing, querying, sharing, and maintaining agent provenance in a git repository.
+`tribal` is the primary interface for importing, querying, sharing, and maintaining agent session history in a git repository.
 
 ## Install
 
@@ -202,9 +202,9 @@ to reach for them — an agent told to use lineage would make any measurement of
 injection a measurement of the prompt.
 
 `context hook` is wired into the agent harness, not run by hand: when the agent
-reads a file with provenance, a digest (attribution, line ranges, session
+reads a file with session history, a digest (attribution, line ranges, session
 summary) is appended to the tool result — deterministically, without spending
-an agent turn. It fails open: on any error, missing provenance, or private
+an agent turn. It fails open: on any error, missing session history, or private
 sessions it prints nothing and exits 0. Every injection — and every
 fired-but-silent outcome, with its reason — is recorded locally in the event
 log at `.git/lineage/events.jsonl` (never synced); `context log` is the surface

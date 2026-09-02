@@ -2,7 +2,7 @@
 name: lineage
 description: >-
   Retrieves and manages engineering context from tribal: AI agent
-  conversations, line-level provenance, team sharing, rebase recovery, and
+  conversations, line-level history, team sharing, rebase recovery, and
   session resume/fork. Use when answering why code exists, finding past
   decisions, onboarding, before risky edits, after rebase, or when sharing
   lineage with teammates.
@@ -10,7 +10,7 @@ description: >-
 
 # Tribal agent skill
 
-Tribal stores **AI agent session provenance** in git (`refs/lineage/*`, `refs/notes/lineage`). Setup is handled by `tribal init` (humans run that once). **Your job is to query, interpret, and advise on lineage data.**
+Tribal stores **AI agent session history** in git (`refs/lineage/*`, `refs/notes/lineage`). Setup is handled by `tribal init` (humans run that once). **Your job is to query, interpret, and advise on lineage data.**
 
 ## When to use lineage
 

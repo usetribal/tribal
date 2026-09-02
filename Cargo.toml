@@ -25,9 +25,9 @@ homepage = "https://github.com/usetribal/tribal"
 documentation = "https://github.com/usetribal/tribal#readme"
 readme = "README.md"
 authors = ["Lineage Contributors"]
-keywords = ["git", "ai", "provenance", "lineage", "agents", "mcp"]
+keywords = ["git", "ai", "history", "lineage", "agents", "mcp"]
 categories = ["command-line-utilities", "development-tools"]
-description = "Git-native provenance for AI coding agents"
+description = "Session history for AI coding agents, stored in git"
 
 [workspace.dependencies]
 lineage-core = { path = "crates/lineage-core" }
