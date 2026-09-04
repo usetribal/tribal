@@ -23,6 +23,7 @@ use lineage_policy::{
 use lineage_search::{LineageIndex, SearchHit};
 
 use crate::auth;
+use crate::browser;
 use crate::events::{EventLog, Outcome};
 use crate::interactive::interactive;
 use crate::migrate;
@@ -665,19 +666,13 @@ pub fn export(repo_path: &Path, redact: bool, format: &str) -> Result<()> {
     Ok(())
 }
 
-/// Prints an approval prompt and waits, polling `poll` until it returns a value.
+/// Prints the approval URL (and opens it unless `no_open`) so the user can
+/// grant the request while [`await_approval`] polls.
 ///
-/// Both approvals in a login share this shape — same deadline, same backoff, same
-/// expiry message — so they share the loop; only the prompt and the poll differ.
-fn await_approval<T>(
-    prompt: &str,
-    url: &str,
-    entry_url: &str,
-    user_code: &str,
-    expires_in: u64,
-    interval: u64,
-    mut poll: impl FnMut() -> Result<Option<PollStep<T>>>,
-) -> Result<T> {
+/// Terminal hyperlinks usually need a modifier-click; launching the default
+/// browser is the path that does not require knowing that. The printed URL
+/// stays the product — a failed open must not fail the login.
+fn offer_approval(prompt: &str, url: &str, entry_url: &str, user_code: &str, no_open: bool) {
     ui::action(prompt);
     ui::hero(url);
     // A prefilled URL can still fail (a browser that drops the query, a code the
@@ -689,8 +684,24 @@ fn await_approval<T>(
             "and confirm code {user_code} (or enter it at {entry_url})."
         ));
     }
+    if !no_open {
+        browser::open(
+            url,
+            "Could not open a browser here — the link above is the one to open.",
+        );
+    }
     ui::action("Waiting for approval…");
+}
 
+/// Polls `poll` until it returns a value.
+///
+/// Both approvals in a login share this shape — same deadline, same backoff, same
+/// expiry message — so they share the loop; only the poll differs.
+fn await_approval<T>(
+    expires_in: u64,
+    interval: u64,
+    mut poll: impl FnMut() -> Result<Option<PollStep<T>>>,
+) -> Result<T> {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(expires_in);
     let mut interval = interval;
     loop {
@@ -713,23 +724,28 @@ enum PollStep<T> {
 }
 
 /// Runs the device login against a Tribal server: prints the verification URL
-/// and code, polls until the browser approval completes the login server-side,
-/// and stores the returned session handle (the durable credential — the JWT it
-/// mints is short-lived and re-minted per command).
+/// and code, opens it in the default browser, polls until the approval
+/// completes the login server-side, and stores the returned session handle
+/// (the durable credential — the JWT it mints is short-lived and re-minted per
+/// command). `--no-open` skips the launch; a failed launch does not fail the
+/// login, because the printed URL is the product.
 ///
 /// A first-time user needs a second approval. The identity provider's device flow
 /// cannot request the organization scope that membership derivation needs, so the
 /// server asks for a separate grant against the forge and the login continues
 /// through it. Returning users never see this step.
-pub fn login(server: Option<&str>) -> Result<()> {
+pub fn login(server: Option<&str>, no_open: bool) -> Result<()> {
     let server = auth::resolve_server(server)?;
     let start = auth::device_start(&server)?;
 
-    let outcome = await_approval(
+    offer_approval(
         "To sign in, open this URL in a browser:",
         &start.verification_uri_complete,
         &start.verification_uri,
         &start.user_code,
+        no_open,
+    );
+    let outcome = await_approval(
         start.expires_in,
         start.interval,
         || match auth::device_poll(&server, &start.device_code)? {
@@ -748,7 +764,7 @@ pub fn login(server: Option<&str>) -> Result<()> {
     let session_handle = match outcome {
         LoginOutcome::Session(handle) => handle,
         LoginOutcome::TrustGrant(handle) => {
-            grant_organization_access(&server, &handle)?;
+            grant_organization_access(&server, &handle, no_open)?;
             handle
         }
     };
@@ -769,26 +785,30 @@ enum LoginOutcome {
 /// Second approval of a first-time login: grants the server a one-off read of the
 /// user's organizations so it can derive their workspaces. The server discards
 /// that access once derivation is done.
-fn grant_organization_access(server: &str, trust_grant_handle: &str) -> Result<()> {
+fn grant_organization_access(server: &str, trust_grant_handle: &str, no_open: bool) -> Result<()> {
     let start = auth::trust_grant_start(server)?;
 
     ui::blank();
-    let tenant_count = await_approval(
+    offer_approval(
         "One more step. To find your organizations, open this URL:",
         &start.verification_uri,
         &start.verification_uri,
         &start.user_code,
-        start.expires_in,
-        start.interval,
-        || match auth::trust_grant_poll(server, trust_grant_handle, &start.device_code)? {
-            auth::TrustGrantPollResponse::Pending { slow_down } => {
-                Ok(slow_down.then_some(PollStep::SlowDown))
-            }
-            auth::TrustGrantPollResponse::Complete { tenant_count } => {
-                Ok(Some(PollStep::Done(tenant_count)))
-            }
-        },
-    )?;
+        no_open,
+    );
+    let tenant_count =
+        await_approval(
+            start.expires_in,
+            start.interval,
+            || match auth::trust_grant_poll(server, trust_grant_handle, &start.device_code)? {
+                auth::TrustGrantPollResponse::Pending { slow_down } => {
+                    Ok(slow_down.then_some(PollStep::SlowDown))
+                }
+                auth::TrustGrantPollResponse::Complete { tenant_count } => {
+                    Ok(Some(PollStep::Done(tenant_count)))
+                }
+            },
+        )?;
 
     ui::action(format!(
         "Found {tenant_count} workspace{}.",

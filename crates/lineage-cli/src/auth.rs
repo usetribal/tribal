@@ -312,7 +312,7 @@ impl std::error::Error for NotAuthenticated {}
 /// and only on a terminal — see [`resolve_token_with`].
 pub fn resolve_token(server: &str, token: Option<&str>) -> Result<String> {
     resolve_token_with(server, token, interactive(), |server| {
-        crate::commands::login(Some(server))
+        crate::commands::login(Some(server), false)
     })
 }
 

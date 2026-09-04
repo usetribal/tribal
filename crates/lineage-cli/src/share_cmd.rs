@@ -12,7 +12,6 @@
 //! that answer into the transcript to refresh.
 
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::{mpsc, Arc};
 use std::time::Duration;
 
@@ -31,6 +30,7 @@ use lineage_select::Purpose;
 use serde::{Deserialize, Serialize};
 
 use crate::auth;
+use crate::browser;
 use crate::events::{EventLog, Outcome};
 use crate::interactive::interactive;
 use crate::session_pick;
@@ -314,7 +314,10 @@ pub fn share(repo_path: &Path, request: &ShareRequest) -> Result<()> {
     ));
 
     if !request.no_open {
-        open_in_browser(&response.url);
+        browser::open(
+            &response.url,
+            "Could not open a browser here — the link above is the share.",
+        );
     }
     Ok(())
 }
@@ -459,42 +462,6 @@ pub fn run_share(
     Ok(response)
 }
 
-/// Opening the browser is a convenience on top of the product, which is the
-/// printed URL — a headless box, a missing opener, or a non-zero exit must not
-/// fail a share that the server already minted.
-fn open_in_browser(url: &str) {
-    let (program, args) = browser_opener();
-    if launch(program, args, url) {
-        return;
-    }
-    ui::action("Could not open a browser here — the link above is the share.");
-}
-
-/// Split out so the failure path is testable without a PATH that has no opener:
-/// tests call it with a program that cannot exist.
-fn launch(program: &str, args: &[&str], url: &str) -> bool {
-    Command::new(program)
-        .args(args)
-        .arg(url)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
-}
-
-fn browser_opener() -> (&'static str, &'static [&'static str]) {
-    if cfg!(target_os = "macos") {
-        return ("open", &[]);
-    }
-    if cfg!(target_os = "windows") {
-        // `start` is a shell builtin, so it needs cmd; the empty title argument
-        // stops cmd reading the URL as the window title.
-        return ("cmd", &["/C", "start", ""]);
-    }
-    ("xdg-open", &[])
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -576,27 +543,6 @@ mod tests {
             artifact.content_hash.is_some(),
             "stored artifact needs a hash"
         );
-    }
-
-    #[test]
-    fn a_missing_opener_is_reported_as_a_failed_launch_rather_than_panicking() {
-        assert!(!launch(
-            "lineage-no-such-browser-opener",
-            &[],
-            "https://app.usetribal.io/s/token"
-        ));
-    }
-
-    #[test]
-    fn the_windows_opener_goes_through_cmd_because_start_is_a_builtin() {
-        let (program, args) = browser_opener();
-        assert!(
-            matches!(program, "open" | "cmd" | "xdg-open"),
-            "unexpected opener: {program}"
-        );
-        if program == "cmd" {
-            assert_eq!(args, &["/C", "start", ""]);
-        }
     }
 
     #[test]

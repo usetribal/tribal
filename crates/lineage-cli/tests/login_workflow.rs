@@ -18,7 +18,9 @@ fn login_stores_handle_and_exchange_resolves_token() {
     let server = spawn_mock_server();
 
     // Login: device start → pending poll → complete poll → stored credentials.
-    lineage_cli::commands::login(Some(server.as_str())).unwrap();
+    // The mock verification URL is not a real page; opening it would launch a
+    // browser tab for every test run.
+    lineage_cli::commands::login(Some(server.as_str()), true).unwrap();
 
     let credentials = auth::load_credentials().unwrap();
     assert_eq!(credentials.default_server.as_deref(), Some(server.as_str()));
@@ -134,7 +136,7 @@ fn first_login_walks_the_organization_approval() {
     let calls = Arc::new(Mutex::new(Vec::new()));
     let server = spawn_first_login_server(Arc::clone(&calls));
 
-    lineage_cli::commands::login(Some(server.as_str())).unwrap();
+    lineage_cli::commands::login(Some(server.as_str()), true).unwrap();
 
     // The handle from the login poll is the one stored, after the grant.
     let credentials = auth::load_credentials().unwrap();

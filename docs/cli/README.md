@@ -227,7 +227,7 @@ injections), so read it from `.git/lineage/events.jsonl` directly.
 
 | Command | Description |
 |---------|-------------|
-| `tribal login [--server URL]` | Sign in to a Tribal server (browser device flow; defaults to production) |
+| `tribal login [--server URL] [--no-open]` | Sign in to a Tribal server (browser device flow; defaults to production) |
 | `tribal sync [--server URL] [--token TOKEN] [--remote origin]` | Exchange sessions with a Tribal server: push, then pull |
 | `tribal push [--server URL] [--token TOKEN] [--remote origin]` | Push only — the one-way half of `sync` |
 | `tribal pull [--server URL] [--token TOKEN] [--remote origin] [--dry-run]` | Pull only — the other half (see [Pull teammates' sessions](#pull-teammates-sessions)) |
@@ -245,11 +245,14 @@ from where you are standing. Signing in needs a terminal, so off one (CI, a
 hook, a pipe) the command fails with the message naming the fix rather than
 blocking on a browser approval nobody can give.
 
-`login` prints a verification URL and code, waits for the browser approval, and
-stores an opaque session handle in `~/.config/lineage/credentials.json` (0600;
-`XDG_CONFIG_HOME` respected, `LINEAGE_CONFIG_DIR` overrides). The handle is the
-durable credential — short-lived access tokens are minted from it per command,
-and the identity-provider refresh token never leaves the server.
+`login` prints a verification URL and code, opens it in your default browser,
+waits for the approval, and stores an opaque session handle in
+`~/.config/lineage/credentials.json` (0600; `XDG_CONFIG_HOME` respected,
+`LINEAGE_CONFIG_DIR` overrides). The handle is the durable credential —
+short-lived access tokens are minted from it per command, and the
+identity-provider refresh token never leaves the server. `--no-open` prints the
+URL without launching a browser. A failed open is not a failed login: the
+printed URL is still the one to use.
 
 Signing in for the first time takes **two browser approvals**: the first proves
 who you are, and the second lets the server read which organizations you belong

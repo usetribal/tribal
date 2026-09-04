@@ -96,6 +96,18 @@ fn the_headless_switch_is_global_and_discoverable() {
     assert!(help.contains("--no-interactive"), "{help}");
 }
 
+/// `login` opens the browser by default; the opt-out has to be on the surface
+/// an agent (or a test) reads, or the printed URL is the only path again.
+#[test]
+fn login_offers_no_open() {
+    let output = Command::new(env!("CARGO_BIN_EXE_tribal"))
+        .args(["login", "--help"])
+        .output()
+        .unwrap();
+    let help = String::from_utf8_lossy(&output.stdout);
+    assert!(help.contains("--no-open"), "{help}");
+}
+
 /// An agent composing a call needs to know a value follows the flag, and that a
 /// bare argument is expected — getting either wrong produces an invalid command.
 #[test]

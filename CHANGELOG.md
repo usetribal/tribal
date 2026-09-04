@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Root `tribal` / `--help` and interactive `init` say "History for every agent session".** The old collar used "provenance", which first-time users did not know. The context-hook step in `init` now says it shows session history on file reads.
 
+### Fixed
+
+- **`tribal login` opens the verification URL in your default browser.** The printed link stays as a fallback — a terminal hyperlink usually needs a modifier-click, which is what people were reaching for when the tab never appeared. A failed open does not fail the login. `--no-open` prints the URL without launching a browser, matching `share`
+
 ## [0.6.0] - 2026-08-25
 
 ### Added

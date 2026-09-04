@@ -317,6 +317,9 @@ enum Commands {
         /// Server base URL; defaults to production or the server stored by a previous login
         #[arg(long)]
         server: Option<String>,
+        /// Print the URL without opening a browser
+        #[arg(long)]
+        no_open: bool,
     },
     /// Push redacted sessions to a Lineage server
     #[command(name = "push", hide = true)]
@@ -942,7 +945,7 @@ fn main() -> ExitCode {
             },
         },
         Commands::Export { redact, format } => commands::export(&repo_path, redact, &format),
-        Commands::Login { server } => commands::login(server.as_deref()),
+        Commands::Login { server, no_open } => commands::login(server.as_deref(), no_open),
         Commands::Push {
             server,
             token,
