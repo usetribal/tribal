@@ -134,6 +134,13 @@ See [Import](../import.md).
 
 See [Explore](../explore.md).
 
+**Slow selector?** Profiling is dev-only (not in release installers). Build
+`cargo install --path crates/lineage-cli --features profile`, then with a TTY
+`TRIBAL_TUI_PROFILE=1 tribal list` prints JSON timing phases on stderr. Headless harnesses live under
+[`oss/harness/profiler/`](../../harness/profiler/README.md); use the [`profiler`](../../../.agents/skills/profiler/SKILL.md)
+skill or run from `oss/`:
+`TRIBAL_TUI_PROFILE_REPO=/path/to/repo cargo test -p lineage-profiler-harness tui_prep_breakdown -- --ignored --nocapture`.
+
 ### Linking and history
 
 | Command | Description |

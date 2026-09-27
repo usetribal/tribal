@@ -1121,6 +1121,7 @@ dependencies = [
  "lineage-embed",
  "lineage-git",
  "lineage-policy",
+ "lineage-profiler",
  "lineage-retrieval",
  "lineage-search",
  "lineage-select",
@@ -1207,6 +1208,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "lineage-profiler"
+version = "0.6.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "lineage-profiler-harness"
+version = "0.6.0"
+dependencies = [
+ "chrono",
+ "crossterm 0.28.1",
+ "lineage-cli",
+ "lineage-profiler",
+ "lineage-select",
+ "ratatui",
+ "serde",
+]
+
+[[package]]
 name = "lineage-retrieval"
 version = "0.6.0"
 dependencies = [
@@ -1241,6 +1263,7 @@ version = "0.6.0"
 dependencies = [
  "chrono",
  "crossterm 0.28.1",
+ "lineage-profiler",
  "ratatui",
  "thiserror",
 ]

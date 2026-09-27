@@ -8,8 +8,13 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
+[features]
+# Dev-only: `TRIBAL_TUI_PROFILE` and harness hooks. Release `tribal` builds omit this.
+profile = ["dep:lineage-profiler"]
+
 [dependencies]
 chrono = { workspace = true }
 crossterm = { workspace = true }
 ratatui = { workspace = true }
 thiserror = { workspace = true }
+lineage-profiler = { workspace = true, optional = true }

@@ -13,6 +13,11 @@ authors.workspace = true
 keywords.workspace = true
 categories.workspace = true
 
+[features]
+default = []
+# Dev-only runtime traces (`TRIBAL_TUI_PROFILE`). Not enabled for shipped release binaries.
+profile = ["dep:lineage-profiler", "lineage-select/profile"]
+
 [lib]
 name = "lineage_cli"
 path = "src/lib.rs"
@@ -33,6 +38,7 @@ lineage-embed = { workspace = true }
 lineage-policy = { workspace = true }
 lineage-search = { workspace = true }
 lineage-select = { workspace = true }
+lineage-profiler = { workspace = true, optional = true }
 serde = { workspace = true }
 sha2 = { workspace = true }
 serde_json = { workspace = true }

@@ -18,6 +18,7 @@ mod session;
 mod state;
 mod transcript;
 mod tui;
+mod tui_runtime_profile;
 mod worker;
 
 pub use confirm::{Choice, Confirm, Stage};
@@ -32,5 +33,7 @@ pub use state::{Listing, Outcome, Screen, Selector};
 pub use transcript::{
     activity_duration, activity_summary, activity_tools, fold, Entry, Speaker, TranscriptTurn,
 };
-pub use tui::{select, select_opening_on, select_with};
+#[cfg(feature = "profile")]
+pub use tui::draw_for_profile;
+pub use tui::{select, select_opening_on, select_while_preparing, select_with};
 pub use worker::{Answer, SearchWorker};

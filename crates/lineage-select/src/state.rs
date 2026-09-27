@@ -64,6 +64,8 @@ pub enum Listing {
     Failed(String),
     /// A query is typed but its result has not arrived.
     Searching,
+    /// Session rows are still being assembled off the UI thread.
+    Booting,
 }
 
 pub struct Selector {
@@ -84,6 +86,11 @@ impl Selector {
     pub fn new(rows: Vec<SessionRow>, purpose: Purpose) -> Self {
         let visible = (0..rows.len()).collect();
         let openings = rows.iter().map(|row| row.context.clone()).collect();
+        let listing = if rows.is_empty() {
+            Listing::Booting
+        } else {
+            Listing::All
+        };
         let mut selector = Self {
             rows,
             openings,
@@ -91,11 +98,29 @@ impl Selector {
             visible,
             selected: 0,
             query: String::new(),
-            listing: Listing::All,
+            listing,
             screen: Screen::List,
         };
-        selector.settle_selection(0);
+        if !matches!(selector.listing, Listing::Booting) {
+            selector.settle_selection(0);
+        }
         selector
+    }
+
+    /// Replace the list once background preparation finishes.
+    pub fn adopt_rows(&mut self, rows: Vec<SessionRow>) {
+        self.rows = rows;
+        self.openings = self.rows.iter().map(|row| row.context.clone()).collect();
+        self.visible = (0..self.rows.len()).collect();
+        self.selected = 0;
+        self.query.clear();
+        self.listing = Listing::All;
+        self.screen = Screen::List;
+        self.settle_selection(0);
+    }
+
+    pub fn is_booting(&self) -> bool {
+        matches!(self.listing, Listing::Booting)
     }
 
     pub fn rows(&self) -> &[SessionRow] {

@@ -1,0 +1,19 @@
+[package]
+name = "lineage-profiler-harness"
+description = "Headless performance harnesses for tribal CLI and selector surfaces"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+lineage-cli = { workspace = true, features = ["profile"] }
+lineage-profiler = { workspace = true }
+lineage-select = { workspace = true, features = ["profile"] }
+chrono = { workspace = true }
+crossterm = { workspace = true }
+ratatui = { workspace = true }
+serde = { workspace = true }

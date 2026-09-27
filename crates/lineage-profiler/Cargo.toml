@@ -1,0 +1,14 @@
+[package]
+name = "lineage-profiler"
+description = "Shared timing reports and TRIBAL_TUI_PROFILE emission for tribal surfaces"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }

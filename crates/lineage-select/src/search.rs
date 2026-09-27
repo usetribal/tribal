@@ -33,6 +33,23 @@ impl From<&str> for SessionMatch {
 /// has to understand how a match was scored.
 pub trait SessionSearch {
     fn search(&self, query: &str) -> Result<Vec<SessionMatch>, SearchError>;
+
+    /// Shown in the search box chrome (`lex`, `fused`, …). The selector reads
+    /// this each frame so a leg that warms up asynchronously can update without
+    /// restarting the loop.
+    fn leg_label(&self) -> &str {
+        "lex"
+    }
+}
+
+impl<S: SessionSearch + ?Sized> SessionSearch for std::sync::Arc<S> {
+    fn search(&self, query: &str) -> Result<Vec<SessionMatch>, SearchError> {
+        (**self).search(query)
+    }
+
+    fn leg_label(&self) -> &str {
+        (**self).leg_label()
+    }
 }
 
 /// A search that could not answer.

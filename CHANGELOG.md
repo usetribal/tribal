@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **TUI profiling harnesses moved under `oss/harness/profiler/` (dev-only).** Release `tribal` builds omit the `profile` feature and do not link harness crates; contributors use `cargo install --path crates/lineage-cli --features profile` for `TRIBAL_TUI_PROFILE=1` and `cargo test -p lineage-profiler-harness` for baselines (see the `profiler` agent skill in `.agents/skills/profiler/` when working in the monorepo).
+- **Root `--help` and `init` no longer print the boxed tribal nameplate.** The tagline still appears in clap’s standard usage line; only the bordered collar under the mark was removed.
+- **The session selector opens immediately and loads in the background.** `tribal list`, `tribal show`, `tribal fork`, and `tribal share` (interactive) take the alternate screen first with a loading state, then fill the list once flush and row assembly finish. Preparation no longer loads the embedding model up front — lexical search works at once and the search chrome shows `lex…` then `fused` when the cached model is ready. One git pass builds flush skip metadata and selector rows together. Set `TRIBAL_TUI_PROFILE=1` to print a JSON timing breakdown on stderr when debugging slow opens.
 - **Root `tribal` / `--help` and interactive `init` say "History for every agent session".** The old collar used "provenance", which first-time users did not know. The context-hook step in `init` now says it shows session history on file reads.
 
 ### Fixed

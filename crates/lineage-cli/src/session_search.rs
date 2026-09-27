@@ -5,6 +5,7 @@
 //! sessions the evidence belongs to, so the selector can order rows by it.
 
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use lineage_embed::Model2VecEmbedder;
 use lineage_git::open_repo;
@@ -21,6 +22,23 @@ use crate::retrieval_cmd::embed_cache_dir;
 /// answers from the lexical leg alone.
 const BUDGET_MS: u64 = 200;
 
+#[derive(Default)]
+enum DenseLeg {
+    #[default]
+    Idle,
+    Loading,
+    Ready(Box<Option<Model2VecEmbedder>>),
+}
+
+impl DenseLeg {
+    fn ready_embedder(&self) -> Option<&Model2VecEmbedder> {
+        match self {
+            DenseLeg::Ready(embedder) => embedder.as_ref().as_ref(),
+            _ => None,
+        }
+    }
+}
+
 /// Searches the sessions of one repository by what was said in them.
 ///
 /// Opens the repository and index once and holds them, because a selector
@@ -29,35 +47,60 @@ const BUDGET_MS: u64 = 200;
 pub struct RepoSessionSearch {
     repo_path: PathBuf,
     index_path: PathBuf,
-    /// Absent when no model is cached. Building one downloads ~130 MB, which is
-    /// not something to do in front of a user waiting for a picker, so the
-    /// dense leg is simply skipped until some other command has fetched it.
-    embedder: Option<Model2VecEmbedder>,
+    cache_dir: PathBuf,
+    dense: Mutex<DenseLeg>,
 }
 
 impl RepoSessionSearch {
-    pub fn open(repo_path: &Path) -> Result<Self, SearchError> {
+    pub fn open(repo_path: &Path) -> Result<Arc<Self>, SearchError> {
         let repo = open_repo(repo_path).map_err(|e| SearchError::new(e.to_string()))?;
         let index_path = repo.git_dir().join("lineage").join("index.db");
         let cache_dir = embed_cache_dir();
-        let embedder = Model2VecEmbedder::is_cached(&cache_dir)
-            .then(|| Model2VecEmbedder::new(cache_dir).ok())
-            .flatten();
-        Ok(Self {
+        let search = Arc::new(Self {
             repo_path: repo_path.to_path_buf(),
             index_path,
-            embedder,
-        })
+            cache_dir: cache_dir.clone(),
+            dense: Mutex::new(DenseLeg::Idle),
+        });
+        if Model2VecEmbedder::is_cached(&cache_dir) {
+            search.begin_dense_load();
+        }
+        Ok(search)
     }
 
-    /// Whether the dense leg is available. The lexical leg always is.
+    fn begin_dense_load(self: &Arc<Self>) {
+        let mut guard = self.dense.lock().expect("dense leg lock");
+        if !matches!(*guard, DenseLeg::Idle) {
+            return;
+        }
+        *guard = DenseLeg::Loading;
+        let weak = Arc::downgrade(self);
+        std::thread::spawn(move || {
+            let Some(search) = weak.upgrade() else {
+                return;
+            };
+            let loaded = Model2VecEmbedder::new(search.cache_dir.clone()).ok();
+            let mut guard = search.dense.lock().expect("dense leg lock");
+            *guard = DenseLeg::Ready(Box::new(loaded));
+        });
+    }
+
+    /// Whether fused search can run right now (dense model loaded).
     pub fn is_fused(&self) -> bool {
-        self.embedder.is_some()
+        self.dense
+            .lock()
+            .expect("dense leg lock")
+            .ready_embedder()
+            .is_some()
     }
 }
 
 impl SessionSearch for RepoSessionSearch {
     fn search(&self, query: &str) -> Result<Vec<SessionMatch>, SearchError> {
+        if query.is_empty() {
+            return Ok(Vec::new());
+        }
+
         let repo = open_repo(&self.repo_path).map_err(|e| SearchError::new(e.to_string()))?;
         let index =
             LineageIndex::open(&self.index_path).map_err(|e| SearchError::new(e.to_string()))?;
@@ -67,27 +110,30 @@ impl SessionSearch for RepoSessionSearch {
         };
 
         let fts = FtsRetriever::new(repo.inner(), &index);
-        let retrieval = match self.embedder.as_ref() {
-            Some(embedder) => {
-                let dense = DenseRetriever::new(repo.inner(), &index, embedder);
-                FusedRetriever::new(fts, dense)
-                    .retrieve_intent(&intent)
-                    .map_err(|e| SearchError::new(e.to_string()))?
-            }
-            None => fts
+        let dense_guard = self.dense.lock().expect("dense leg lock");
+        let retrieval = if let Some(embedder) = dense_guard.ready_embedder() {
+            let dense = DenseRetriever::new(repo.inner(), &index, embedder);
+            FusedRetriever::new(fts, dense)
                 .retrieve_intent(&intent)
-                .map_err(|e| SearchError::new(e.to_string()))?,
+                .map_err(|e| SearchError::new(e.to_string()))?
+        } else {
+            fts.retrieve_intent(&intent)
+                .map_err(|e| SearchError::new(e.to_string()))?
         };
         Ok(sessions_in_order(&retrieval))
+    }
+
+    fn leg_label(&self) -> &str {
+        match &*self.dense.lock().expect("dense leg lock") {
+            DenseLeg::Loading => "lex…",
+            DenseLeg::Ready(embedder) if embedder.is_some() => "fused",
+            _ => "lex",
+        }
     }
 }
 
 /// Sessions in the order their first piece of evidence appeared, each carrying
 /// the text of its best match.
-///
-/// Evidence is per-turn, so one session can match many times; the retriever's
-/// ordering is the ranking, so first appearance is that session's rank and its
-/// passage, and later duplicates say nothing new.
 fn sessions_in_order(retrieval: &Retrieval) -> Vec<SessionMatch> {
     let mut found: Vec<SessionMatch> = Vec::new();
     for evidence in &retrieval.evidence {
@@ -103,11 +149,6 @@ fn sessions_in_order(retrieval: &Retrieval) -> Vec<SessionMatch> {
     found
 }
 
-/// A one-line passage from a matched turn.
-///
-/// Evidence summaries are verbatim turn text, so they arrive with the turn's
-/// own newlines and indentation. A row has one line to spend, and leading
-/// whitespace in it reads as a rendering fault.
 fn passage_of(summary: &str) -> Option<String> {
     let flattened = summary.split_whitespace().collect::<Vec<_>>().join(" ");
     (!flattened.is_empty()).then_some(flattened)

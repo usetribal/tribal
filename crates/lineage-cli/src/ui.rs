@@ -92,27 +92,23 @@ const LOGO_PNG: &[u8] = include_bytes!("../assets/tribal-logo.png");
 /// Columns for the mark after crop. Wide enough that the interlocking gaps
 /// survive nearest-neighbour, not so wide that help falls off the screen.
 const BANNER_WIDTH: u32 = 48;
-const TITLE: &str = "tribal";
-const TAGLINE: &str = "History for every agent session";
 const MARK: Style = Style::new()
     .fg_color(Some(Color::Ansi(AnsiColor::BrightWhite)))
     .bg_color(Some(Color::Ansi(AnsiColor::BrightWhite)));
 const MARK_HALF: Style = Style::new().fg_color(Some(Color::Ansi(AnsiColor::BrightWhite)));
 
-/// Tribal mark + nameplate above root `--help` and the interactive init wizard.
+/// Tribal mark above root `--help` and the interactive init wizard.
 ///
 /// The PNG is thresholded and nearest-neighbour scaled, then printed as
-/// half-blocks. The title sits in a collar the same width as the mark; the
-/// tagline is inside it. Off a colour TTY (or under `NO_COLOR`) the mark is
-/// skipped and the collar still prints.
+/// half-blocks. Off a colour TTY (or under `NO_COLOR`) nothing is printed.
 pub fn banner() {
-    if color_enabled() {
-        if let Ok(img) = logo_image() {
-            print_mark(&img);
-        }
+    if !color_enabled() {
+        return;
     }
-    print_collar(TITLE, TAGLINE);
-    println!();
+    if let Ok(img) = logo_image() {
+        print_mark(&img);
+        println!();
+    }
 }
 
 fn logo_image() -> Result<image::RgbaImage, image::ImageError> {
@@ -198,33 +194,6 @@ fn print_mark(img: &image::RgbaImage) {
 
 fn is_on(pixel: &image::Rgba<u8>) -> bool {
     pixel.0[3] > 0
-}
-
-fn print_collar(title: &str, tagline: &str) {
-    let width = BANNER_WIDTH as usize;
-    let rule = "─".repeat(width);
-    println!("  {}{}{}", dim("╭"), dim(&rule), dim("╮"));
-    println!(
-        "  {}{}{}",
-        dim("│"),
-        paint(ACCENT.bold(), &pad_collar(&format!(" {title}"), width)),
-        dim("│")
-    );
-    println!(
-        "  {}{}{}",
-        dim("│"),
-        dim(pad_collar(&format!(" {tagline}"), width)),
-        dim("│")
-    );
-    println!("  {}{}{}", dim("╰"), dim(&rule), dim("╯"));
-}
-
-fn pad_collar(text: &str, width: usize) -> String {
-    let len = text.chars().count();
-    if len >= width {
-        return text.chars().take(width).collect();
-    }
-    format!("{text}{}", " ".repeat(width - len))
 }
 
 pub fn paint(style: Style, text: &str) -> String {
@@ -572,12 +541,6 @@ mod tests {
         let manual = paint_with(true, ACCENT, "manual");
         assert_ne!(exact, heuristic);
         assert_ne!(heuristic, manual);
-    }
-
-    #[test]
-    fn tagline_does_not_mention_git() {
-        assert!(!TAGLINE.to_lowercase().contains("git"));
-        assert_eq!(TAGLINE, "History for every agent session");
     }
 
     #[test]

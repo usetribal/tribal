@@ -5,7 +5,8 @@
 //! events into calls on them and draws what comes back.
 
 use std::io::{self, Stdout};
-use std::sync::mpsc;
+use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use chrono::Utc;
@@ -28,6 +29,7 @@ use crate::search::SessionSearch;
 use crate::session::{Purpose, SessionRow};
 use crate::state::{Listing, Outcome, Screen, Selector};
 use crate::transcript::Entry;
+use crate::tui_runtime_profile::RatatuiProfiler;
 use crate::worker::SearchWorker;
 
 /// How long typing must pause before a search runs. Long enough that a fast
@@ -120,6 +122,239 @@ where
     select_opening_on(rows, purpose, search, leg, load, share, None)
 }
 
+type PrepReceiver<S> = Receiver<Result<(Vec<SessionRow>, Arc<S>), String>>;
+
+/// Open the terminal immediately and fill the list once `prep` delivers.
+pub fn select_while_preparing<S, L, W>(
+    purpose: Purpose,
+    prep: PrepReceiver<S>,
+    load: L,
+    share: W,
+    open_on: Option<&str>,
+) -> io::Result<Outcome>
+where
+    S: SessionSearch + Send + Sync + 'static,
+    L: Fn(&str) -> Vec<Entry>,
+    W: Fn(&str) -> Result<(), String> + Clone + Send + 'static,
+{
+    let open_on = open_on.map(str::to_string);
+    let mut selector = Selector::new(Vec::new(), purpose);
+    let mut guard = TerminalGuard::enter()?;
+    let mut worker: Option<SearchWorker> = None;
+    let mut search: Option<Arc<S>> = None;
+    let mut pending_since: Option<Instant> = None;
+    let mut page = 1usize;
+    let mut rendered = 0usize;
+    let mut matches: Vec<Match> = Vec::new();
+    let mut confirm: Option<Confirm> = None;
+    let mut shared: Option<String> = None;
+    let mut failure: Option<String> = None;
+    let mut work: Option<mpsc::Receiver<Result<String, String>>> = None;
+
+    loop {
+        if worker.is_none() {
+            match prep.try_recv() {
+                Ok(Ok((rows, search_impl))) => {
+                    selector.adopt_rows(rows);
+                    if let Some(session_id) = open_on.as_deref() {
+                        if selector.focus(session_id) {
+                            let entries = load(session_id);
+                            selector.read(entries);
+                        }
+                    }
+                    search = Some(search_impl.clone());
+                    worker = Some(SearchWorker::spawn(search_impl));
+                }
+                Ok(Err(message)) => return Err(io::Error::other(message)),
+                Err(TryRecvError::Empty) => {}
+                Err(TryRecvError::Disconnected) => {
+                    return Err(io::Error::other("session preparation stopped unexpectedly"));
+                }
+            }
+        }
+
+        let leg = search.as_ref().map(|s| s.leg_label()).unwrap_or("lex");
+        guard.terminal.draw(|frame| {
+            let frame_state = draw(frame, &selector, leg);
+            page = frame_state.viewport;
+            rendered = frame_state.rendered;
+            matches = frame_state.matches;
+            if let Some(confirm) = confirm.as_ref() {
+                modal::draw(frame, confirm, Instant::now(), &modal_styles());
+            }
+        })?;
+
+        if selector.is_booting() {
+            if event::poll(TICK)? {
+                if let Event::Key(key) = event::read()? {
+                    if key.kind == KeyEventKind::Press
+                        && key.code == KeyCode::Char('c')
+                        && key.modifiers.contains(KeyModifiers::CONTROL)
+                    {
+                        return Ok(selector.cancel());
+                    }
+                }
+            }
+            continue;
+        }
+
+        let worker = worker.as_mut().expect("worker ready after boot");
+
+        if let Some(pending) = confirm.as_mut() {
+            let now = Instant::now();
+            if let Some(error) = failure.take() {
+                return Err(io::Error::other(error));
+            }
+            if let Some(result) = work.as_ref().and_then(|rx| rx.try_recv().ok()) {
+                match result {
+                    Ok(id) => {
+                        shared = Some(id);
+                        pending.celebrate(now);
+                    }
+                    Err(error) => failure = Some(error),
+                }
+                work = None;
+            }
+            match pending.stage() {
+                Stage::Working if shared.is_none() && work.is_none() && failure.is_none() => {
+                    let id = selector
+                        .confirmable()
+                        .map(|row| row.id.clone())
+                        .unwrap_or_default();
+                    let (tx, rx) = mpsc::channel();
+                    let job = share.clone();
+                    std::thread::spawn(move || {
+                        let _ = tx.send(job(&id).map(|()| id));
+                    });
+                    work = Some(rx);
+                }
+                Stage::Celebrating if pending.is_finished(now) => {
+                    return Ok(Outcome::Chose(shared.unwrap_or_default()));
+                }
+                _ => {}
+            }
+            if pending.stage() != Stage::Asking {
+                std::thread::sleep(ANIMATION_TICK);
+                continue;
+            }
+        }
+
+        if let Some(line) = selector.take_pending_jump(&matches) {
+            selector.scroll_to(line, page, rendered);
+        }
+
+        if let Some(answer) = worker.poll() {
+            match answer.result {
+                Ok(ids) => selector.apply_results(&ids),
+                Err(error) => selector.apply_search_error(&error),
+            }
+        }
+
+        if pending_since.is_some_and(|since| since.elapsed() >= DEBOUNCE) {
+            pending_since = None;
+            worker.request(selector.query());
+        }
+
+        let wait = if confirm.is_some() {
+            ANIMATION_TICK
+        } else {
+            TICK
+        };
+        if !event::poll(wait)? {
+            continue;
+        }
+        let Event::Key(key) = event::read()? else {
+            continue;
+        };
+        if key.kind != KeyEventKind::Press {
+            continue;
+        }
+
+        if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
+            return Ok(selector.cancel());
+        }
+
+        if let Some(pending) = confirm.as_mut() {
+            match key.code {
+                KeyCode::Esc => confirm = None,
+                KeyCode::Left | KeyCode::Right | KeyCode::Char('h') | KeyCode::Char('l') => {
+                    pending.move_focus()
+                }
+                KeyCode::Enter => match pending.answer() {
+                    Choice::GoBack => confirm = None,
+                    Choice::DoIt => pending.begin_work(Instant::now()),
+                },
+                _ => {}
+            }
+            continue;
+        }
+
+        if selector.is_finding() {
+            match key.code {
+                KeyCode::Esc => selector.end_find(),
+                KeyCode::Enter => {
+                    if let Some(line) = selector.next_match(&matches) {
+                        selector.scroll_to(line, page, rendered);
+                    }
+                }
+                KeyCode::Backspace => selector.pop_find_char(),
+                KeyCode::Down => selector.scroll_by(1, page, rendered),
+                KeyCode::Up => selector.scroll_by(-1, page, rendered),
+                KeyCode::Char(c) => selector.push_find_char(c),
+                _ => {}
+            }
+            continue;
+        }
+
+        if selector.is_reading() {
+            match key.code {
+                KeyCode::Esc | KeyCode::Char('q') => selector.back(),
+                KeyCode::Char('/') => selector.begin_find(),
+                KeyCode::Enter => {
+                    if selector.confirmable().is_some() {
+                        confirm = Some(Confirm::new());
+                    }
+                }
+                KeyCode::Down | KeyCode::Char('j') => selector.scroll_by(1, page, rendered),
+                KeyCode::Up | KeyCode::Char('k') => selector.scroll_by(-1, page, rendered),
+                KeyCode::PageDown | KeyCode::Char(' ') => {
+                    selector.scroll_by(page as isize, page, rendered)
+                }
+                KeyCode::PageUp => selector.scroll_by(-(page as isize), page, rendered),
+                _ => {}
+            }
+            continue;
+        }
+
+        match key.code {
+            KeyCode::Esc => return Ok(selector.cancel()),
+            KeyCode::Enter => {
+                if let Some(row) = selector.open() {
+                    let entries = load(&row.id);
+                    selector.read(entries);
+                }
+            }
+            KeyCode::Down => selector.move_down(),
+            KeyCode::Up => selector.move_up(),
+            KeyCode::Char('n') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                selector.move_down()
+            }
+            KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                selector.move_up()
+            }
+            KeyCode::Backspace => {
+                selector.pop_query_char();
+                pending_since = (!selector.query().is_empty()).then(Instant::now);
+            }
+            KeyCode::Char(c) => {
+                selector.push_query_char(c);
+                pending_since = Some(Instant::now());
+            }
+            _ => {}
+        }
+    }
+}
+
 /// As [`select_with`], opening straight into `open_on`'s session when it names
 /// one this list holds.
 ///
@@ -153,8 +388,21 @@ where
             selector.read(entries);
         }
     }
+    let row_count = selector.rows().len();
+    let mut ratatui_profile = RatatuiProfiler::begin();
+
+    let worker_start = ratatui_profile.worker_spawn_start();
     let mut worker = SearchWorker::spawn(search);
+    if let Some(start) = worker_start {
+        ratatui_profile.on_worker_spawn(start);
+    }
+
+    let enter_start = ratatui_profile.terminal_enter_start();
     let mut guard = TerminalGuard::enter()?;
+    if let Some(start) = enter_start {
+        ratatui_profile.on_terminal_enter(start);
+    }
+
     let mut pending_since: Option<Instant> = None;
 
     let mut page = 1usize;
@@ -164,8 +412,8 @@ where
     let mut shared: Option<String> = None;
     let mut failure: Option<String> = None;
     let mut work: Option<mpsc::Receiver<Result<String, String>>> = None;
-
     loop {
+        let draw_start = ratatui_profile.first_frame_draw_start();
         guard.terminal.draw(|frame| {
             let frame_state = draw(frame, &selector, &leg);
             page = frame_state.viewport;
@@ -175,6 +423,9 @@ where
                 modal::draw(frame, confirm, Instant::now(), &modal_styles());
             }
         })?;
+        if let Some(start) = draw_start {
+            ratatui_profile.on_first_frame_draw(start, row_count);
+        }
 
         // The confirmation drives itself once it starts: the share runs under
         // the fill, the burst follows a success, and the modal closes when it
@@ -363,6 +614,12 @@ struct FrameState {
     viewport: usize,
     rendered: usize,
     matches: Vec<Match>,
+}
+
+/// One frame for profiling harnesses — same path the interactive loop uses (`profile` feature).
+#[cfg(feature = "profile")]
+pub fn draw_for_profile(frame: &mut Frame, selector: &Selector, leg: &str) {
+    let _ = draw(frame, selector, leg);
 }
 
 fn draw(frame: &mut Frame, selector: &Selector, leg: &str) -> FrameState {
@@ -576,6 +833,12 @@ fn empty_state(listing: &Listing) -> Paragraph<'static> {
             "○",
             "No sessions here yet",
             "Sessions appear once an agent has worked in this repository.".to_string(),
+            MID,
+        ),
+        Listing::Booting => (
+            "·",
+            "Loading sessions…",
+            "Updating from agent transcripts and assembling the list.".to_string(),
             MID,
         ),
     };

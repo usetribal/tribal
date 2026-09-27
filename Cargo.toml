@@ -12,6 +12,8 @@ members = [
     "crates/lineage-embed",
     "crates/lineage-retrieval",
     "crates/lineage-select",
+    "crates/lineage-profiler",
+    "crates/lineage-profiler-harness",
     "crates/lineage-mcp",
 ]
 
@@ -40,6 +42,8 @@ lineage-search = { path = "crates/lineage-search" }
 lineage-embed = { path = "crates/lineage-embed" }
 lineage-retrieval = { path = "crates/lineage-retrieval" }
 lineage-select = { path = "crates/lineage-select" }
+lineage-profiler = { path = "crates/lineage-profiler" }
+lineage-profiler-harness = { path = "crates/lineage-profiler-harness" }
 lineage-cli = { path = "crates/lineage-cli" }
 
 chrono = { version = "0.4", features = ["serde"] }

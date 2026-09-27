@@ -11,7 +11,12 @@ fn reads_codex_rollout_fixture() {
     let adapter = CodexAdapter::new(&fixture);
     let sessions = adapter.discover().unwrap();
     assert!(!sessions.is_empty());
-    let conv = adapter.read(&sessions[0]).unwrap();
+    // WalkDir order is filesystem-dependent; pin the legacy fixture that carries auth.rs.
+    let legacy = sessions
+        .iter()
+        .find(|s| s.source_path.to_string_lossy().contains("rollout-sample"))
+        .expect("legacy rollout fixture");
+    let conv = adapter.read(legacy).unwrap();
     assert_eq!(conv.agent, AgentKind::Codex);
     assert!(conv.turns.len() >= 3);
     assert!(conv.turns.iter().any(|t| matches!(t.role, Role::User)));

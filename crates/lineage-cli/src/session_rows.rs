@@ -2,12 +2,18 @@
 
 use std::path::Path;
 
-use chrono::Duration;
-use lineage_core::{display_title, opening_ask};
-use lineage_git::{list_session_ids, open_repo, read_conversation_stored, PROMPTED_BY_NAME};
+use std::collections::HashMap;
+
+use chrono::{DateTime, Duration, Utc};
+use lineage_core::{display_title, opening_ask, Conversation, LineageId, SOURCE_MTIME_KEY};
+use lineage_git::{
+    list_session_ids, open_repo, read_conversation_stored, LineageRepo, PROMPTED_BY_NAME,
+};
 use lineage_select::{Origin, SessionRow};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+type StoredSnapshot = (HashMap<LineageId, DateTime<Utc>>, Vec<SessionRow>);
 
 /// How much of a session's opening to keep for the row's context line. Wider
 /// than any terminal, because the renderer is what knows the real budget.
@@ -20,36 +26,66 @@ const CONTEXT_CHARS: usize = 200;
 /// costs far more than it shows.
 pub fn collect_session_rows(repo_path: &Path) -> Result<Vec<SessionRow>> {
     let repo = open_repo(repo_path)?;
+    Ok(collect_session_rows_from_repo(&repo))
+}
+
+/// One git walk: stored mtimes for flush skip logic and selector rows together.
+pub fn stored_snapshot(repo: &LineageRepo) -> Result<StoredSnapshot> {
+    let mut mtimes = HashMap::new();
     let mut rows = Vec::new();
     for id in list_session_ids(repo.inner())? {
         let Some(conv) = read_conversation_stored(repo.inner(), &id)? else {
             continue;
         };
-        rows.push(SessionRow {
-            id: conv.id.to_string(),
-            title: display_title(&conv),
-            agent: conv.agent.as_str().to_string(),
-            turns: conv.turns.len(),
-            started_at: conv.started_at,
-            duration: session_duration(&conv),
-            project: project_name(&conv.workspace_root),
-            context: opening_ask(&conv, CONTEXT_CHARS),
-            // A local fork of a pulled session carries `fork_origin` but no
-            // `pull_origin`, and still pushes — so the pull edge, not the fork
-            // edge, is what makes a session someone else's to share.
-            origin: match conv.pull_origin {
-                Some(_) => Origin::Received,
-                None => Origin::Local,
-            },
-            prompted_by: conv
-                .metadata
-                .get(PROMPTED_BY_NAME)
-                .and_then(|v| v.as_str())
-                .map(String::from),
-        });
+        if let Some(mtime) = source_mtime(&conv) {
+            mtimes.insert(id.clone(), mtime);
+        }
+        rows.push(row_from_conversation(&conv));
     }
     rows.sort_by_key(|row| std::cmp::Reverse(row.started_at));
-    Ok(rows)
+    Ok((mtimes, rows))
+}
+
+pub fn collect_session_rows_from_repo(repo: &LineageRepo) -> Vec<SessionRow> {
+    let mut rows = Vec::new();
+    for id in list_session_ids(repo.inner()).unwrap_or_default() {
+        let Ok(Some(conv)) = read_conversation_stored(repo.inner(), &id) else {
+            continue;
+        };
+        rows.push(row_from_conversation(&conv));
+    }
+    rows.sort_by_key(|row| std::cmp::Reverse(row.started_at));
+    rows
+}
+
+fn source_mtime(conv: &Conversation) -> Option<DateTime<Utc>> {
+    conv.metadata
+        .get(SOURCE_MTIME_KEY)
+        .and_then(|v| v.as_str())
+        .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+        .map(|dt| dt.with_timezone(&Utc))
+}
+
+fn row_from_conversation(conv: &Conversation) -> SessionRow {
+    SessionRow {
+        id: conv.id.to_string(),
+        title: display_title(conv),
+        agent: conv.agent.as_str().to_string(),
+        turns: conv.turns.len(),
+        started_at: conv.started_at,
+        duration: session_duration(conv),
+        project: project_name(&conv.workspace_root),
+        context: opening_ask(conv, CONTEXT_CHARS),
+        origin: match conv.pull_origin {
+            Some(_) => Origin::Received,
+            None => Origin::Local,
+        },
+        prompted_by: conv
+            .metadata
+            .get(PROMPTED_BY_NAME)
+            .and_then(|v| v.as_str())
+            .map(String::from),
+    }
 }
 
 /// How long the session ran, from its own turn timestamps.

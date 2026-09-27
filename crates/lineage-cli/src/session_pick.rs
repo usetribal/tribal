@@ -1,20 +1,26 @@
 //! Pick a session for fork when the id is not supplied up front.
 
 use std::path::Path;
+use std::sync::{mpsc, Arc, Mutex};
+use std::thread;
 
 use lineage_core::{display_title, LineageId};
 use lineage_git::{open_repo, resolve_session, ResolveError, SessionCandidate};
 use lineage_search::{LineageIndex, SearchHit};
 use lineage_select::{Outcome, Purpose};
 
-use crate::flush::flush_sessions;
+use crate::flush::flush_and_collect_rows;
 use crate::interactive::interactive;
-use crate::session_rows::collect_session_rows;
 use crate::session_search::RepoSessionSearch;
 use crate::session_transcript::load_session_entries;
 use crate::ui;
+#[cfg(feature = "profile")]
+use lineage_profiler::{emit_prep, profiling_enabled, CliPhase, PrepReport};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+type PrepResult =
+    std::result::Result<(Vec<lineage_select::SessionRow>, Arc<RepoSessionSearch>), String>;
 
 /// Backing out of the selector. An error for a caller that needed a session,
 /// and an ordinary exit for one that was only browsing — so the two agree on
@@ -100,20 +106,10 @@ pub fn pick_fork_session(repo_path: &Path, options: &ForkPickOptions) -> Result<
 }
 
 /// Open the selector over this repository's sessions.
-///
-/// Flushes first so a session the user has just finished is on the list: the
-/// transcript is on disk continuously but only reaches refs at import, and a
-/// picker that cannot offer the session someone just left is the whole problem
-/// this replaced.
 pub fn pick_interactively(repo_path: &Path, purpose: Purpose) -> Result<ForkPickResult> {
     pick_interactively_with(repo_path, purpose, |_| Ok(()))
 }
 
-/// Open the selector to look through sessions, with no follow-on action.
-///
-/// What `list` and `show` run. `open_on` names the session to open for reading;
-/// with none, the selector opens on the list. Backing out is an ordinary exit
-/// here rather than a cancelled choice — browsing has nothing to cancel.
 pub fn browse(repo_path: &Path, open_on: Option<&str>) -> Result<()> {
     match browse_with(repo_path, open_on) {
         Ok(()) => Ok(()),
@@ -126,8 +122,6 @@ fn browse_with(repo_path: &Path, open_on: Option<&str>) -> Result<()> {
     open_selector(repo_path, Purpose::Browse, |_| Ok(()), open_on).map(|_| ())
 }
 
-/// As [`pick_interactively`], with `share` performing the work the confirmation
-/// commits to, so it runs under the animation rather than after it.
 pub fn pick_interactively_with<W>(
     repo_path: &Path,
     purpose: Purpose,
@@ -139,7 +133,6 @@ where
     open_selector(repo_path, purpose, share, None)
 }
 
-/// The one path that assembles rows, opens the search, and runs the selector.
 fn open_selector<W>(
     repo_path: &Path,
     purpose: Purpose,
@@ -149,41 +142,105 @@ fn open_selector<W>(
 where
     W: Fn(&str) -> std::result::Result<(), String> + Clone + Send + 'static,
 {
-    let _ = flush_sessions(repo_path, &mut |_, _| {})?;
+    let (prep_tx, prep_rx) = mpsc::channel();
+    let repo = repo_path.to_path_buf();
+    #[cfg(feature = "profile")]
+    let profile = profiling_enabled();
+    #[cfg(not(feature = "profile"))]
+    let profile = false;
+    let row_cache: Arc<Mutex<Option<Vec<lineage_select::SessionRow>>>> = Arc::new(Mutex::new(None));
+    let cache_for_thread = row_cache.clone();
 
-    let rows = collect_session_rows(repo_path)?;
-    if rows.is_empty() {
-        return Err("no sessions in this repository — import or pull one first".into());
-    }
+    thread::spawn(move || {
+        let result = prepare_selector(&repo, profile);
+        if let Ok((rows, _search)) = &result {
+            *cache_for_thread.lock().expect("row cache") = Some(rows.clone());
+        }
+        let _ = prep_tx.send(result);
+    });
 
-    let search = RepoSessionSearch::open(repo_path)?;
-    let leg = if search.is_fused() { "fused" } else { "lex" };
-    let outcome = lineage_select::select_opening_on(
-        rows.clone(),
-        purpose,
-        search,
-        leg,
-        |session_id| {
-            // A session that cannot be read shows as empty rather than failing
-            // the pick: the list is still usable, and the pane says so.
-            load_session_entries(repo_path, session_id).unwrap_or_default()
-        },
-        share,
-        open_on,
-    )?;
+    let repo_path = repo_path.to_path_buf();
+    let load =
+        move |session_id: &str| load_session_entries(&repo_path, session_id).unwrap_or_default();
+
+    let outcome = lineage_select::select_while_preparing(purpose, prep_rx, load, share, open_on)?;
     let Outcome::Chose(session_id) = outcome else {
         return Err(NO_SESSION_CHOSEN.into());
     };
-    let title = rows
-        .iter()
-        .find(|row| row.id == session_id)
-        .map(|row| row.title.clone())
+
+    let title = row_cache
+        .lock()
+        .ok()
+        .and_then(|guard| guard.as_ref().cloned())
+        .and_then(|rows| {
+            rows.iter()
+                .find(|row| row.id == session_id)
+                .map(|row| row.title.clone())
+        })
         .unwrap_or_default();
     Ok(ForkPickResult {
         session_id,
         title,
         candidates: vec![],
     })
+}
+
+fn prepare_selector(repo_path: &Path, profile: bool) -> PrepResult {
+    #[cfg(feature = "profile")]
+    let mut phases = profile.then(Vec::new);
+    #[cfg(feature = "profile")]
+    let total = profile.then(std::time::Instant::now);
+
+    #[cfg(feature = "profile")]
+    let flush_t = phases.as_ref().map(|_| std::time::Instant::now());
+    #[cfg(not(feature = "profile"))]
+    let _profile = profile;
+    let (flush_report, rows) =
+        flush_and_collect_rows(repo_path, &mut |_, _| {}).map_err(|e| e.to_string())?;
+    #[cfg(feature = "profile")]
+    {
+        if let (Some(phases), Some(t)) = (&mut phases, flush_t) {
+            phases.push(CliPhase {
+                name: "flush_and_collect_rows",
+                millis: t.elapsed().as_millis(),
+                detail: Some(format!(
+                    "imported={} skipped={} failed={} sessions={}",
+                    flush_report.imported,
+                    flush_report.skipped,
+                    flush_report.failed,
+                    rows.len()
+                )),
+            });
+        }
+    }
+    #[cfg(not(feature = "profile"))]
+    let _ = flush_report;
+
+    if rows.is_empty() {
+        return Err("no sessions in this repository — import or pull one first".into());
+    }
+
+    #[cfg(feature = "profile")]
+    let search_t = phases.as_ref().map(|_| std::time::Instant::now());
+    let search = RepoSessionSearch::open(repo_path).map_err(|e| e.to_string())?;
+    #[cfg(feature = "profile")]
+    if let (Some(phases), Some(t)) = (&mut phases, search_t) {
+        phases.push(CliPhase {
+            name: "repo_session_search_open",
+            millis: t.elapsed().as_millis(),
+            detail: Some(format!("fused={}", search.is_fused())),
+        });
+    }
+
+    #[cfg(feature = "profile")]
+    if let Some(start) = total {
+        emit_prep(&PrepReport {
+            total_millis: start.elapsed().as_millis(),
+            phases: phases.unwrap_or_default(),
+        });
+    }
+
+    Ok((rows, search))
 }
 
 fn search_candidates(

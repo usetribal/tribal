@@ -10,10 +10,10 @@ use std::path::Path;
 use chrono::{DateTime, Utc};
 use lineage_adapters::all_adapters;
 use lineage_core::{derive_session_id, generate_architecture_summary, AgentKind, SOURCE_MTIME_KEY};
-use lineage_git::{
-    list_session_ids, open_repo, persist_import, read_conversation_stored, read_repo_config,
-    stamp_prompted_by,
-};
+use lineage_git::{open_repo, persist_import, read_repo_config, stamp_prompted_by, LineageRepo};
+use lineage_select::SessionRow;
+
+use crate::session_rows::{collect_session_rows_from_repo, stored_snapshot};
 use lineage_policy::{apply_policy, is_private_session, policy_from_repo_config};
 
 use crate::commands::index_persisted_sessions_best_effort;
@@ -40,15 +40,32 @@ pub struct FlushReport {
 ///
 /// A transcript that fails to parse is counted and skipped rather than raised —
 /// one malformed file must not stop the caller opening.
+/// Flush then return selector rows, reusing one stored snapshot when possible.
+pub fn flush_and_collect_rows(
+    repo_path: &Path,
+    progress: &mut dyn FnMut(usize, usize),
+) -> Result<(FlushReport, Vec<SessionRow>)> {
+    let repo = open_repo(repo_path)?;
+    let (report, rows) = flush_sessions_on_repo(&repo, progress)?;
+    Ok((report, rows))
+}
+
 pub fn flush_sessions(
     repo_path: &Path,
     progress: &mut dyn FnMut(usize, usize),
 ) -> Result<FlushReport> {
     let repo = open_repo(repo_path)?;
+    Ok(flush_sessions_on_repo(&repo, progress)?.0)
+}
+
+fn flush_sessions_on_repo(
+    repo: &LineageRepo,
+    progress: &mut dyn FnMut(usize, usize),
+) -> Result<(FlushReport, Vec<SessionRow>)> {
     let inner = repo.inner();
     let repo_config = read_repo_config(inner)?;
     let policy = policy_from_repo_config(&repo_config);
-    let stored = stored_mtimes(&repo)?;
+    let (stored, mut rows) = stored_snapshot(repo)?;
 
     // Discovery is per-adapter and cheap; the count is needed up front so
     // progress can be reported against a total rather than an unknown.
@@ -89,7 +106,7 @@ pub fn flush_sessions(
     }
 
     if conversations.is_empty() {
-        return Ok(report);
+        return Ok((report, rows));
     }
 
     for conv in &mut conversations {
@@ -99,31 +116,9 @@ pub fn flush_sessions(
     report.imported = results.len();
 
     let ids: Vec<_> = conversations.iter().map(|c| c.id.clone()).collect();
-    index_persisted_sessions_best_effort(&repo, &ids);
-    Ok(report)
-}
-
-/// The transcript mtime each stored session was last read at. A file untouched
-/// since then holds nothing new, so it is never parsed again.
-fn stored_mtimes(
-    repo: &lineage_git::LineageRepo,
-) -> Result<std::collections::HashMap<lineage_core::LineageId, DateTime<Utc>>> {
-    let mut mtimes = std::collections::HashMap::new();
-    for id in list_session_ids(repo.inner())? {
-        let Some(conv) = read_conversation_stored(repo.inner(), &id)? else {
-            continue;
-        };
-        let stamped = conv
-            .metadata
-            .get(SOURCE_MTIME_KEY)
-            .and_then(|v| v.as_str())
-            .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
-            .map(|dt| dt.with_timezone(&Utc));
-        if let Some(mtime) = stamped {
-            mtimes.insert(id, mtime);
-        }
-    }
-    Ok(mtimes)
+    index_persisted_sessions_best_effort(repo, &ids);
+    rows = collect_session_rows_from_repo(repo);
+    Ok((report, rows))
 }
 
 fn is_unchanged(
