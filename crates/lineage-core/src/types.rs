@@ -93,6 +93,18 @@ pub struct ToolCall {
     pub target: Option<ToolTarget>,
 }
 
+/// The `name` of an entry that carries a tool's answer rather than making a call.
+/// It repeats the id of the call it answers (`specs/conversation-schema-v0.md`).
+pub const TOOL_RESULT_CALL_NAME: &str = "tool_result";
+
+impl ToolCall {
+    /// True for an entry answering an earlier call. It is not a step of its own,
+    /// so anything counting or narrating what an agent did skips it.
+    pub fn is_answer(&self) -> bool {
+        self.name == TOOL_RESULT_CALL_NAME
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ArtifactKind {

@@ -12,10 +12,6 @@ use lineage_core::{Role, ToolCall, Turn};
 use serde_json::Value;
 use ulid::Ulid;
 
-/// The name the Claude adapter gives the entry that answers a call. Such an entry
-/// is a result, not a call, so it is never narrated as something the agent did.
-const ANSWER_CALL_NAME: &str = "tool_result";
-
 const TOOLS_USED_NOTE: &str =
     "[tribal: this turn used tools, recorded here as history rather than replayable calls]";
 const TOOL_OUTPUT_NOTE: &str = "[tribal: tool output from the original session]";
@@ -91,9 +87,7 @@ fn assistant_prose(turn: &Turn) -> String {
 }
 
 fn made_calls(turn: &Turn) -> impl Iterator<Item = &ToolCall> {
-    turn.tool_calls
-        .iter()
-        .filter(|call| call.name != ANSWER_CALL_NAME)
+    turn.tool_calls.iter().filter(|call| !call.is_answer())
 }
 
 fn tools_used_prose(calls: &[&ToolCall]) -> String {
@@ -169,7 +163,7 @@ pub(crate) fn mint_uuid(version: u8) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lineage_core::{LineageId, ToolTarget, ToolTargetKind};
+    use lineage_core::{LineageId, ToolTarget, ToolTargetKind, TOOL_RESULT_CALL_NAME};
 
     fn turn(role: Role, content: &str) -> Turn {
         Turn {
@@ -231,8 +225,12 @@ mod tests {
     #[test]
     fn a_tool_turn_of_answers_alone_is_a_labelled_recap() {
         let mut tool = turn(Role::Tool, "");
-        tool.tool_calls
-            .push(call("tu-1", ANSWER_CALL_NAME, "", Some("pub mod auth;")));
+        tool.tool_calls.push(call(
+            "tu-1",
+            TOOL_RESULT_CALL_NAME,
+            "",
+            Some("pub mod auth;"),
+        ));
 
         let records = narrate(&tool);
 

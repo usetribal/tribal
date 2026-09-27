@@ -21,7 +21,7 @@ use crate::content::{
     artifacts_from_tool_input, enrich_turn_with_images, extract_text_content, tool_target,
 };
 use crate::metadata::{finalize_session_metadata, insert_str, normalize_model, vendor_session_id};
-use crate::path_util::paths_match_workspace;
+use crate::path_util::{home_dir, paths_match_workspace};
 
 /// The metadata key this adapter records Codex's own session id under. Named so
 /// the import that writes it and the resume that reads it cannot drift apart.
@@ -543,10 +543,6 @@ fn parse_timestamp(s: &str) -> Option<DateTime<Utc>> {
     DateTime::parse_from_rfc3339(s)
         .ok()
         .map(|d| d.with_timezone(&Utc))
-}
-
-fn home_dir() -> Option<PathBuf> {
-    std::env::var_os("HOME").map(PathBuf::from)
 }
 
 impl TranscriptWriter for CodexAdapter {

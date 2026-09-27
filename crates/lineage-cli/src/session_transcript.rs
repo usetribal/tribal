@@ -10,10 +10,6 @@ use lineage_select::{fold, Entry, Speaker, TranscriptTurn};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-/// A `tool_result` is the answer to a call, not a step of its own — counting it
-/// would list the same action twice under two names.
-const TOOL_RESULT: &str = "tool_result";
-
 /// Load one session and fold it into what a reader follows.
 ///
 /// Read on demand for the one session someone opened: the list holds no turns,
@@ -57,7 +53,7 @@ fn transcript_turns(conv: &Conversation) -> Vec<TranscriptTurn> {
             tools: turn
                 .tool_calls
                 .iter()
-                .filter(|call| call.name != TOOL_RESULT)
+                .filter(|call| !call.is_answer())
                 .map(|call| call.name.clone())
                 .collect(),
             wrote: turn
@@ -77,7 +73,7 @@ fn transcript_turns(conv: &Conversation) -> Vec<TranscriptTurn> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lineage_core::{AgentKind, Artifact, ToolCall, Turn};
+    use lineage_core::{AgentKind, Artifact, ToolCall, Turn, TOOL_RESULT_CALL_NAME};
 
     fn turn(role: Role, content: &str) -> Turn {
         Turn {
@@ -105,7 +101,7 @@ mod tests {
     fn a_tool_result_is_not_counted_as_a_step() {
         let mut conv = Conversation::new(AgentKind::Claude, "/tmp/repo");
         let mut acted = turn(Role::Assistant, "");
-        acted.tool_calls = vec![call("Read"), call(TOOL_RESULT)];
+        acted.tool_calls = vec![call("Read"), call(TOOL_RESULT_CALL_NAME)];
         conv.turns.push(acted);
 
         let turns = transcript_turns(&conv);

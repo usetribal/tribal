@@ -2,7 +2,7 @@ use std::path::Path;
 
 use lineage_core::{
     normalize_repo_path_unscoped, Artifact, ArtifactKind, ArtifactResolve, ResolveStrategy,
-    ToolCall, ToolTarget, ToolTargetKind,
+    ToolCall, ToolTarget, ToolTargetKind, TOOL_RESULT_CALL_NAME,
 };
 use serde_json::Value;
 
@@ -158,7 +158,7 @@ pub fn extract_claude_content(
                     .unwrap_or_default();
                 tool_calls.push(ToolCall {
                     id,
-                    name: "tool_result".into(),
+                    name: TOOL_RESULT_CALL_NAME.into(),
                     arguments: String::new(),
                     result: Some(result.chars().take(2000).collect()),
                     // A result carries no arguments; what it answered is named on

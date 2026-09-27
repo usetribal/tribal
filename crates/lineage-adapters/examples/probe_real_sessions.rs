@@ -269,7 +269,7 @@ fn inspect_session(adapter: &impl SessionReader, session: &SessionRef, report: &
                     // names a target by design (ToolTarget documents "what a
                     // call acted on"), so counting it here would conflate a
                     // real gap with expected shape.
-                    if tc.target.is_none() && tc.name != "tool_result" {
+                    if tc.target.is_none() && !tc.is_answer() {
                         report.unresolved_tool_calls += 1;
                         *report.by_name.entry(tc.name.clone()).or_insert(0) += 1;
                     }

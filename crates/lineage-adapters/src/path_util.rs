@@ -1,6 +1,12 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+/// Read on every call rather than once, so pointing `HOME` elsewhere redirects
+/// both discovery and write-back to a different set of harness state directories.
+pub(crate) fn home_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME").map(PathBuf::from)
+}
+
 /// Claude Code encodes the launch directory as a path prefix:
 /// `/Users/dev/my-project` -> `-Users-dev-my-project`
 ///

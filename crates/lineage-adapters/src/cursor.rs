@@ -16,7 +16,7 @@ use crate::citations::enrich_turn_with_citations;
 use crate::content::{enrich_turn_with_images, extract_cursor_content};
 use crate::cursor_tags::strip_cursor_tags;
 use crate::metadata::{finalize_session_metadata, insert_str, normalize_model};
-use crate::path_util::cursor_transcripts_dir;
+use crate::path_util::{cursor_transcripts_dir, home_dir};
 
 pub struct CursorAdapter {
     workspace_root: PathBuf,
@@ -281,10 +281,6 @@ fn parse_role(s: &str) -> Role {
         "tool" => Role::Tool,
         _ => Role::User,
     }
-}
-
-fn home_dir() -> Option<PathBuf> {
-    std::env::var_os("HOME").map(PathBuf::from)
 }
 
 #[cfg(test)]

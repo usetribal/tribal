@@ -6,7 +6,7 @@ use crate::claude_transcript::render_claude_transcript;
 use crate::content::{enrich_turn_with_images, extract_claude_content};
 use crate::metadata::{finalize_session_metadata, insert_str, normalize_model, vendor_session_id};
 use crate::path_util::{
-    claude_project_dir, claude_project_key, paths_match_workspace, workspace_is_under_cwd,
+    claude_project_dir, claude_project_key, home_dir, paths_match_workspace, workspace_is_under_cwd,
 };
 use chrono::{DateTime, Utc};
 use lineage_agent::{
@@ -381,10 +381,6 @@ fn parse_timestamp(s: &str) -> Option<DateTime<Utc>> {
     DateTime::parse_from_rfc3339(s)
         .ok()
         .map(|d| d.with_timezone(&Utc))
-}
-
-fn home_dir() -> Option<PathBuf> {
-    std::env::var_os("HOME").map(PathBuf::from)
 }
 
 #[cfg(test)]

@@ -110,7 +110,7 @@ pub fn transcript_path(home: &Path, workspace_root: &Path, session_id: &str) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lineage_core::{AgentKind, LineageId, Role, ToolCall, Turn};
+    use lineage_core::{AgentKind, LineageId, Role, ToolCall, Turn, TOOL_RESULT_CALL_NAME};
     use serde_json::Value;
 
     fn turn(role: Role, content: &str) -> Turn {
@@ -233,7 +233,7 @@ mod tests {
         let mut tool_turn = turn(Role::Tool, "");
         tool_turn.tool_calls.push(ToolCall {
             id: "tu-1".into(),
-            name: "tool_result".into(),
+            name: TOOL_RESULT_CALL_NAME.into(),
             arguments: String::new(),
             result: Some("pub mod auth;".into()),
             target: None,

@@ -542,29 +542,8 @@ fn detect_headless_skills(context: &Context) -> Result<bool> {
 }
 
 /// Reinstall the tribal skill wherever it predates `--no-interactive`.
-///
-/// Forced for the same reason the rename step is: the detector has already
-/// established these copies are ours and out of date.
 fn apply_headless_skills(context: &Context) -> Result<Outcome> {
-    let mut stamped = 0usize;
-
-    for path in repos_to_stamp(context) {
-        let stale = skills_without_headless_switch(&path);
-        if stale.is_empty() {
-            continue;
-        }
-        let targets: Vec<String> = stale
-            .iter()
-            .filter_map(|p| target_of(&path, p))
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect();
-
-        match crate::skill_cmd::init_skill_quiet(&path, &targets, true) {
-            Ok(()) => stamped += 1,
-            Err(error) => tracing::warn!("could not restamp skills in {}: {error}", path.display()),
-        }
-    }
+    let stamped = restamp_stale_skills(context, skills_without_headless_switch);
 
     if stamped == 0 {
         return Ok(Outcome::Skipped(
@@ -602,30 +581,9 @@ fn detect_skills(context: &Context) -> Result<bool> {
 /// Rewrite installed skill files so agents are told the current command.
 ///
 /// Runs last: a stale skill costs an agent one failed command, where the
-/// earlier steps carry credentials and server bindings. Forced, because the
-/// detector has already established these copies are ours and out of date.
+/// earlier steps carry credentials and server bindings.
 fn apply_skills(context: &Context) -> Result<Outcome> {
-    let mut stamped = 0usize;
-
-    for path in repos_to_stamp(context) {
-        let stale = stale_skills(&path);
-        if stale.is_empty() {
-            continue;
-        }
-        // Only the targets that actually have stale copies, so the step never
-        // installs a skill into a repository that had not opted into it.
-        let targets: Vec<String> = stale
-            .iter()
-            .filter_map(|p| target_of(&path, p))
-            .collect::<BTreeSet<_>>()
-            .into_iter()
-            .collect();
-
-        match crate::skill_cmd::init_skill_quiet(&path, &targets, true) {
-            Ok(()) => stamped += 1,
-            Err(error) => tracing::warn!("could not restamp skills in {}: {error}", path.display()),
-        }
-    }
+    let stamped = restamp_stale_skills(context, stale_skills);
 
     if stamped == 0 {
         return Ok(Outcome::Skipped(
@@ -720,13 +678,32 @@ fn detect_codex_write_out_skills(context: &Context) -> Result<bool> {
 }
 
 /// Reinstall the tribal skill wherever it still says only Claude can be written
-/// out. Forced, as the other skill steps are: the detector has already established
-/// these copies are ours and out of date.
+/// out.
 fn apply_codex_write_out_skills(context: &Context) -> Result<Outcome> {
+    let stamped = restamp_stale_skills(context, skills_claiming_claude_only_write_out);
+
+    if stamped == 0 {
+        return Ok(Outcome::Skipped(
+            "installed skills already say Codex sessions can be written out".into(),
+        ));
+    }
+    Ok(Outcome::Applied(format!(
+        "updated agent skills for Codex write-out in {}",
+        repository_count(stamped)
+    )))
+}
+
+/// Reinstall the skills `find_stale` reports as out of date in every repository,
+/// returning how many repositories were restamped.
+///
+/// Only the targets holding a stale copy are reinstalled, so a step never installs
+/// a skill into a repository that had not opted into it. Forced, because the
+/// detector has already established these copies are ours and out of date.
+fn restamp_stale_skills(context: &Context, find_stale: fn(&Path) -> Vec<PathBuf>) -> usize {
     let mut stamped = 0usize;
 
     for path in repos_to_stamp(context) {
-        let stale = skills_claiming_claude_only_write_out(&path);
+        let stale = find_stale(&path);
         if stale.is_empty() {
             continue;
         }
@@ -742,16 +719,7 @@ fn apply_codex_write_out_skills(context: &Context) -> Result<Outcome> {
             Err(error) => tracing::warn!("could not restamp skills in {}: {error}", path.display()),
         }
     }
-
-    if stamped == 0 {
-        return Ok(Outcome::Skipped(
-            "installed skills already say Codex sessions can be written out".into(),
-        ));
-    }
-    Ok(Outcome::Applied(format!(
-        "updated agent skills for Codex write-out in {}",
-        repository_count(stamped)
-    )))
+    stamped
 }
 
 fn target_of(repo_path: &Path, skill_path: &Path) -> Option<String> {
