@@ -1,6 +1,6 @@
 [package]
 name = "lineage-mcp"
-description = "MCP server exposing lineage session data to AI tools"
+description = "MCP server exposing tribal session data to AI tools"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

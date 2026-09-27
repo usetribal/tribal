@@ -109,12 +109,12 @@ Installation and wiring state.
 
 ### `capture`
 
-Whether the sessions that should be in lineage are in lineage.
+Whether the sessions that should be in tribal are in tribal.
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `sessions_discovered` | object | Per-agent counts from the most recent `import` event |
-| `sessions_imported` | int | Sessions stored in lineage refs |
+| `sessions_imported` | int | Sessions stored in tribal refs |
 | `workspace_mismatches` | object[] | `[{ "session_id": "...", "workspace_root": "...", "repo_root": "..." }]` — sessions whose recorded workspace is not this repository (e.g. a parent directory), meaning they were captured against the wrong root |
 | `broken_sessions` | string[] | Session ids whose stored conversation can no longer be read |
 | `missing_lfs_blobs` | string[] | Blob ids referenced by sessions but absent from local storage |
@@ -174,7 +174,7 @@ files present at `HEAD`.
 | Field | Type | Description |
 |-------|------|-------------|
 | `commits_total` | number | Commits reachable from `HEAD` |
-| `commits_with_notes` | number | Of those, how many carry a lineage note |
+| `commits_with_notes` | number | Of those, how many carry a tribal note |
 | `files_total` | number | Tracked non-empty text files at `HEAD` |
 | `files_with_any` | number | Of those, how many have at least one covered line |
 | `lines_total` | number | Total lines across `files_total` |

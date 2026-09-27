@@ -494,7 +494,7 @@ mod tests {
     #[test]
     fn mixed_titles_align_later_columns() {
         let rows = format_scan_rows(&[
-            row("Lineage RLS audit", "01SHORT"),
+            row("Tribal RLS audit", "01SHORT"),
             row("A much longer session title than the first", "01LONGID"),
         ]);
         let day_at: Vec<usize> = rows.iter().map(|line| column(line, "2026-07-26")).collect();

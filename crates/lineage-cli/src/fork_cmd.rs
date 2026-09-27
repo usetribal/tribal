@@ -145,9 +145,9 @@ pub fn fork_resolved(
     let id = resolve_session(repo.inner(), session_id).map_err(|error| error.to_string())?;
     let source = read_conversation(repo.inner(), &id)?.ok_or_else(|| {
         format!(
-            "no session {session_id} in this repository's lineage refs. \
+            "no session {session_id} in this repository's tribal refs. \
              `tribal list` shows what is here; if the session is a teammate's, \
-             fetch their lineage refs first (`tribal lfs fetch`, then `git fetch origin 'refs/lineage/*:refs/lineage/*'`)"
+             fetch their tribal refs first (`tribal lfs fetch`, then `git fetch origin 'refs/lineage/*:refs/lineage/*'`)"
         )
     })?;
 

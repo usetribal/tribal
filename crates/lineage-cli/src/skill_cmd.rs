@@ -10,7 +10,7 @@ use crate::ui;
 /// Every bundled skill, as (directory name, `SKILL.md` contents). Each is
 /// installed into every selected target, so adding one here is the whole change.
 const BUNDLED_SKILLS: &[(&str, &str)] = &[
-    ("lineage", include_str!("../assets/skills/lineage/SKILL.md")),
+    ("tribal", include_str!("../assets/skills/tribal/SKILL.md")),
     ("share", include_str!("../assets/skills/share/SKILL.md")),
 ];
 
@@ -138,7 +138,7 @@ fn init_skill_impl(repo_path: &Path, targets: &[String], force: bool, verbose: b
     }
 
     if verbose {
-        ui::action("installing lineage agent skills:");
+        ui::action("installing tribal agent skills:");
     }
     for target in &resolved {
         for (skill, contents) in BUNDLED_SKILLS {
@@ -153,7 +153,7 @@ fn init_skill_impl(repo_path: &Path, targets: &[String], force: bool, verbose: b
         }
     }
     if verbose {
-        ui::action("Agents can use lineage to search sessions, blame lines, show conversations, and share a session as a link.");
+        ui::action("Agents can use tribal to search sessions, blame lines, show conversations, and share a session as a link.");
     }
 
     if let Some(log) = EventLog::for_repo_path(repo_path) {
@@ -189,14 +189,14 @@ mod tests {
         let t = resolve_targets(&["agents".into()]);
         assert_eq!(t, vec![SkillTarget::Codex]);
         assert!(t[0]
-            .skill_path(Path::new("/repo"), "lineage")
-            .ends_with(".agents/skills/lineage/SKILL.md"));
+            .skill_path(Path::new("/repo"), "tribal")
+            .ends_with(".agents/skills/tribal/SKILL.md"));
     }
 
     #[test]
     fn bundles_lineage_and_share_skills() {
         let names: Vec<&str> = BUNDLED_SKILLS.iter().map(|(name, _)| *name).collect();
-        assert_eq!(names, vec!["lineage", "share"]);
+        assert_eq!(names, vec!["tribal", "share"]);
         assert!(BUNDLED_SKILLS
             .iter()
             .all(|(_, contents)| contents.starts_with("---\nname: ")));

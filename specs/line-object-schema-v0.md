@@ -42,7 +42,7 @@ One turn may produce many line objects. One line may have multiple objects acros
 
 ## Rebase behavior
 
-On rebase, lineage attempts remap via:
+On rebase, tribal attempts remap via:
 
 1. Patch-id match on commit
 2. File path + surrounding context at new commit

@@ -1,5 +1,5 @@
 //! Client side of `specs/sync-protocol-v0.md`: assemble a `SyncBatch` from the
-//! repo's git-native lineage storage and push it to a server's ingest endpoint.
+//! repo's git-native tribal storage and push it to a server's ingest endpoint.
 //!
 //! Transport mirrors the LFS HTTP path (`lfs_batch.rs`): `ureq`, bearer auth,
 //! per-object results inspected from the response. Assembly is kept pure and

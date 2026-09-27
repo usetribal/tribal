@@ -182,7 +182,7 @@ fn naming_a_session_overrides_the_guess() {
     );
     touch(&newer);
     // The harness UUID is what a user copies out of their terminal, so the
-    // override must accept it and not only the lineage id.
+    // override must accept it and not only the tribal id.
     let named = ShareRequest {
         session_id: Some("aaaaaaaa-0000-0000-0000-000000000001".into()),
         ..request()
@@ -333,7 +333,7 @@ mod selection {
         conv.turns.push(turn(&format!("work on {id}")));
         if pulled {
             conv.pull_origin = Some(PullOrigin {
-                server: "https://lineage.example".into(),
+                server: "https://tribal.example".into(),
                 tenant: Some("acme".into()),
                 pulled_at: chrono::Utc::now(),
                 lineage_version: "test".into(),

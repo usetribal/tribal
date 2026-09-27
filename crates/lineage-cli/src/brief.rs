@@ -230,7 +230,7 @@ pub const TASK_SLOT_MARKER: &str = "--- TASK (append the subagent's task below t
 
 /// The whole block: A the brief, B the traversal vocabulary, C the empty task
 /// slot. C is deliberately left empty — the task belongs to the agent spawning
-/// the subagent, and lineage has no idea what it is.
+/// the subagent, and tribal has no idea what it is.
 pub fn render_brief(
     conversation: &Conversation,
     selection: &Selection<'_>,

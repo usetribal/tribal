@@ -2,7 +2,7 @@
 
 [← Documentation index](README.md) · [Privacy](privacy.md) · [CLI reference](cli/README.md)
 
-Day-to-day lineage operations beyond import and search: health checks, index rebuilds, manual linking, cleanup, and session removal.
+Day-to-day tribal operations beyond import and search: health checks, index rebuilds, manual linking, cleanup, and session removal.
 
 ## Health check
 

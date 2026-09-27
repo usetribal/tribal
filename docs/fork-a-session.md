@@ -28,7 +28,7 @@ one. `--new` forces it for a session that could have been reopened.
 ## Usage
 
 ```bash
-tribal fork <session-id>              # lineage id, prefix, or Claude UUID
+tribal fork <session-id>              # tribal id, prefix, or Claude UUID
 tribal fork --query "RLS audit"       # search, then pick (--pick N if several)
 tribal fork                           # interactive picker on a TTY
 tribal fork <session-id> --new        # write out even if it could be reopened
@@ -38,9 +38,9 @@ tribal fork <session-id> --json       # structured preflight for agents
 `tribal list` shows **titles first** (from Claude's session summary when
 imported, otherwise the opening ask), then id, date, agent, model, and author —
 so you can pick a session before continuing it. Session ids are interoperable:
-pass a Claude vendor UUID or a unique lineage id prefix wherever a full id works.
+pass a Claude vendor UUID or a unique tribal id prefix wherever a full id works.
 
-Sessions are resolved from lineage's own refs, so one pulled from a teammate
+Sessions are resolved from tribal's own refs, so one pulled from a teammate
 works exactly as one you imported yourself. Full output and caveats:
 [CLI reference](cli/README.md#fork-a-session).
 
@@ -63,7 +63,7 @@ a thing to choose rather than have happen.
 - **An ancestor edge, not co-authorship.** The new session records `fork_origin`
   ([conversation schema](../specs/conversation-schema-v0.md)). Lines you write
   afterwards are attributed to you.
-- **Only what lineage stored.** Redaction runs before persist, so it is at most
+- **Only what tribal stored.** Redaction runs before persist, so it is at most
   as complete as the redacted stored copy.
 
 Claude Code only for now. Codex and Cursor sessions decline by name rather than
@@ -74,14 +74,14 @@ failing obscurely.
 `codex fork <id>` exists, and Codex's id resolution appears to scan rollout files
 rather than an index — so this very likely works. It has not been executed
 against a lineage-written transcript, and Codex's unified backend may validate
-ids server-side. One test decides it; until that test is run, lineage refuses
+ids server-side. One test decides it; until that test is run, tribal refuses
 rather than writing a file that may not open.
 
 ### Why not Cursor
 
 `cursor-agent --resume` exists, so the old claim that Cursor has no resume CLI is
-out of date. It does not make Cursor sessions writable by lineage:
-`cursor-agent` keeps its own session store, and lineage's adapter reads Cursor's
+out of date. It does not make Cursor sessions writable by tribal:
+`cursor-agent` keeps its own session store, and tribal's adapter reads Cursor's
 **IDE** transcripts ([agent paths](agent-paths.md)). Those are different sessions
 in different places, so writing an IDE-shaped transcript would not produce
 something `cursor-agent` can open. Cursor sessions stay view-and-inject only.
@@ -100,18 +100,18 @@ Install the [VS Code extension](vscode.md) in VS Code or Cursor.
 
 ### From editor hover
 
-When hover blame finds lineage for a line, icon actions offer view, fork
+When hover blame finds tribal for a line, icon actions offer view, fork
 (Claude), and resume (Claude/Codex).
 
-Commands are also available from the command palette (`Lineage: Resume
-Conversation`, `Lineage: Fork Conversation`).
+Commands are also available from the command palette (`Tribal: Resume
+Conversation`, `Tribal: Fork Conversation`).
 
 ## Prerequisites
 
 1. Session imported with `tribal import` (or hooks), or fetched from a
-   teammate's lineage refs.
+   teammate's tribal refs.
 2. Agent CLI installed (`claude`, `codex`) and on PATH.
-3. For extension actions: `lineage.cliPath` set if `tribal` is not on PATH
+3. For extension actions: `tribal.cliPath` set if `tribal` is not on PATH
    (see [VS Code](vscode.md)).
 
 ## Related guides

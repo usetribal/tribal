@@ -291,11 +291,11 @@ fn stale_agent_skills_are_rewritten() {
     let repo = init_repo(&home);
     let skill = repo.join(".claude/skills/lineage/SKILL.md");
     fs::create_dir_all(skill.parent().unwrap()).unwrap();
-    fs::write(&skill, "---\nname: lineage\n---\nRun `tribal list`.\n").unwrap();
+    fs::write(&skill, "---\nname: lineage\n---\nRun `git lineage list`.\n").unwrap();
 
     migrate::apply_pending(&repo_context(&repo)).unwrap();
 
-    let rewritten = fs::read_to_string(&skill).unwrap();
+    let rewritten = fs::read_to_string(repo.join(".claude/skills/tribal/SKILL.md")).unwrap();
     assert!(
         !rewritten.contains("git lineage"),
         "the old command is gone"
@@ -320,7 +320,7 @@ fn skills_predating_the_headless_switch_are_updated() {
 
     migrate::apply_pending(&repo_context(&repo)).unwrap();
 
-    let rewritten = fs::read_to_string(&skill).unwrap();
+    let rewritten = fs::read_to_string(repo.join(".claude/skills/tribal/SKILL.md")).unwrap();
     assert!(
         rewritten.contains("--no-interactive"),
         "the agent must be told the headless switch: {rewritten}"

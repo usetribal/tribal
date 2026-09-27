@@ -1,6 +1,6 @@
-//! Resolve a session from a lineage id, id prefix, or vendor harness id.
+//! Resolve a session from a tribal id, id prefix, or vendor harness id.
 //!
-//! Fork and resume today require the exact 26-character lineage id, but users
+//! Fork and resume today require the exact 26-character tribal id, but users
 //! naturally copy Claude's UUID from their terminal. This module is the single
 //! place that bridges the two naming schemes.
 
@@ -95,7 +95,7 @@ pub fn resolve_session(repo: &Repository, hint: &str) -> Result<LineageId, Resol
     }
 
     Err(ResolveError::NotFound(format!(
-        "no session matching '{hint}' in this repository's lineage refs. \
+        "no session matching '{hint}' in this repository's tribal refs. \
          `tribal list` shows what is here"
     )))
 }
@@ -146,7 +146,7 @@ fn pick_unique(
 ) -> Result<LineageId, ResolveError> {
     match matches.len() {
         0 => Err(ResolveError::NotFound(format!(
-            "no session matching '{hint}' in this repository's lineage refs. \
+            "no session matching '{hint}' in this repository's tribal refs. \
              `tribal list` shows what is here"
         ))),
         1 => Ok(matches[0].0.clone()),
@@ -235,7 +235,7 @@ mod tests {
     fn resolves_claude_vendor_uuid() {
         let dir = init_repo();
         let vendor = "019fa49d-f719-43f8-8d60-e2c9d4cdab31";
-        let id = seed_session(&dir, vendor, "Lineage RLS audit");
+        let id = seed_session(&dir, vendor, "Tribal RLS audit");
         let repo = open_repo(dir.path()).unwrap();
         assert_eq!(resolve_session(repo.inner(), vendor).unwrap(), id);
     }
@@ -244,7 +244,7 @@ mod tests {
     fn resolves_claude_vendor_uuid_prefix() {
         let dir = init_repo();
         let vendor = "019fa49d-f719-43f8-8d60-e2c9d4cdab31";
-        let id = seed_session(&dir, vendor, "Lineage RLS audit");
+        let id = seed_session(&dir, vendor, "Tribal RLS audit");
         let repo = open_repo(dir.path()).unwrap();
         assert_eq!(resolve_session(repo.inner(), "019fa49d-f719").unwrap(), id);
     }
@@ -255,7 +255,7 @@ mod tests {
         seed_session(
             &dir,
             "019fa49d-f719-43f8-8d60-e2c9d4cdab31",
-            "Lineage RLS audit",
+            "Tribal RLS audit",
         );
         seed_session(
             &dir,

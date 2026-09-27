@@ -75,7 +75,7 @@ pub fn save(registry: &Registry) -> Result<()> {
 /// Record this checkout under its `origin`, if it is a repository with one.
 ///
 /// Called once per invocation from the command dispatcher rather than from each
-/// command, so the registry tracks "repositories lineage was used in" without
+/// command, so the registry tracks "repositories tribal was used in" without
 /// every new subcommand having to remember to say so.
 pub fn record(repo_path: &Path, now: DateTime<Utc>) {
     let Some(url) = origin_url(repo_path) else {

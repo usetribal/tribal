@@ -151,7 +151,7 @@ fn excludes_line_objects_of_unsynced_sessions() {
 
 fn mark_pulled(conv: &mut Conversation) {
     conv.pull_origin = Some(PullOrigin {
-        server: "https://lineage.example".into(),
+        server: "https://tribal.example".into(),
         tenant: Some("acme".into()),
         pulled_at: Utc::now(),
         lineage_version: "0.0.0-test".into(),

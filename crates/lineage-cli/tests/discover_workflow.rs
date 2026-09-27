@@ -32,7 +32,7 @@ fn command<'a>(surface: &'a Value, name: &str) -> &'a Value {
 }
 
 /// Discovery runs without a repository: an agent may be deciding whether to use
-/// lineage at all, from anywhere.
+/// tribal at all, from anywhere.
 #[test]
 fn discover_needs_no_repository_and_no_subcommand() {
     let surface = discover();

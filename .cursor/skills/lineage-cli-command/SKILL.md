@@ -56,7 +56,7 @@ Rules:
 - `init-config`, `init-skill` — individual setup steps (also run from `init`)
 - `import` — alias `ingest`; `--incremental`, `--no-link-head`
 
-Bundled end-user skill: `assets/skills/lineage/SKILL.md` (not the contributor skills under repo `.cursor/skills/`).
+Bundled end-user skill: `assets/skills/tribal/SKILL.md` (not the contributor skills under repo `.cursor/skills/`).
 
 ## Add a subcommand
 

@@ -269,7 +269,7 @@ fn a_session_with_no_renderable_transcript_still_briefs() {
 
     let mut conv = Conversation::new(AgentKind::Codex, dir.path().display().to_string());
     conv.pull_origin = Some(PullOrigin {
-        server: "https://lineage.example".into(),
+        server: "https://tribal.example".into(),
         tenant: None,
         pulled_at: chrono::Utc::now(),
         lineage_version: "0.1.0".into(),

@@ -1,6 +1,6 @@
 [package]
 name = "lineage-git"
-description = "Git notes, refs, blame, and commit mapping for lineage"
+description = "Git notes, refs, blame, and commit mapping for tribal"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -14,7 +14,7 @@ Tribal stores AI agent session history in your git repository. These guides cove
 | [Configuration](configuration.md) | Repository policy at `refs/lineage/config` |
 | [Privacy and policy](privacy.md) | Redaction, private sessions, safe export |
 
-## Working with lineage data
+## Working with tribal data
 
 | Guide | Description |
 |-------|-------------|
@@ -23,7 +23,7 @@ Tribal stores AI agent session history in your git repository. These guides cove
 | [Agent paths](agent-paths.md) | Where Cursor, Claude, and Codex store transcripts |
 | [Share with your team](share.md) | Push refs, notes, and LFS content |
 | [Large content (LFS)](lfs.md) | Transport modes, push, fetch, and status |
-| [After a rebase](rebase.md) | Remap orphaned lineage notes |
+| [After a rebase](rebase.md) | Remap orphaned tribal notes |
 | [Maintenance](maintenance.md) | Doctor, delete, garbage collection, materialize |
 | [Fork a session](fork-a-session.md) | Continue or branch agent conversations |
 

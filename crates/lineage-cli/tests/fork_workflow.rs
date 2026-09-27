@@ -1,4 +1,4 @@
-//! `tribal fork` end to end: resolve from lineage refs, materialize a
+//! `tribal fork` end to end: resolve from tribal refs, materialize a
 //! vendor transcript, record the edge, print what to run.
 //!
 //! Run through the built binary rather than the library. The adapter reads
@@ -297,7 +297,7 @@ fn an_unknown_session_id_says_what_to_do_next() {
 
 /// A session can render to nothing legitimately — all system notes, or content
 /// redacted away at import. Writing the empty file anyway defers the failure to
-/// the harness, where it surfaces as "session not found" and reads as lineage
+/// the harness, where it surfaces as "session not found" and reads as tribal
 /// having written a broken transcript.
 #[test]
 fn a_session_with_nothing_replayable_refuses_before_writing() {
@@ -310,7 +310,7 @@ fn a_session_with_nothing_replayable_refuses_before_writing() {
     conv.turns.push(Turn {
         id: LineageId::new(),
         role: Role::System,
-        content: "lineage: imported from a hook".into(),
+        content: "tribal: imported from a hook".into(),
         tool_calls: vec![],
         model: None,
         timestamp: None,

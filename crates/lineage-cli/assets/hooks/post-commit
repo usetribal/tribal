@@ -1,5 +1,5 @@
 #!/bin/sh
-# Lineage post-commit hook: link recently imported sessions to the new commit.
+# Tribal post-commit hook: link recently imported sessions to the new commit.
 set -e
 
 export PATH="${HOME}/.cargo/bin:${PATH}"

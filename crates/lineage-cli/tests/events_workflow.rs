@@ -204,7 +204,7 @@ fn sync_records_the_full_server_response_verbatim() {
         .any(|r| r["status"] == "rejected" && r["reason"] == "invalid"));
 }
 
-/// Traversal is the one agent-facing lineage operation whose whole point is
+/// Traversal is the one agent-facing tribal operation whose whole point is
 /// that it can be tied back to an injection, so the verbs must log even when
 /// they find nothing — an honest-nothing traversal is still one the agent chose
 /// to make.

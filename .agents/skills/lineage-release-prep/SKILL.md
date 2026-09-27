@@ -34,7 +34,7 @@ tribal export --redact --format jsonl > /tmp/review.jsonl
 
 Verify `refs/lineage/config` redaction and private-session patterns.
 
-## Sharing lineage refs
+## Sharing tribal refs
 
 ```bash
 tribal lfs push

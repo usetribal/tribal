@@ -1,6 +1,6 @@
 # Conversation Schema v0
 
-Stable contract for agent session data stored in lineage.
+Stable contract for agent session data stored in tribal.
 
 ## Session
 

@@ -166,7 +166,7 @@ fn log_route(repo: &lineage_git::LineageRepo, text: &str, decision: &RouteDecisi
 
 /// A traversal verb run goes to the event log under `context_traversal`,
 /// best-effort like every other event write. Without this the four verbs are
-/// the only agent-facing lineage operations that leave no trace: `context log`
+/// the only agent-facing tribal operations that leave no trace: `context log`
 /// and doctor's activity section can show that context was *injected* but not
 /// that the agent went on to follow it, which is the one thing the handle
 /// round-trip makes observable.

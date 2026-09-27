@@ -37,11 +37,11 @@ From repo root: `make vscode` or `make vscode-lint`.
 ## Local dev (F5)
 
 1. Run `./scripts/setup.sh` (builds `target/debug/tribal`)
-2. Open **lineage repo root** in VS Code/Cursor
+2. Open **tribal repo root** in VS Code/Cursor
 3. Press **F5** — uses `.vscode/launch.json`:
    - `--extensionDevelopmentPath=extensions/vscode`
    - Opens this repository as the workspace
-4. `lineage.cliPath` in `.vscode/settings.json` → `target/debug/tribal`
+4. `tribal.cliPath` in `.vscode/settings.json` → `target/debug/tribal`
 
 ## Adding a command
 
@@ -52,5 +52,5 @@ From repo root: `make vscode` or `make vscode-lint`.
 
 ## Settings (extension contributes)
 
-- `lineage.cliPath` — path to binary
-- `lineage.decorateGutter`, `lineage.hoverEnabled`, `lineage.autoRefresh`
+- `tribal.cliPath` — path to binary
+- `tribal.decorateGutter`, `tribal.hoverEnabled`, `tribal.autoRefresh`

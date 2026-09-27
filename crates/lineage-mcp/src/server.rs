@@ -134,7 +134,7 @@ pub async fn handle_request(
                     "query": { "type": "string" },
                     "limit": { "type": "integer" }
                 }), &["query"]),
-                tool_schema("lineage_doctor", "Check lineage repo health", json!({}), &[]),
+                tool_schema("lineage_doctor", "Check tribal repo health", json!({}), &[]),
                 tool_schema("lineage_materialize", "Materialize line objects", json!({
                     "session_id": { "type": "string" },
                     "commit_sha": { "type": "string" }
@@ -144,7 +144,7 @@ pub async fn handle_request(
                     "redact": { "type": "boolean" },
                     "format": { "type": "string" }
                 }), &[]),
-                tool_schema("lineage_remap", "Remap lineage after rebase", json!({}), &[]),
+                tool_schema("lineage_remap", "Remap tribal after rebase", json!({}), &[]),
                 // The traversal vocabulary (lineage_retrieval::VERBS). An
                 // MCP-connected agent gets verb discovery free from this list,
                 // which is why the CLI needs a SessionStart hook and this does

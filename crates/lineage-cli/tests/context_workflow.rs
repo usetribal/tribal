@@ -74,7 +74,7 @@ fn covered_file_injects_attributed_digest_and_logs_it() {
         .as_str()
         .unwrap();
     assert!(updated.starts_with("1: fn login() {}"));
-    assert!(updated.contains("Lineage: 1 past session(s) touched src/auth.rs"));
+    assert!(updated.contains("Tribal: 1 past session(s) touched src/auth.rs"));
     assert!(updated.contains("claude session"));
     assert!(updated.contains("Introduce rate limiting on login"));
 
@@ -314,12 +314,12 @@ fn session_start_hook_emits_the_verb_vocabulary() {
 }
 
 /// The hook states a capability and must never instruct the agent to use
-/// lineage: an agent *told* to use it would make the A/B harness measure the
+/// tribal: an agent *told* to use it would make the A/B harness measure the
 /// prompt instead of the tool (`specs/context-injection-v0.md`).
 ///
 /// The phrases below are the instruction-shaped constructions this text could
 /// plausibly drift into — a directive to the reader ("you should", "make sure
-/// to", "use lineage to"), or a rule about *when* to act ("always", "whenever",
+/// to", "use tribal to"), or a rule about *when* to act ("always", "whenever",
 /// "if you need"). Naming a mechanism is allowed; naming an occasion to reach
 /// for it is not. Deliberately a small hand-picked set rather than a grammar:
 /// it exists to fail on a careless edit to the vocabulary, not to prove the text
@@ -330,7 +330,7 @@ fn assert_no_instruction(context: &str) {
         "you must",
         "make sure",
         "be sure to",
-        "use lineage to",
+        "use tribal to",
         "always",
         "whenever",
         "if you need",
@@ -421,5 +421,5 @@ fn structured_read_response_gets_digest_inside_file_content() {
     assert_eq!(updated["file"]["numLines"], 2);
     let content = updated["file"]["content"].as_str().unwrap();
     assert!(content.starts_with("fn main() {}\n"));
-    assert!(content.contains("Lineage: 1 past session(s) touched main.rs"));
+    assert!(content.contains("Tribal: 1 past session(s) touched main.rs"));
 }

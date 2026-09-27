@@ -1,4 +1,4 @@
-//! Local, keyless text embedding for lineage retrieval.
+//! Local, keyless text embedding for tribal retrieval.
 //!
 //! The [`TextEmbedder`] trait is the seam: the dense retriever depends on it,
 //! not on any particular model runtime. The shipped implementation is a

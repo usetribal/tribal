@@ -76,7 +76,7 @@ pub fn tracked_file_line_counts(repo: &Repository) -> Result<BTreeMap<String, u6
     Ok(counts)
 }
 
-/// How many commits reachable from HEAD carry a lineage note. Capture health,
+/// How many commits reachable from HEAD carry a tribal note. Capture health,
 /// as the contrast the reach number is read against: high note coverage with
 /// low file reach localizes the loss to materialization.
 pub fn commit_note_coverage(repo: &Repository) -> Result<(usize, usize), LineageError> {

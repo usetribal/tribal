@@ -28,17 +28,17 @@ Import failures on pre-commit log to stderr but **do not block** the commit by d
 ## Requirements
 
 - `tribal` or `tribal` on PATH inside hook environment (`~/.cargo/bin` is prepended in hook scripts).
-- Repository initialized with lineage config (`tribal init` or `init-config`).
+- Repository initialized with tribal config (`tribal init` or `init-config`).
 
 ## Contributor repos vs application repos
 
-The Tribal **monorepo** uses separate contributor hooks (format + lint) via `make install-hooks` and `core.hooksPath .githooks`. Application repositories use lineage import hooks from `tribal init --hooks`.
+The Tribal **monorepo** uses separate contributor hooks (format + lint) via `make install-hooks` and `core.hooksPath .githooks`. Application repositories use tribal import hooks from `tribal init --hooks`.
 
 Do not assume both hook systems on the same repo without merging scripts manually.
 
 ## VS Code
 
-**Lineage: Install Git Hooks** from the command palette runs `tribal init --hooks`.
+**Tribal: Install Git Hooks** from the command palette runs `tribal init --hooks`.
 
 ## When hooks are not enough
 

@@ -410,7 +410,7 @@ pub fn without_plumbing(content: &str) -> String {
     out.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// Short lineage id for secondary labels (`019fa49d…`).
+/// Short tribal id for secondary labels (`019fa49d…`).
 pub fn id_prefix(id: &str) -> String {
     if id.chars().count() <= ID_PREFIX_CHARS {
         return id.to_string();
@@ -708,9 +708,9 @@ mod tests {
         let mut c = Conversation::new(AgentKind::Claude, "/tmp");
         c.metadata.insert(
             SESSION_SUMMARY_KEY.into(),
-            serde_json::Value::String("Lineage RLS audit".into()),
+            serde_json::Value::String("Tribal RLS audit".into()),
         );
-        assert_eq!(display_title(&c), "Lineage RLS audit");
+        assert_eq!(display_title(&c), "Tribal RLS audit");
     }
 
     #[test]

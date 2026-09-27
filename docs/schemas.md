@@ -30,7 +30,7 @@ Sessions are immutable blobs addressed by ref. Re-import updates by writing a ne
 
 ## Line object overview
 
-Line objects connect a file path and line range to a specific turn and artifact slice at a commit. They power lineage blame and gutter decorations. Materialization resolves artifacts (patches, citations, search/replace blocks) against the commit tree.
+Line objects connect a file path and line range to a specific turn and artifact slice at a commit. They power tribal blame and gutter decorations. Materialization resolves artifacts (patches, citations, search/replace blocks) against the commit tree.
 
 ## Git notes overview
 

@@ -28,7 +28,7 @@ To keep a session local in practice, avoid pushing `refs/lineage/*` until you ha
 
 ## Export and sharing
 
-Before pushing lineage refs publicly or to a broad team audience:
+Before pushing tribal refs publicly or to a broad team audience:
 
 ```bash
 tribal export --redact --format jsonl > review.jsonl
@@ -43,9 +43,9 @@ tribal lfs push
 git push origin refs/lineage/* refs/notes/lineage
 ```
 
-Anyone with repository access can read pushed lineage data. Treat pushed refs like source code: only share what you intend to be team-visible.
+Anyone with repository access can read pushed tribal data. Treat pushed refs like source code: only share what you intend to be team-visible.
 
-## What lineage reads locally
+## What tribal reads locally
 
 Import scans agent transcript directories on disk (see [Agent paths](agent-paths.md)). It does not upload transcripts to a Tribal cloud service. Normalized, policy-filtered JSON is written into your local git object store.
 
@@ -70,7 +70,7 @@ Details: [Configuration](configuration.md).
 
 ## Operational hygiene
 
-- Run `tribal doctor` after changing policy or cloning a repo with lineage refs.
+- Run `tribal doctor` after changing policy or cloning a repo with tribal refs.
 - Use `tribal delete <id> --purge-blobs` to remove a session and refcount-aware LFS data when a conversation should not remain in history.
 - Run `tribal gc` periodically to drop orphan line objects and unreferenced blobs.
 - Do not paste raw `tribal show` or export output into public issue trackers.

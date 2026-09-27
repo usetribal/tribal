@@ -1,6 +1,6 @@
 [package]
 name = "lineage-retrieval"
-description = "Retrieval spine for lineage: query -> ranked session evidence (lexical, dense, fused)"
+description = "Retrieval spine for tribal: query -> ranked session evidence (lexical, dense, fused)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

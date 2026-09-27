@@ -114,7 +114,7 @@ Target a different repository path with `--repo /path/to/repo` on any command.
 ## Roadmap
 
 ```text
-[x] Rebase-aware lineage remapping (tribal remap)
+[x] Rebase-aware tribal remapping (tribal remap)
 [x] Git LFS backend for large session content (tribal lfs push/fetch)
 [x] Repo config ref (refs/lineage/config) and incremental import
 [x] Pre-commit and post-commit hooks for automatic import and linking

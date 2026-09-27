@@ -74,7 +74,7 @@ const SESSION_KEY_DOMAIN: &str = "session-v2";
 
 /// Stable session ID from the agent and its own identifier for the session.
 ///
-/// This is the only place in lineage that decides a session key. It is pure over
+/// This is the only place in tribal that decides a session key. It is pure over
 /// the two arguments: nothing here reads the filesystem, the clock, or the
 /// repository, because every one of those varies between two machines observing
 /// the same session and would make the id unmergeable.

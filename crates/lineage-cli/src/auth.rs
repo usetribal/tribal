@@ -297,7 +297,7 @@ impl std::fmt::Display for NotAuthenticated {
 
 impl std::error::Error for NotAuthenticated {}
 
-/// The token every command that talks to a Lineage server uses.
+/// The token every command that talks to a Tribal server uses.
 ///
 /// One resolver rather than one per command: the precedence is a contract with
 /// scripts (an explicit `--token` and `LINEAGE_TOKEN` bypass the stored login

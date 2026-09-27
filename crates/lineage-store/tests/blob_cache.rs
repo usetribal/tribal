@@ -4,7 +4,7 @@ use lineage_store::BlobCache;
 fn blob_cache_round_trip_and_externalize() {
     let dir = tempfile::tempdir().unwrap();
     let cache = BlobCache::new(dir.path());
-    let data = b"hello lineage cache";
+    let data = b"hello tribal cache";
     let blob_ref = cache.put(data).unwrap();
     assert_eq!(cache.get(&blob_ref).unwrap(), data);
 

@@ -1,6 +1,6 @@
 [package]
 name = "lineage-search"
-description = "Rebuildable SQLite search index for lineage sessions"
+description = "Rebuildable SQLite search index for tribal sessions"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

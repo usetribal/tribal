@@ -1,6 +1,6 @@
 # Git Notes Schema v0
 
-How lineage data is stored inside a git repository.
+How tribal data is stored inside a git repository.
 
 ## Ref namespace
 
@@ -8,7 +8,7 @@ How lineage data is stored inside a git repository.
 |-----|---------|
 | `refs/lineage/sessions/<session-id>` | Points to conversation blob OID |
 | `refs/lineage/index` | JSON manifest of all session IDs |
-| `refs/lineage/config` | Repo lineage config (optional) |
+| `refs/lineage/config` | Repo tribal config (optional) |
 
 ## Git notes
 

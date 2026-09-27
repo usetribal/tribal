@@ -105,7 +105,7 @@ pub fn transcript_path(home: &Path, workspace_root: &Path, session_id: &str) -> 
 }
 
 /// One turn as a `(claude_role, text)` pair, or `None` when it carries nothing
-/// worth a record. Claude only accepts `user` and `assistant`, so lineage's
+/// worth a record. Claude only accepts `user` and `assistant`, so tribal's
 /// four roles collapse onto two.
 fn narrate(turn: &Turn) -> Option<(&'static str, String)> {
     let body = match turn.role {
@@ -114,7 +114,7 @@ fn narrate(turn: &Turn) -> Option<(&'static str, String)> {
         // verbatim would read as Alice having typed the tool's output, so it is
         // labelled as the recap it is.
         Role::Tool => tool_result_prose(turn),
-        // System turns are lineage's own; attributing them to the user would be
+        // System turns are tribal's own; attributing them to the user would be
         // a lie, and Claude has no system record type in a transcript.
         Role::System => return None,
         Role::User => turn.content.trim().to_string(),
@@ -151,7 +151,7 @@ fn assistant_prose(turn: &Turn) -> String {
 
     if !actions.is_empty() {
         parts.push(format!(
-            "[lineage: this turn used tools, recorded here as history rather than replayable calls]\n{}",
+            "[tribal: this turn used tools, recorded here as history rather than replayable calls]\n{}",
             actions.join("\n")
         ));
     }
@@ -183,7 +183,7 @@ fn tool_result_prose(turn: &Turn) -> String {
     }
 
     format!(
-        "[lineage: tool output from the original session]\n{}",
+        "[tribal: tool output from the original session]\n{}",
         parts.join("\n")
     )
 }
@@ -206,7 +206,7 @@ fn summarize_arguments(arguments: &str) -> String {
 
 /// Claude session ids are UUIDs and the filename is the id, so the minted id
 /// must look like one. A ULID is 128 bits from the same workspace dependency
-/// lineage already uses for ids, formatted in UUID layout — adding a `uuid`
+/// tribal already uses for ids, formatted in UUID layout — adding a `uuid`
 /// crate to mint a name would buy nothing.
 ///
 /// The version and variant nibbles are stamped to v4 rather than left as ULID
@@ -420,7 +420,7 @@ mod tests {
     fn empty_and_system_turns_are_dropped_so_the_chain_stays_walkable() {
         let conv = conversation(vec![
             turn(Role::User, "hello"),
-            turn(Role::System, "lineage internal note"),
+            turn(Role::System, "tribal internal note"),
             turn(Role::Assistant, "   "),
             turn(Role::Assistant, "hi"),
         ]);

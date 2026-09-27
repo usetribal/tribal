@@ -27,7 +27,7 @@ Only when the user names a different session than the one you are in:
 tribal share --session <session-id>
 ```
 
-If the command fails — not a lineage repo, not signed in, session marked
+If the command fails — not a tribal repo, not signed in, session marked
 private — report what it said. Do not work around it; a private session is
 meant to refuse.
 

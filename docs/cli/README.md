@@ -32,7 +32,7 @@ tribal init --config             # write default refs/lineage/config only
 
 ### Agent skills
 
-Two bundled skills: `lineage` teaches agents to use lineage features (search, blame, share, rebase, resume), and `share` teaches them to turn the current session into a link. Installed during init or manually:
+Two bundled skills: `tribal` teaches agents to use tribal features (search, blame, share, rebase, resume), and `share` teaches them to turn the current session into a link. Installed during init or manually:
 
 ```bash
 tribal init --skills
@@ -43,9 +43,9 @@ tribal init --skills --target all --force
 
 | Target | Install path |
 |--------|--------------|
-| `cursor` | `.cursor/skills/{lineage,share}/SKILL.md` |
-| `claude` | `.claude/skills/{lineage,share}/SKILL.md` |
-| `codex` / `agents` | `.agents/skills/{lineage,share}/SKILL.md` |
+| `cursor` | `.cursor/skills/{tribal,share}/SKILL.md` |
+| `claude` | `.claude/skills/{tribal,share}/SKILL.md` |
+| `codex` / `agents` | `.agents/skills/{tribal,share}/SKILL.md` |
 | `all` | All three (default) |
 
 Re-run with `--force` after upgrading the CLI to refresh skill content.
@@ -147,7 +147,7 @@ skill or run from `oss/`:
 |---------|-------------|
 | `tribal link <session-id> <commit-sha>` | Manually link session and materialize |
 | `tribal materialize [--commit SHA] [--session ID]` | Build line objects |
-| `tribal remap` | Recover lineage after rebase |
+| `tribal remap` | Recover tribal after rebase |
 
 See [Rebase](../rebase.md) and [Maintenance](../maintenance.md).
 
@@ -169,7 +169,7 @@ See [LFS](../lfs.md).
 | `tribal context hook claude-session-start` | Agent-hook endpoint (Claude Code SessionStart); emits the traversal vocabulary and the continuation capability (`continue`, `continue --brief`) once per session |
 | `tribal context log [--limit N]` | Show recorded context injections, newest last |
 | `tribal context install [--user]` | Wire the context hook per-repo or user-level (all repos) |
-| `tribal context uninstall [--user]` | Remove lineage context-hook wiring |
+| `tribal context uninstall [--user]` | Remove tribal context-hook wiring |
 | `tribal context query "<text>" [--timing]` | Retrieve past turns matching a free-text intent. With no leg/`--file` flag the query is **dispatched**: a named file that exists (in the corpus or the working tree) routes to the temporal plan on that anchor, everything else to the fused plan; `--timing` prints the chosen `route:` and per-stage timings |
 | `tribal context query "<text>" [--lexical\|--dense\|--fused]` | Force one leg, skipping the dispatcher — the flags exist to see a leg in isolation |
 | `tribal context query --file <path>[:<line>] ["text"]` | Force the line-anchored temporal plan (skips the dispatcher): the turns that authored the file/line, time-ordered (walked back through ancestry); with text, the text re-ranks those anchored turns |
@@ -205,7 +205,7 @@ than a `session#turn` handle, and it is not read-only.
 It is taught by the hook rather than the bundled skill on purpose: a skill loads
 only if it was installed and only if the harness looks for it, whereas the hook
 fires every session. The vocabulary states what the commands do and never when
-to reach for them — an agent told to use lineage would make any measurement of
+to reach for them — an agent told to use tribal would make any measurement of
 injection a measurement of the prompt.
 
 `context hook` is wired into the agent harness, not run by hand: when the agent
@@ -273,7 +273,7 @@ If a stored login expires or is revoked, the next sync says to run `login` again
 assembles a `sync-batch-v0` (conversations with embedded turns, line objects,
 decomposed commit links, and a blob manifest), uploads referenced blobs, and
 POSTs the batch. The server resolves the repo from the `--remote` URL and root
-commit; its returned id is cached in local git config (`lineage.serverRepoId`).
+commit; its returned id is cached in local git config (`tribal.serverRepoId`).
 The data always lands in the workspace that owns the remote's namespace (the
 `<owner>` in `github.com/<owner>/<name>`), never a different workspace you also
 belong to. A sync into a namespace you have no membership in is rejected with
@@ -288,7 +288,7 @@ then the stored login. Implements
 | Command | Description |
 |---------|-------------|
 | `tribal init --hooks [--force]` | Install pre-commit and post-commit hooks |
-| `tribal init --uninstall` | Remove lineage hooks |
+| `tribal init --uninstall` | Remove tribal hooks |
 
 See [Git hooks](../git-hooks.md).
 
@@ -306,7 +306,7 @@ See [Maintenance](../maintenance.md) and [Privacy](../privacy.md).
 ## Pull teammates' sessions
 
 `tribal pull` brings sessions your teammates have synced down into this
-repository's lineage refs, so `list`, `show`, `search`, and `fork` see them the
+repository's tribal refs, so `list`, `show`, `search`, and `fork` see them the
 same as sessions you imported yourself.
 
 ```bash
@@ -353,7 +353,7 @@ Merge rules, mirroring the push write rules in
 
 Notes:
 
-- Pulled sessions carry `pull_origin` (server, when, lineage version) so the
+- Pulled sessions carry `pull_origin` (server, when, tribal version) so the
   push path can skip re-uploading them — the server they came from is already
   their source of truth. A **fork of** a pulled session is yours and does push.
 - A commit sha naming history this checkout has not fetched is dropped rather
@@ -399,7 +399,7 @@ each says so on its row.
 Sessions are imported before the list opens, so a session you have only just
 finished is on it.
 
-`--session` skips the selector and takes the same id forms as `fork`: a lineage
+`--session` skips the selector and takes the same id forms as `fork`: a tribal
 id, an id prefix, or the harness UUID you can copy out of your terminal.
 
 ```bash
@@ -451,7 +451,7 @@ ways that happens is a property of the session, not a choice you make:
   the ancestor. `--new` forces this even for a session that could be reopened.
 
 Which one happened is printed. Claude Code and Codex can be reopened; Cursor
-declines by name, because the id lineage records comes from its IDE store and
+declines by name, because the id tribal records comes from its IDE store and
 `cursor-agent --resume` reads a separate CLI store.
 
 `tribal fork <share-url>` does the same from a share link — no account, no
@@ -511,7 +511,7 @@ an agent that invoked the CLI can act on it directly.
 
 Notes:
 
-- The session is resolved from lineage's own refs, not from a local transcript
+- The session is resolved from tribal's own refs, not from a local transcript
   path, so a session pulled from a teammate forks the same as one you imported.
 - A fresh vendor session id is minted; the source session's file is never read
   or modified, and your continuation is a new session either way.

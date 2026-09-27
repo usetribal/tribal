@@ -3,7 +3,7 @@ name: lineage-contribute
 description: >-
   Tribal repo contribution conventions: make check, 80% coverage gate, MSRV
   1.86, specs-first schema work, policy-before-persist, crate boundaries, and
-  CHANGELOG updates. Use when changing any code or docs in the lineage
+  CHANGELOG updates. Use when changing any code or docs in the tribal
   monorepo, reviewing PRs, or fixing CI in this repository.
 ---
 

@@ -8,7 +8,6 @@ extend-exclude = [
 
 [default.extend-words]
 # Domain / crate names
-lineage = "lineage"
 jsonl = "jsonl"
 ulid = "ulid"
 rusqlite = "rusqlite"

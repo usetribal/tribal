@@ -202,7 +202,7 @@ fn hook_loadable_from_session_roots(
 }
 
 fn lineage_hook_installed(path: &Path) -> bool {
-    fs::read_to_string(path).is_ok_and(|content| content.contains("Lineage"))
+    fs::read_to_string(path).is_ok_and(|content| content.contains("Tribal"))
 }
 
 fn capture_section(
@@ -369,7 +369,7 @@ fn canonical(path: &Path) -> String {
 }
 
 fn render_text(report: &serde_json::Value) {
-    ui::heading("Lineage doctor");
+    ui::heading("Tribal doctor");
 
     if let Some(setup) = report.get("setup") {
         ui::blank();

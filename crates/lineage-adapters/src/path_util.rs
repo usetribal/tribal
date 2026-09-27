@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 /// `dot-test`, `under_score` -> `under-score`. Substitution is per character
 /// and never collapses a run, so `/tmp/claude-1000/-home` keeps its double dash.
 /// Missing the `.` case made every repo with a dot in its path invisible to
-/// import, while lineage's own round-trip tests passed by sharing the error.
+/// import, while tribal's own round-trip tests passed by sharing the error.
 pub fn claude_project_key(workspace: &Path) -> String {
     let path = fs::canonicalize(workspace).unwrap_or_else(|_| workspace.to_path_buf());
     path.display()

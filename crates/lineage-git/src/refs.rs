@@ -35,11 +35,11 @@ fn write_ref(repo: &Repository, ref_name: &str, oid: git2::Oid) -> Result<(), Li
     let mut reference = if let Ok(r) = repo.find_reference(ref_name) {
         r
     } else {
-        repo.reference(ref_name, oid, true, "lineage: update ref")
+        repo.reference(ref_name, oid, true, "tribal: update ref")
             .map_err(|e| LineageError::Other(e.to_string()))?
     };
     reference
-        .set_target(oid, "lineage: update ref")
+        .set_target(oid, "tribal: update ref")
         .map_err(|e| LineageError::Other(e.to_string()))?;
     Ok(())
 }

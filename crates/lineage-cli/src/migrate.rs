@@ -454,7 +454,10 @@ fn hook_is_stale(path: &Path) -> bool {
     };
     // Only a hook this CLI wrote is ours to rewrite, and only one still naming
     // the old binary needs it.
-    content.contains("Lineage pre-commit hook") || content.contains("Lineage post-commit hook")
+    content.contains("Lineage pre-commit hook")
+        || content.contains("Lineage post-commit hook")
+        || content.contains("Tribal pre-commit hook")
+        || content.contains("Tribal post-commit hook")
 }
 
 fn stale_hooks(repo_path: &Path) -> Vec<PathBuf> {
@@ -481,7 +484,7 @@ fn detect_hooks(context: &Context) -> Result<bool> {
 /// Re-stamp installed hooks so they invoke `tribal`.
 ///
 /// `install_hook_quiet` overwrites in place when the existing file carries the
-/// Lineage marker, so a hook this CLI installed is replaced without `--force`
+/// Tribal marker, so a hook this CLI installed is replaced without `--force`
 /// while one the user wrote themselves is left alone.
 fn apply_hooks(context: &Context) -> Result<Outcome> {
     let mut stamped = 0usize;
@@ -519,12 +522,14 @@ fn apply_hooks(context: &Context) -> Result<Outcome> {
 fn skills_without_headless_switch(repo_path: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
     for dir in [".cursor/skills", ".claude/skills", ".agents/skills"] {
-        let path = repo_path.join(dir).join("lineage").join("SKILL.md");
-        let Ok(content) = fs::read_to_string(&path) else {
-            continue;
-        };
-        if !content.contains("--no-interactive") {
-            out.push(path);
+        for skill in ["tribal", "lineage"] {
+            let path = repo_path.join(dir).join(skill).join("SKILL.md");
+            let Ok(content) = fs::read_to_string(&path) else {
+                continue;
+            };
+            if !content.contains("--no-interactive") {
+                out.push(path);
+            }
         }
     }
     out
@@ -536,7 +541,7 @@ fn detect_headless_skills(context: &Context) -> Result<bool> {
         .any(|path| !skills_without_headless_switch(path).is_empty()))
 }
 
-/// Reinstall the lineage skill wherever it predates `--no-interactive`.
+/// Reinstall the tribal skill wherever it predates `--no-interactive`.
 ///
 /// Forced for the same reason the rename step is: the detector has already
 /// established these copies are ours and out of date.
@@ -575,7 +580,7 @@ fn apply_headless_skills(context: &Context) -> Result<Outcome> {
 fn stale_skills(repo_path: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
     for dir in [".cursor/skills", ".claude/skills", ".agents/skills"] {
-        for skill in ["lineage", "share"] {
+        for skill in ["tribal", "lineage", "share"] {
             let path = repo_path.join(dir).join(skill).join("SKILL.md");
             let Ok(content) = fs::read_to_string(&path) else {
                 continue;
@@ -633,6 +638,61 @@ fn apply_skills(context: &Context) -> Result<Outcome> {
     )))
 }
 
+fn has_legacy_skill_directory(repo_path: &Path) -> bool {
+    [".cursor/skills", ".claude/skills", ".agents/skills"]
+        .iter()
+        .any(|dir| {
+            repo_path
+                .join(dir)
+                .join("lineage")
+                .join("SKILL.md")
+                .is_file()
+        })
+}
+
+fn detect_skill_directory_rename(context: &Context) -> Result<bool> {
+    Ok(repos_to_stamp(context)
+        .iter()
+        .any(|path| has_legacy_skill_directory(path)))
+}
+
+/// Reinstall bundled skills under `tribal/` and remove the old `lineage/` copy.
+fn apply_skill_directory_rename(context: &Context) -> Result<Outcome> {
+    let mut stamped = 0usize;
+
+    for path in repos_to_stamp(context) {
+        if !has_legacy_skill_directory(&path) {
+            continue;
+        }
+        let targets = vec!["all".to_string()];
+        match crate::skill_cmd::init_skill_quiet(&path, &targets, true) {
+            Ok(()) => stamped += 1,
+            Err(error) => {
+                tracing::warn!(
+                    "could not rename installed skill directory in {}: {error}",
+                    path.display()
+                );
+            }
+        }
+        for dir in [".cursor/skills", ".claude/skills", ".agents/skills"] {
+            let legacy = path.join(dir).join("lineage");
+            if legacy.is_dir() {
+                let _ = fs::remove_dir_all(&legacy);
+            }
+        }
+    }
+
+    if stamped == 0 {
+        return Ok(Outcome::Skipped(
+            "no installed skills used the legacy directory name".into(),
+        ));
+    }
+    Ok(Outcome::Applied(format!(
+        "renamed installed agent skill to tribal/ in {}",
+        repository_count(stamped)
+    )))
+}
+
 fn target_of(repo_path: &Path, skill_path: &Path) -> Option<String> {
     let rel = skill_path.strip_prefix(repo_path).ok()?;
     let first = rel.components().next()?.as_os_str().to_str()?;
@@ -680,6 +740,15 @@ pub const MIGRATIONS: &[Migration] = &[
             id: "skills-headless",
             detect: detect_headless_skills,
             apply: apply_headless_skills,
+        }],
+    },
+    Migration {
+        id: "0003-skill-directory-rename",
+        introduced_in: "0.6.0",
+        steps: &[Step {
+            id: "skill-directory",
+            detect: detect_skill_directory_rename,
+            apply: apply_skill_directory_rename,
         }],
     },
 ];

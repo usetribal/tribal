@@ -19,7 +19,7 @@ const LINE_OBJECT_REF_GLOB: &str = "refs/lineage/lines/*";
 /// answer for an unchanged repo (tiers, grouping, summary source).
 pub const LOCAL_RETRIEVER_VERSION: &str = "5";
 
-/// Solo-mode retriever: answers from the repo's own lineage refs and search
+/// Solo-mode retriever: answers from the repo's own tribal refs and search
 /// index, in-process. Team mode swaps in a server-backed implementation
 /// behind the same `Retriever` trait.
 pub struct LocalRetriever<'a> {

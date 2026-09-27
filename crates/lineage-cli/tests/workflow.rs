@@ -307,7 +307,7 @@ fn init_non_interactive_installs_defaults() {
         },
     )
     .unwrap();
-    assert!(dir.path().join(".cursor/skills/lineage/SKILL.md").is_file());
+    assert!(dir.path().join(".cursor/skills/tribal/SKILL.md").is_file());
     assert!(dir.path().join(".cursor/skills/share/SKILL.md").is_file());
     assert!(dir.path().join(".git/hooks/pre-commit").is_file());
 }
@@ -325,7 +325,7 @@ fn init_installs_every_bundled_skill_in_every_target() {
     )
     .unwrap();
     for target in [".cursor", ".claude", ".agents"] {
-        for skill in ["lineage", "share"] {
+        for skill in ["tribal", "share"] {
             let path = dir.path().join(target).join("skills").join(skill);
             assert!(
                 path.join("SKILL.md").is_file(),
@@ -340,9 +340,9 @@ fn init_installs_every_bundled_skill_in_every_target() {
 fn init_skill_installs_all_targets_by_default() {
     let dir = init_repo();
     skill_cmd::init_skill(dir.path(), &[], false).unwrap();
-    assert!(dir.path().join(".cursor/skills/lineage/SKILL.md").is_file());
-    assert!(dir.path().join(".claude/skills/lineage/SKILL.md").is_file());
-    assert!(dir.path().join(".agents/skills/lineage/SKILL.md").is_file());
+    assert!(dir.path().join(".cursor/skills/tribal/SKILL.md").is_file());
+    assert!(dir.path().join(".claude/skills/tribal/SKILL.md").is_file());
+    assert!(dir.path().join(".agents/skills/tribal/SKILL.md").is_file());
     assert!(dir.path().join(".cursor/skills/share/SKILL.md").is_file());
     assert!(dir.path().join(".claude/skills/share/SKILL.md").is_file());
     assert!(dir.path().join(".agents/skills/share/SKILL.md").is_file());
@@ -352,11 +352,11 @@ fn init_skill_installs_all_targets_by_default() {
 fn init_skill_multiselect_targets() {
     let dir = init_repo();
     skill_cmd::init_skill(dir.path(), &["cursor".into(), "claude".into()], false).unwrap();
-    assert!(dir.path().join(".cursor/skills/lineage/SKILL.md").is_file());
-    assert!(dir.path().join(".claude/skills/lineage/SKILL.md").is_file());
+    assert!(dir.path().join(".cursor/skills/tribal/SKILL.md").is_file());
+    assert!(dir.path().join(".claude/skills/tribal/SKILL.md").is_file());
     assert!(dir.path().join(".cursor/skills/share/SKILL.md").is_file());
     assert!(dir.path().join(".claude/skills/share/SKILL.md").is_file());
-    assert!(!dir.path().join(".agents/skills/lineage/SKILL.md").exists());
+    assert!(!dir.path().join(".agents/skills/tribal/SKILL.md").exists());
     assert!(!dir.path().join(".agents/skills/share/SKILL.md").exists());
 }
 
@@ -364,16 +364,16 @@ fn init_skill_multiselect_targets() {
 fn init_skill_agents_alias_installs_codex_path() {
     let dir = init_repo();
     skill_cmd::init_skill(dir.path(), &["agents".into()], false).unwrap();
-    assert!(dir.path().join(".agents/skills/lineage/SKILL.md").is_file());
+    assert!(dir.path().join(".agents/skills/tribal/SKILL.md").is_file());
     assert!(dir.path().join(".agents/skills/share/SKILL.md").is_file());
-    assert!(!dir.path().join(".cursor/skills/lineage/SKILL.md").exists());
+    assert!(!dir.path().join(".cursor/skills/tribal/SKILL.md").exists());
 }
 
 #[test]
 fn init_skill_refuses_when_only_the_share_skill_is_present() {
     let dir = init_repo();
     skill_cmd::init_skill(dir.path(), &["cursor".into()], false).unwrap();
-    fs::remove_dir_all(dir.path().join(".cursor/skills/lineage")).unwrap();
+    fs::remove_dir_all(dir.path().join(".cursor/skills/tribal")).unwrap();
     assert!(skill_cmd::init_skill(dir.path(), &["cursor".into()], false).is_err());
     assert!(skill_cmd::init_skill(dir.path(), &["cursor".into()], true).is_ok());
 }

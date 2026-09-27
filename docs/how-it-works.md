@@ -14,7 +14,7 @@ Schema: [conversation-schema-v0](../specs/conversation-schema-v0.md).
 
 ### 2. Line objects
 
-Line objects map a file path and line range to a specific turn and artifact at a commit. They power lineage blame and editor gutter hints. Stored at `refs/lineage/lines/<line-object-id>`.
+Line objects map a file path and line range to a specific turn and artifact at a commit. They power tribal blame and editor gutter hints. Stored at `refs/lineage/lines/<line-object-id>`.
 
 Schema: [line-object-schema-v0](../specs/line-object-schema-v0.md).
 

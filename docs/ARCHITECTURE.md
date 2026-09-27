@@ -4,7 +4,7 @@ This document describes how Tribal is structured and how data flows through the 
 
 ## Design goals
 
-1. **Git-native** — lineage is stored as git objects (blobs, refs, notes), not an external database
+1. **Git-native** — tribal is stored as git objects (blobs, refs, notes), not an external database
 2. **Rebuildable** — the search index and local caches can be reconstructed from git refs
 3. **Policy-first** — sensitive content is redacted before persistence
 4. **Agent-agnostic** — a canonical conversation schema; adapters translate vendor formats

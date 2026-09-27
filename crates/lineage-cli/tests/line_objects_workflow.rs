@@ -120,7 +120,7 @@ fn blame_after_import_returns_matches() {
     let result = blame_with_lineage(repo.inner(), Path::new("src/auth.rs"), 1).unwrap();
     assert!(
         !result.matches.is_empty() || !result.line_objects.is_empty(),
-        "blame should return lineage matches after import"
+        "blame should return tribal matches after import"
     );
 }
 

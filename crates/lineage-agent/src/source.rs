@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use lineage_core::{AgentKind, Conversation, LineageError};
 
 pub struct SessionRef {
-    /// The vendor's own name for this session, and the sole input to its lineage
+    /// The vendor's own name for this session, and the sole input to its tribal
     /// id (`derive_session_id`). Adapters must set it to something identical on
     /// every machine that observes the same session and unchanged as the session
     /// is appended to — in practice the transcript's filename stem, which every

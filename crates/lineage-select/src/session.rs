@@ -12,7 +12,7 @@ use chrono::{DateTime, Duration, Utc};
 pub enum Origin {
     /// Imported on this machine from a local agent transcript.
     Local,
-    /// Pulled from a lineage server — the server that holds it is its source of
+    /// Pulled from a tribal server — the server that holds it is its source of
     /// truth, so this machine cannot push it anywhere.
     Received,
 }

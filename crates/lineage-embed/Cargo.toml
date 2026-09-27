@@ -1,6 +1,6 @@
 [package]
 name = "lineage-embed"
-description = "Local text embedding for lineage retrieval (model2vec static embeddings), behind a small trait"
+description = "Local text embedding for tribal retrieval (model2vec static embeddings), behind a small trait"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

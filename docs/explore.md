@@ -1,4 +1,4 @@
-# Explore your lineage
+# Explore your tribal
 
 [← Documentation index](README.md) · [Import](import.md) · [Fork a session](fork-a-session.md)
 
@@ -28,7 +28,7 @@ Show hydrates large LFS-backed turn content automatically. Use `--hydrate-images
 
 ## Tribal blame
 
-Combines `git blame` with lineage notes at the introducing commit:
+Combines `git blame` with tribal notes at the introducing commit:
 
 ```bash
 tribal blame src/main.rs:42

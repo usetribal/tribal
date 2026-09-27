@@ -41,7 +41,7 @@ fn install_hook_impl(repo_path: &Path, force: bool, verbose: bool) -> Result<()>
     );
 
     if verbose {
-        ui::action("installed lineage hooks:");
+        ui::action("installed tribal hooks:");
         ui::row("pre-commit", "(import agent sessions)");
         ui::row("post-commit", "(link sessions to new commit)");
     }
@@ -58,13 +58,15 @@ pub fn uninstall_hook(repo_path: &Path) -> Result<()> {
             continue;
         }
         let content = fs::read_to_string(&path)?;
-        if content.contains("Lineage pre-commit hook")
-            || content.contains("Lineage post-commit hook")
+        if content.contains("Tribal pre-commit hook")
+            || content.contains("Tribal post-commit hook")
+            || content.contains("Tribal pre-commit hook")
+            || content.contains("Tribal post-commit hook")
         {
             fs::remove_file(&path)?;
             ui::action(format!("removed {name}"));
         } else {
-            ui::action(format!("skipped {name} (not installed by lineage)"));
+            ui::action(format!("skipped {name} (not installed by tribal)"));
         }
     }
     Ok(())
@@ -74,7 +76,7 @@ pub fn post_commit(repo_path: &Path) -> Result<()> {
     let repo = open_repo(repo_path)?;
     let report = link_recent_sessions_to_head(repo.inner())?;
     if !report.linked.is_empty() {
-        eprintln!("lineage: linked {} session(s) to HEAD", report.linked.len());
+        eprintln!("tribal: linked {} session(s) to HEAD", report.linked.len());
     }
 
     let head_sha = repo
@@ -133,7 +135,9 @@ pub fn post_commit(repo_path: &Path) -> Result<()> {
 fn install_one(path: &Path, content: &str, force: bool) -> Result<()> {
     if path.exists() && !force {
         let existing = fs::read_to_string(path)?;
-        if !existing.contains("Lineage pre-commit hook")
+        if !existing.contains("Tribal pre-commit hook")
+            && !existing.contains("Tribal post-commit hook")
+            && !existing.contains("Lineage pre-commit hook")
             && !existing.contains("Lineage post-commit hook")
         {
             return Err(format!(

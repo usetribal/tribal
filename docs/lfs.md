@@ -60,7 +60,7 @@ Use `refs` or `http` when contributors cannot install git-lfs. Use `gitcli` when
 
 ## Doctor and missing objects
 
-`tribal doctor` reports missing LFS objects referenced from sessions. After pulling lineage refs without LFS data, run `tribal lfs fetch` before `show`, blame, or export with hydration.
+`tribal doctor` reports missing LFS objects referenced from sessions. After pulling tribal refs without LFS data, run `tribal lfs fetch` before `show`, blame, or export with hydration.
 
 `tribal show <id>` hydrates large text automatically. Add `--hydrate-images` when reviewing image artifacts in the session timeline.
 

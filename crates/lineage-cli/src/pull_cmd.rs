@@ -1,5 +1,5 @@
 //! `tribal pull` — bring teammates' sessions down from a Tribal server
-//! into this repository's lineage refs.
+//! into this repository's tribal refs.
 //!
 //! Pull is not sync with the arrows reversed. Push merges into an authority;
 //! pull merges into a cache. Three rules follow from that, and they mirror the

@@ -165,7 +165,7 @@ fn walk_resolves_full_chain_to_boundary() {
     assert!(hops[0].hop_kind == "resolved" || hops[0].hop_kind == "boundary");
 }
 
-/// A commit on the line's ancestry that carries no lineage note is a dark hop:
+/// A commit on the line's ancestry that carries no tribal note is a dark hop:
 /// the chain continues through it (an edge exists), attributing nothing.
 #[test]
 fn dark_hop_continues_the_chain() {

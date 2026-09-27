@@ -1,8 +1,8 @@
-# Share lineage with your team
+# Share tribal with your team
 
 [← Documentation index](README.md) · [LFS](lfs.md) · [Privacy](privacy.md)
 
-Tribal data lives in git refs and notes alongside your code. Teammates with repository access can fetch the same sessions, blame, and search after pulling lineage refs.
+Tribal data lives in git refs and notes alongside your code. Teammates with repository access can fetch the same sessions, blame, and search after pulling tribal refs.
 
 ## What to push
 
@@ -24,7 +24,7 @@ git push origin refs/lineage/* refs/notes/lineage
 | `refs/lineage/lfs-data/*` | Ref-transported large payloads |
 | `refs/notes/lineage` | Per-commit session indexes |
 
-Standard `git push` without these refspecs does not publish lineage data.
+Standard `git push` without these refspecs does not publish tribal data.
 
 ## Teammate onboarding
 
@@ -70,7 +70,7 @@ If your team rebases shared branches, run `tribal remap` after rewrite and push 
 
 ## Removing shared data
 
-Deleting a session locally and pushing updated refs removes it for future clones. Rewriting public history to expunge blobs may still require git history remediation — treat lineage refs like any other sensitive git data.
+Deleting a session locally and pushing updated refs removes it for future clones. Rewriting public history to expunge blobs may still require git history remediation — treat tribal refs like any other sensitive git data.
 
 ## Related guides
 

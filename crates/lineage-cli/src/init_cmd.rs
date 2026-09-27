@@ -142,7 +142,7 @@ fn run_steps(repo_path: &Path, options: &InitOptions) -> Result<()> {
 }
 
 fn run_non_interactive(repo_path: &Path, options: &InitOptions) -> Result<()> {
-    ui::heading("Lineage setup");
+    ui::heading("Tribal setup");
     ui::kv("Repository", repo_path.display());
     ui::blank();
 
@@ -215,7 +215,7 @@ fn run_interactive(repo_path: &Path, options: &InitOptions) -> Result<()> {
 
     step_heading(
         "Agent skills",
-        Some("bundled lineage and share skills for your coding agents"),
+        Some("bundled tribal and share skills for your coding agents"),
     );
     let skill_targets = prompt_skill_targets()?;
     match skill_targets {
@@ -394,7 +394,7 @@ fn print_header(repo_path: &Path) {
     ui::banner();
     let repo_line = format!("Repository: {}", repo_path.display());
     println!();
-    draw_box(&["Lineage setup", repo_line.as_str()], 36);
+    draw_box(&["Tribal setup", repo_line.as_str()], 36);
     println!();
 }
 

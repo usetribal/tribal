@@ -1,5 +1,5 @@
 #!/bin/sh
-# Lineage pre-commit hook: import agent sessions before each commit.
+# Tribal pre-commit hook: import agent sessions before each commit.
 set -e
 
 export PATH="${HOME}/.cargo/bin:${PATH}"

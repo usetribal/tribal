@@ -20,8 +20,8 @@ pub enum SearchError {
     #[error("sqlite error: {0}")]
     Sqlite(#[from] rusqlite::Error),
 
-    #[error("lineage error: {0}")]
-    Lineage(#[from] LineageError),
+    #[error("tribal error: {0}")]
+    Tribal(#[from] LineageError),
 
     #[error("{0}")]
     Other(String),
@@ -896,7 +896,7 @@ impl LineageIndex {
 
     /// Classify a hop: a boundary (no parent) records honestly; otherwise the
     /// edge is `resolved` if a line object covers the child region, `dark_no_note`
-    /// if the child commit has no lineage note, else `dark_no_match` (note
+    /// if the child commit has no tribal note, else `dark_no_match` (note
     /// present but no covering object — carried-along region).
     fn hop_kind_for(&self, repo: &Repository, hop: &AncestryHop) -> Result<String> {
         if hop.parent.is_none() {
@@ -909,7 +909,7 @@ impl LineageIndex {
             return Ok("resolved".to_string());
         }
         let has_note = read_note_for_commit(repo, &hop.commit_sha)
-            .map_err(SearchError::Lineage)?
+            .map_err(SearchError::Tribal)?
             .is_some();
         Ok(if has_note {
             "dark_no_match".to_string()
@@ -956,7 +956,7 @@ impl LineageIndex {
         self.conn.execute("DELETE FROM line_objects", [])?;
         self.conn.execute("DELETE FROM line_ancestry", [])?;
 
-        let objects = list_line_objects(repo).map_err(SearchError::Lineage)?;
+        let objects = list_line_objects(repo).map_err(SearchError::Tribal)?;
         let total = objects.len();
         progress(0, total);
 
@@ -1005,7 +1005,7 @@ impl LineageIndex {
         let wanted: std::collections::HashSet<&str> =
             session_ids.iter().map(|id| id.as_str()).collect();
         let objects: Vec<LineObject> = list_line_objects(repo)
-            .map_err(SearchError::Lineage)?
+            .map_err(SearchError::Tribal)?
             .into_iter()
             .filter(|o| wanted.contains(o.conversation_id.as_str()))
             .collect();
@@ -1229,15 +1229,15 @@ impl LineageIndex {
         self.conn.execute("DELETE FROM session_files", [])?;
         self.conn.execute("DELETE FROM session_commits", [])?;
 
-        let ids = list_session_ids(repo).map_err(SearchError::Lineage)?;
+        let ids = list_session_ids(repo).map_err(SearchError::Tribal)?;
         let total = ids.len();
         progress(0, total);
         let mut indexed = 0usize;
         for id in ids {
             if let Some(mut conv) =
-                read_conversation_stored(repo, &id).map_err(SearchError::Lineage)?
+                read_conversation_stored(repo, &id).map_err(SearchError::Tribal)?
             {
-                hydrate_conversation(repo, &mut conv).map_err(SearchError::Lineage)?;
+                hydrate_conversation(repo, &mut conv).map_err(SearchError::Tribal)?;
                 self.index_conversation(&conv)?;
                 indexed += 1;
             }

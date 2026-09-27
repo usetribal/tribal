@@ -224,7 +224,7 @@ evaluated for adoption in this protocol:
   non-fast-forward pushes needing a merge protocol that monotonic container
   merge already provides for free; and none of the slice's correctness
   requirements need it — properties 1–4 above already deliver convergence,
-  safety, and fork lineage.
+  safety, and fork tribal.
 
 **Decision: deferred.** v0 ships ULID + write-once-hash + monotonic merge.
 What v0 does to avoid foreclosing v1: turns are already immutable and

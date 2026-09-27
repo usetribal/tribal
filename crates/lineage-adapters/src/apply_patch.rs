@@ -7,7 +7,7 @@
 //! key lookup (`input.get("path")`, `first_str(input, PATH_KEYS)`) operates on
 //! a `serde_json::Value::Object` and returns `None` unconditionally against a
 //! `Value::String`, so this tool call silently produced zero artifacts and no
-//! resolved target — the edit happened but Lineage never saw which file it
+//! resolved target — the edit happened but Tribal never saw which file it
 //! touched. A patch can also name several files in one call, which a single
 //! `path` field could never represent, so this returns one artifact per file
 //! section rather than trying to fit the shape used by object-argument tools.

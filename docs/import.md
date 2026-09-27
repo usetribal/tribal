@@ -79,7 +79,7 @@ tribal import --agent all --incremental
 
 ## Automatic import
 
-[Git hooks](git-hooks.md) run incremental import on pre-commit and link sessions on post-commit. Recommended for keeping lineage current without remembering commands.
+[Git hooks](git-hooks.md) run incremental import on pre-commit and link sessions on post-commit. Recommended for keeping tribal current without remembering commands.
 
 ## Troubleshooting
 

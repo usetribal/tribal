@@ -87,7 +87,7 @@ so it fires whether or not the corpus has anything to say.
   emits it. This is the fail-open shape for a trigger whose whole output is
   static.
 - **A hook of this kind MUST state capability, never instruct.** Telling an
-  agent to use lineage would make any measurement of injection a measurement
+  agent to use tribal would make any measurement of injection a measurement
   of the prompt instead.
 
 Delivery is a hook rather than an agent skill deliberately: whether a skill
@@ -173,7 +173,7 @@ at presentation time, never cached:
 
 - First line is the attribution header and MUST identify the injection as
   Lineage-originated, e.g.
-  `Lineage: 2 past sessions touched src/auth.rs — details below.`
+  `Tribal: 2 past sessions touched src/auth.rs — details below.`
 - One block per selected evidence entry: its **handle**, attribution, line
   ranges when present, then the summary.
 - Minimum strength `low` (inject `files_touched` evidence; silence still wins
@@ -220,7 +220,7 @@ pure formatting step:
 
 - The attribution header identifies the injection as Lineage-originated and
   names the trigger, e.g.
-  `Lineage: 2 past turns match this prompt — details below.`
+  `Tribal: 2 past turns match this prompt — details below.`
 - One block per selected turn: handle, attribution (agent, session date,
   author when known), then the verbatim turn text.
 - A block states **which edges its node has** — it names nouns, not commands.
@@ -262,7 +262,7 @@ An MCP consumer never shells out, so a runnable command string is a rendering
 detail and MUST NOT be the vocabulary's definition.
 
 `sessions-for-commit` is the one verb whose entry point is not an injected
-digest: it composes lineage with ordinary git work.
+digest: it composes tribal with ordinary git work.
 
 ## Cache
 

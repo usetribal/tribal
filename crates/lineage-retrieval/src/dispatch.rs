@@ -416,7 +416,7 @@ mod tests {
                     Plan::Temporal,
                     Some("commands.rs"),
                 ),
-                // A path that exists nowhere in lineage or on disk → fused.
+                // A path that exists nowhere in tribal or on disk → fused.
                 ("what happened in missing.rs", Plan::Fused, None),
                 // Pure-intent prose (no path, no identifier) → fused.
                 ("how did we implement the CLI login auth", Plan::Fused, None),

@@ -102,7 +102,7 @@ pub fn map_commit_to_sessions(
         .unwrap_or_default())
 }
 
-/// Every lineage note in the repo. Unparsable notes are skipped, not errors:
+/// Every tribal note in the repo. Unparsable notes are skipped, not errors:
 /// diagnostics over a partially broken repo must still see the rest.
 pub fn list_notes(repo: &Repository) -> Result<Vec<GitNote>, LineageError> {
     let Ok(notes) = repo.notes(Some(LINEAGE_NOTES_REF)) else {

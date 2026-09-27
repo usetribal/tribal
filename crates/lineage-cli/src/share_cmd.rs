@@ -126,7 +126,7 @@ pub struct CurrentSession {
 
 /// Decide which session `share` is about.
 ///
-/// With `session_id` this is a lookup: the id forms `fork` accepts (lineage id,
+/// With `session_id` this is a lookup: the id forms `fork` accepts (tribal id,
 /// id prefix, harness UUID) resolve against the stored refs, and the transcript
 /// that produced that session is the one refreshed.
 ///
@@ -427,7 +427,7 @@ pub fn run_share(
     let batch = assemble_batch(repo.inner(), &request.remote, vec![prepared])?;
     if batch.conversations.is_empty() {
         return Err(format!(
-            "session {conversation_id} came from a Lineage server, so the server that holds it \
+            "session {conversation_id} came from a Tribal server, so the server that holds it \
              is the one to share it from"
         )
         .into());

@@ -1,6 +1,6 @@
 [package]
 name = "lineage-core"
-description = "Shared domain types for lineage"
+description = "Shared domain types for tribal"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

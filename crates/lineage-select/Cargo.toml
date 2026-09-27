@@ -1,6 +1,6 @@
 [package]
 name = "lineage-select"
-description = "Terminal session selector for lineage: renders a searchable session list and one session's detail"
+description = "Terminal session selector for tribal: renders a searchable session list and one session's detail"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

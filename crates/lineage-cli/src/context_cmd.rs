@@ -307,7 +307,7 @@ pub fn chain(repo_path: &Path, target: &str) -> Result<()> {
         short(&head)
     ));
     if hops.is_empty() {
-        ui::empty("no chain (line not on indexed lineage history)");
+        ui::empty("no chain (line not on indexed tribal history)");
         return Ok(());
     }
     for (i, hop) in hops.iter().enumerate() {
@@ -360,7 +360,7 @@ fn parse_chain_target(target: &str) -> Result<(String, u32)> {
 /// could not find.
 ///
 /// The hook *states a capability*, it does not instruct — an agent is never told
-/// to use lineage, which is what keeps the A/B harness's treatment arm honest.
+/// to use tribal, which is what keeps the A/B harness's treatment arm honest.
 ///
 /// Fails open like the others: a payload that does not parse still gets the
 /// vocabulary, and nothing here can exit nonzero.
@@ -413,7 +413,7 @@ pub fn install_claude_agent_hook(repo_path: &Path) -> Result<bool> {
 
 /// User-level install (`~/.claude/settings.json`): one wiring covers every
 /// repo, because the hook derives its repo from the file the agent read and
-/// fails open outside lineage repos — the gap 7 answer for parent-workspace
+/// fails open outside tribal repos — the gap 7 answer for parent-workspace
 /// sessions whose project root never loads a nested repo's settings.
 pub fn install_claude_agent_hook_user() -> Result<bool> {
     install_claude_agent_hook_at(&user_settings_path()?)
@@ -428,7 +428,7 @@ fn user_settings_path() -> Result<std::path::PathBuf> {
     Ok(Path::new(&home).join(CLAUDE_SETTINGS_FILE))
 }
 
-/// The two hook groups lineage owns: the file-keyed injection endpoint and the
+/// The two hook groups tribal owns: the file-keyed injection endpoint and the
 /// once-per-session vocabulary. `SessionStart` groups carry no matcher — there
 /// is no tool to match on.
 const LINEAGE_HOOK_GROUPS: &[(&str, Option<&str>, &str)] = &[
@@ -461,7 +461,7 @@ fn install_claude_agent_hook_at(path: &Path) -> Result<bool> {
     Ok(true)
 }
 
-/// Append one lineage hook group under `hooks.<event>`, or report that an
+/// Append one tribal hook group under `hooks.<event>`, or report that an
 /// equivalent one is already there. Merges into existing settings rather than
 /// replacing them — the file is shared user configuration, not ours.
 fn add_hook_group(
@@ -559,7 +559,7 @@ fn group_has_lineage_hook(group: &serde_json::Value) -> bool {
     })
 }
 
-/// One *specific* lineage hook group. Install matches on the exact command
+/// One *specific* tribal hook group. Install matches on the exact command
 /// because the two groups share a prefix: a repo with the file-keyed hook
 /// already installed must still gain the `SessionStart` one.
 fn group_has_lineage_command(group: &serde_json::Value, command: &str) -> bool {

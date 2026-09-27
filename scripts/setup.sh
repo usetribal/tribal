@@ -23,7 +23,7 @@ Options:
   -h, --help     Show this help
 
 Examples:
-  ./scripts/setup.sh                          # configure lineage repo root
+  ./scripts/setup.sh                          # configure tribal repo root
   ./scripts/setup.sh /path/to/your-project    # configure another repo
   ./scripts/setup.sh --import /path/to/your-project
 EOF
@@ -90,7 +90,7 @@ fi
 REPO_PATH="$(cd "${REPO_PATH}" && pwd)"
 
 if [[ "${REPO_PATH}" == "${ROOT}" ]] && [[ ! -d "${ROOT}/.git" ]]; then
-  echo "==> Initializing git repository at lineage root"
+  echo "==> Initializing git repository at tribal root"
   git -C "${ROOT}" init -b main
 fi
 
@@ -108,7 +108,7 @@ fi
 if [[ "${IMPORT}" != "true" ]]; then
   INIT_ARGS+=(--no-import)
 fi
-git -C "${REPO_PATH}" lineage init "${INIT_ARGS[@]}"
+git -C "${REPO_PATH}" tribal init "${INIT_ARGS[@]}"
 
 if [[ "${REPO_PATH}" == "${ROOT}" ]]; then
   echo "==> Installing contributor git hooks (.githooks: format + lint on commit)"

@@ -36,7 +36,7 @@ Tribal handles agent conversation data that may contain secrets. Built-in mitiga
 
 ### Recommendations for users
 
-- Run `tribal export --redact` before sharing lineage data
+- Run `tribal export --redact` before sharing tribal data
 - Review imported sessions before pushing `refs/lineage/*` to a remote
 - Do not import sessions from untrusted sources without reviewing policy rules
 - Keep `tribal` and `lineage-mcp` updated

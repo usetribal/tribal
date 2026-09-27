@@ -29,13 +29,13 @@ const COMMAND_GROUPS: &[(&str, &[(&str, &str)])] = &[
         "Setup",
         &[(
             "init",
-            "Set up lineage here: config, agent skills, hooks, first import",
+            "Set up tribal here: config, agent skills, hooks, first import",
         )],
     ),
     (
         "Sessions",
         &[
-            ("import", "Import agent sessions into lineage refs"),
+            ("import", "Import agent sessions into tribal refs"),
             ("list", "Browse sessions — search, read, and pick one"),
             ("show", "Open one session, with the list behind it"),
             (
@@ -49,7 +49,7 @@ const COMMAND_GROUPS: &[(&str, &[(&str, &str)])] = &[
     (
         "Team",
         &[
-            ("login", "Sign in to a Lineage server"),
+            ("login", "Sign in to a Tribal server"),
             (
                 "sync",
                 "Exchange sessions with the server (push, then pull)",
@@ -60,7 +60,7 @@ const COMMAND_GROUPS: &[(&str, &[(&str, &str)])] = &[
     (
         "Maintenance",
         &[
-            ("doctor", "Check lineage health in this repository"),
+            ("doctor", "Check tribal health in this repository"),
             ("rebuild", "Rebuild derived state from stored sessions"),
         ],
     ),
@@ -146,7 +146,7 @@ enum Commands {
         #[arg(long)]
         dry_run: bool,
     },
-    /// Check repository lineage health: setup, capture, materialization, links, activity
+    /// Check repository tribal health: setup, capture, materialization, links, activity
     Doctor {
         #[arg(long)]
         json: bool,
@@ -157,7 +157,7 @@ enum Commands {
         #[arg(long, default_value_t = doctor_cmd::DEFAULT_ACTIVITY_LIMIT)]
         activity_limit: usize,
     },
-    /// Set up lineage in this repository: config, agent skills, hooks, first import
+    /// Set up tribal in this repository: config, agent skills, hooks, first import
     ///
     /// Run with no flags this is the whole setup, interactively. Each step is
     /// also addressable on its own — `--config`, `--skills`, `--hooks` — for
@@ -257,7 +257,7 @@ enum Commands {
     /// cannot write a transcript for.
     #[command(name = "fork", alias = "continue", alias = "resume")]
     Fork {
-        /// Session to continue — lineage id, id prefix, harness UUID
+        /// Session to continue — tribal id, id prefix, harness UUID
         /// (`tribal list` shows titles and ids), or a share link
         /// (`https://<host>/s/<token>`)
         session_id: Option<String>,
@@ -279,14 +279,14 @@ enum Commands {
         /// Share links: continue into this directory instead of resolving where to land
         #[arg(long)]
         into: Option<PathBuf>,
-        /// Share links: Lineage server to fetch from (default: derived from the link)
+        /// Share links: Tribal server to fetch from (default: derived from the link)
         #[arg(long)]
         server: Option<String>,
         /// Share links: print the command to continue the session instead of running it
         #[arg(long)]
         no_open: bool,
     },
-    /// Show lineage for a file line
+    /// Show tribal for a file line
     Blame {
         /// Path with optional :line suffix (e.g. src/main.rs:42)
         target: String,
@@ -312,7 +312,7 @@ enum Commands {
         #[arg(long, default_value = "json")]
         format: String,
     },
-    /// Sign in to a Lineage server (browser device flow)
+    /// Sign in to a Tribal server (browser device flow)
     Login {
         /// Server base URL; defaults to production or the server stored by a previous login
         #[arg(long)]
@@ -321,7 +321,7 @@ enum Commands {
         #[arg(long)]
         no_open: bool,
     },
-    /// Push redacted sessions to a Lineage server
+    /// Push redacted sessions to a Tribal server
     #[command(name = "push", hide = true)]
     Push {
         /// Server base URL; defaults to production or the server stored by `login`
@@ -335,7 +335,7 @@ enum Commands {
         #[arg(long, default_value = "origin")]
         remote: String,
     },
-    /// Exchange sessions with a Lineage server: push, then pull
+    /// Exchange sessions with a Tribal server: push, then pull
     ///
     /// The two directions are not mirror images — a push merges into an
     /// authority, a pull merges into a local cache — so they stay separately
@@ -355,7 +355,7 @@ enum Commands {
     },
     /// Share one session as a link anyone can open without an account
     ///
-    /// Pushes the session you are in to the Lineage server the same way `push`
+    /// Pushes the session you are in to the Tribal server the same way `push`
     /// does — same redaction, and a private session is refused rather than
     /// stripped — then mints a link pinned at the turns it has now. Continuing
     /// the session afterwards does not change what the link shows.
@@ -370,7 +370,7 @@ enum Commands {
         /// Git remote whose URL identifies the repo to the server
         #[arg(long, default_value = "origin")]
         remote: String,
-        /// Session to share — lineage id, id prefix, or harness UUID; with a
+        /// Session to share — tribal id, id prefix, or harness UUID; with a
         /// terminal attached, omitting it opens the session selector
         #[arg(long)]
         session: Option<String>,
@@ -384,7 +384,7 @@ enum Commands {
         #[arg(long)]
         no_open: bool,
     },
-    /// Pull teammates' sessions down from a Lineage server
+    /// Pull teammates' sessions down from a Tribal server
     ///
     /// Never deletes: sessions the server does not mention are left alone, and
     /// turns you already have are kept as they are.
@@ -430,7 +430,7 @@ enum Commands {
         #[arg(long)]
         session: Option<String>,
     },
-    /// Remap lineage after rebase (re-materialize at HEAD)
+    /// Remap tribal after rebase (re-materialize at HEAD)
     #[command(hide = true)]
     Remap,
     /// Git LFS object transport for large session content
@@ -505,7 +505,7 @@ enum ContextAction {
         #[arg(long)]
         user: bool,
     },
-    /// Remove lineage context-hook wiring from Claude Code settings
+    /// Remove tribal context-hook wiring from Claude Code settings
     Uninstall {
         #[arg(long)]
         user: bool,

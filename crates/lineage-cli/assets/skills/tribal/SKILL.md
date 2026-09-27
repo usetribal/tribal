@@ -1,23 +1,23 @@
 ---
-name: lineage
+name: tribal
 description: >-
   Retrieves and manages engineering context from tribal: AI agent
   conversations, line-level history, team sharing, rebase recovery, and
   session resume/fork. Use when answering why code exists, finding past
   decisions, onboarding, before risky edits, after rebase, or when sharing
-  lineage with teammates.
+  tribal with teammates.
 ---
 
 # Tribal agent skill
 
-Tribal stores **AI agent session history** in git (`refs/lineage/*`, `refs/notes/lineage`). Setup is handled by `tribal init` (humans run that once). **Your job is to query, interpret, and advise on lineage data.**
+Tribal stores **AI agent session history** in git (`refs/lineage/*`, `refs/notes/lineage`). Setup is handled by `tribal init` (humans run that once). **Your job is to query, interpret, and advise on tribal data.**
 
-## When to use lineage
+## When to use tribal
 
 - Why was this code written? What prompt or decision led to it?
 - What did agents discuss about this module, API, or bug?
 - Before editing unfamiliar code: linked sessions, blame, architecture summary
-- After `git rebase` / `git rebase -i`: orphaned lineage notes
+- After `git rebase` / `git rebase -i`: orphaned tribal notes
 - Sharing context with teammates or reviewing what would leave the repo
 - Continuing a prior agent session (Claude Code, Codex; VS Code extension)
 
@@ -43,13 +43,13 @@ tribal export --redact --format jsonl
 `tribal --discover` prints the whole command surface as JSON, including commands
 that are hidden from `--help`. Read it when you need a verb you cannot guess.
 
-**Workflow:** query by topic, then blame for a specific line, then `show` the best session. Cite `session_id` and turn content. Do not invent history if lineage returns nothing.
+**Workflow:** query by topic, then blame for a specific line, then `show` the best session. Cite `session_id` and turn content. Do not invent history if tribal returns nothing.
 
 Session JSON may include `metadata.architecture_summary`, `prompted_by_email`, `prompted_by_name`, `vendor_session_id`, `parent_session_id`, and `git_branch`.
 
 ## Tribal blame
 
-Combines `git blame` with lineage notes at the introducing commit. JSON `matches` include confidence and content previews. Line objects materialize when sessions link to commits (hooks or manual import + commit).
+Combines `git blame` with tribal notes at the introducing commit. JSON `matches` include confidence and content previews. Line objects materialize when sessions link to commits (hooks or manual import + commit).
 
 ## Sharing with your team
 
@@ -72,7 +72,7 @@ Before sharing publicly: `tribal export --redact --format jsonl` and review outp
 
 ## After a rebase
 
-Rewritten SHAs orphan lineage notes. Recovery:
+Rewritten SHAs orphan tribal notes. Recovery:
 
 ```bash
 tribal remap
@@ -92,7 +92,7 @@ Manual refresh: `tribal import --agent all --incremental` (alias: `ingest`)
 ## Continue sessions
 
 `tribal fork` carries on a stored session — including a teammate's,
-since it resolves from lineage's refs rather than a local transcript file:
+since it resolves from tribal's refs rather than a local transcript file:
 
 ```bash
 tribal fork <session-id>            # reopens yours, writes out anyone else's
@@ -109,7 +109,7 @@ replayable tool handles. Writing out is Claude Code only.
 The VS Code / Cursor extension offers both from the session tree and from hover.
 
 Cursor sessions are view-and-inject only: `cursor-agent` keeps a different session
-store from the Cursor IDE transcripts lineage imports.
+store from the Cursor IDE transcripts tribal imports.
 
 ## Maintenance commands
 
@@ -138,4 +138,4 @@ If `lineage-mcp` is configured, prefer MCP tools (`lineage_list_sessions`, `line
 - `tribal import --agent all --incremental`
 - Confirm [agent paths](https://github.com/usetribal/tribal/blob/main/docs/agent-paths.md) for Cursor / Claude / Codex
 - Teammates may need `git fetch origin refs/lineage/* refs/notes/lineage`
-- Fall back to `git log` and code comments; lineage augments git, it does not replace it
+- Fall back to `git log` and code comments; tribal augments git, it does not replace it

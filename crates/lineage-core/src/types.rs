@@ -183,14 +183,14 @@ pub struct Turn {
 /// relation that could have been rederived from history.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct ForkOrigin {
-    /// The lineage id of the session that was forked. Mirrors
+    /// The tribal id of the session that was forked. Mirrors
     /// `parent_session_id` so the privacy fork-chain walk needs no special case.
     pub source_session_id: LineageId,
     /// Vendor id minted for the forked copy — never the source session's, which
     /// would collide if both users ever share a machine.
     pub forked_session_handle: String,
     pub forked_at: DateTime<Utc>,
-    /// Version of lineage that wrote the edge, so a fork made by an older writer
+    /// Version of tribal that wrote the edge, so a fork made by an older writer
     /// stays attributable when the transcript renderer changes.
     pub lineage_version: String,
     /// Tenant the source session was pulled from, when the fork crossed a
@@ -220,7 +220,7 @@ pub struct PullOrigin {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tenant: Option<String>,
     pub pulled_at: DateTime<Utc>,
-    /// Version of lineage that wrote the marker, matching `ForkOrigin`.
+    /// Version of tribal that wrote the marker, matching `ForkOrigin`.
     pub lineage_version: String,
 }
 

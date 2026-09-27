@@ -1,5 +1,5 @@
 //! `tribal fork` end to end, on the reopen half: a session this machine
-//! holds is resolved from lineage refs, the adapter is asked for the invocation,
+//! holds is resolved from tribal refs, the adapter is asked for the invocation,
 //! and it is printed — writing nothing.
 //!
 //! The fall-through half (no invocation available, so the session is written out
@@ -103,7 +103,7 @@ fn claude_transcripts(home: &Path) -> Vec<PathBuf> {
 }
 
 /// The command is the adapter's verbatim, and it must name the id the harness
-/// resolves by — the session's own vendor id, never lineage's id, which the
+/// resolves by — the session's own vendor id, never tribal's id, which the
 /// harness has never seen.
 #[test]
 fn resume_prints_the_adapter_command_for_the_stored_vendor_id() {
@@ -124,11 +124,11 @@ fn resume_prints_the_adapter_command_for_the_stored_vendor_id() {
         stdout.contains("claude --resume 019f9d91-3f94-48f4-8cbf-663330ac0cee"),
         "{stdout}"
     );
-    // The harness has never seen lineage's id, so passing it would resolve to
+    // The harness has never seen tribal's id, so passing it would resolve to
     // nothing with no error.
     assert!(
         !stdout.contains(&format!("--resume {}", conv.id.as_str())),
-        "the command must name the vendor id, not lineage's: {stdout}"
+        "the command must name the vendor id, not tribal's: {stdout}"
     );
     // Claude derives its project key from the launch directory, so the output
     // has to say where to run it or the command silently finds nothing.

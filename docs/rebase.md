@@ -44,13 +44,13 @@ Remap succeeds when patch-id correspondence exists between old and new commits. 
 git rebase -i main
 tribal remap
 tribal doctor
-# push updated refs if sharing lineage with team
+# push updated refs if sharing tribal with team
 git push origin refs/lineage/* refs/notes/lineage
 ```
 
 ## VS Code and MCP
 
-**Lineage: Remap After Rebase** in the extension runs the same CLI command. MCP exposes `lineage_remap` for agent-driven recovery after rebase operations.
+**Tribal: Remap After Rebase** in the extension runs the same CLI command. MCP exposes `lineage_remap` for agent-driven recovery after rebase operations.
 
 ## Related guides
 

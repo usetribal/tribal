@@ -29,7 +29,7 @@ The server reads through the same git and policy layers as the CLI. It does not 
 | `lineage_get_session` | Fetch session by id (redacted by policy) |
 | `lineage_blame_line` | Tribal for file path and line number |
 | `lineage_search` | Full-text search over session content |
-| `lineage_doctor` | Repository lineage health |
+| `lineage_doctor` | Repository tribal health |
 | `lineage_materialize` | Materialize line objects at HEAD or a commit |
 | `lineage_rebuild_index` | Rebuild local search index from refs |
 | `lineage_export` | Export sessions with optional redaction |

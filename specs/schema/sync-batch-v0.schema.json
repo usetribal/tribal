@@ -242,7 +242,7 @@
           "type": "string"
         },
         "lineage_version": {
-          "description": "Version of lineage that wrote the edge, so a fork made by an older writer\nstays attributable when the transcript renderer changes.",
+          "description": "Version of tribal that wrote the edge, so a fork made by an older writer\nstays attributable when the transcript renderer changes.",
           "type": "string"
         },
         "source_repo": {
@@ -253,7 +253,7 @@
           ]
         },
         "source_session_id": {
-          "description": "The lineage id of the session that was forked. Mirrors\n`parent_session_id` so the privacy fork-chain walk needs no special case.",
+          "description": "The tribal id of the session that was forked. Mirrors\n`parent_session_id` so the privacy fork-chain walk needs no special case.",
           "type": "string"
         },
         "source_tenant": {
@@ -326,7 +326,7 @@
       "description": "Where a session came from when it was not imported on this machine.\n\nA typed field rather than a metadata key for the same reason as\n[`ForkOrigin`]: `metadata` merges first-write-wins per key\n(`specs/sync-protocol-v0.md`), which silently drops a provenance edge that\ncannot be recomputed. This one also has to be read on the *push* path —\na pulled session is excluded from the next batch, because the server it came\nfrom is already its source of truth — and a filter that decides what to\nupload should not key off a string every caller has to remember.",
       "properties": {
         "lineage_version": {
-          "description": "Version of lineage that wrote the marker, matching `ForkOrigin`.",
+          "description": "Version of tribal that wrote the marker, matching `ForkOrigin`.",
           "type": "string"
         },
         "pulled_at": {

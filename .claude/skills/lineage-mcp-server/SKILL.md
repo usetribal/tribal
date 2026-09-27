@@ -3,7 +3,7 @@ name: lineage-mcp-server
 description: >-
   Changes the lineage-mcp MCP server: handle_request, JSON-RPC tools, and
   server tests. Use when modifying MCP tools, Cursor MCP integration, or
-  lineage search/git exposure via MCP.
+  tribal search/git exposure via MCP.
 ---
 
 # Tribal MCP server

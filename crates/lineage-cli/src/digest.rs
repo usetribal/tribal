@@ -71,7 +71,7 @@ pub fn select(retrieval: &Retrieval, trigger: Trigger) -> Vec<&Evidence> {
 /// three affordances is over 13% of the intent cap spent on navigation.
 pub fn render_digest(file_path: &str, selected: &[&Evidence], trigger: Trigger) -> String {
     let mut digest = format!(
-        "Lineage: {} past session(s) touched {file_path} — details below.\n",
+        "Tribal: {} past session(s) touched {file_path} — details below.\n",
         selected.len(),
     );
     for evidence in selected {
@@ -138,7 +138,7 @@ pub enum Continuation {
 
 /// The vocabulary in full, for the once-per-session `SessionStart` injection.
 /// A statement of capability, never an instruction to use it — an agent told to
-/// use lineage would make the A/B harness measure the prompt rather than the
+/// use tribal would make the A/B harness measure the prompt rather than the
 /// tool.
 pub fn verb_vocabulary() -> String {
     render_vocabulary(Continuation::Offered)
@@ -152,7 +152,7 @@ pub fn traversal_vocabulary() -> String {
 
 fn render_vocabulary(continuation: Continuation) -> String {
     let mut text = String::from(
-        "Lineage indexes past agent sessions in this repo and can be traversed. \
+        "Tribal indexes past agent sessions in this repo and can be traversed. \
          Injected evidence carries a `session#turn` handle; these commands take one:\n",
     );
     for verb in VERBS {
@@ -172,7 +172,7 @@ fn render_vocabulary(continuation: Continuation) -> String {
 /// the subagent invocation.
 ///
 /// This states what the commands do and what their output is for. It does not
-/// say when to reach for them, and must not: an agent told to use lineage would
+/// say when to reach for them, and must not: an agent told to use tribal would
 /// make any measurement of injection a measurement of the prompt
 /// (`specs/context-injection-v0.md`). "Here is the mechanism" is capability;
 /// "use the mechanism" is instruction.

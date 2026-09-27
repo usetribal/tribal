@@ -450,7 +450,7 @@ fn git(args: &[&str], cwd: &Path) -> Result<()> {
 
 // --- Persistence ----------------------------------------------------------------
 
-/// Write the shared conversation into the target repository's lineage refs.
+/// Write the shared conversation into the target repository's tribal refs.
 ///
 /// This is the pull merge unchanged, because the share fetch returns the
 /// down-sync shape (share-v0 "Wire shapes"): a receiver who already had the
