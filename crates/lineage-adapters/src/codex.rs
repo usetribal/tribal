@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
 use lineage_agent::{
-    no_vendor_session_id, transcript_writing_unsupported, AgentSource, RenderedTranscript,
-    ResumeInvocation, SessionReader, SessionRef, SessionResumer, TranscriptWriter,
+    no_vendor_session_id, AgentSource, RenderedTranscript, ResumeInvocation, SessionReader,
+    SessionRef, SessionResumer, TranscriptWriter,
 };
 use lineage_core::{
     derive_session_id, AgentKind, Artifact, Conversation, LineageError, LineageId, Role, ToolCall,
@@ -16,6 +16,7 @@ use serde_json::Value;
 use walkdir::WalkDir;
 
 use crate::citations::enrich_turn_with_citations;
+use crate::codex_transcript::render_codex_transcript;
 use crate::content::{
     artifacts_from_tool_input, enrich_turn_with_images, extract_text_content, tool_target,
 };
@@ -549,21 +550,22 @@ fn home_dir() -> Option<PathBuf> {
 }
 
 impl TranscriptWriter for CodexAdapter {
-    /// `codex fork` very likely accepts a hand-written rollout file, but that
-    /// has not been executed against a real Codex install, and its unified
-    /// backend may validate ids server-side. Declining until it is proven beats
-    /// writing a file that silently fails to resume.
     fn render_transcript(
         &self,
-        _conversation: &Conversation,
+        conversation: &Conversation,
     ) -> Result<RenderedTranscript, LineageError> {
-        Err(transcript_writing_unsupported(AgentKind::Codex))
+        let home = home_dir().ok_or_else(|| {
+            LineageError::Other("cannot locate the Codex state directory: HOME is unset".into())
+        })?;
+        Ok(render_codex_transcript(
+            conversation,
+            &home,
+            &self.workspace_root,
+            Utc::now(),
+        ))
     }
 }
 
-/// Codex can reopen a session it already holds even though it cannot be handed a
-/// written one — which is why resuming and transcript writing are separate
-/// capabilities rather than one "can be continued" flag.
 impl SessionResumer for CodexAdapter {
     fn resume_invocation(
         &self,

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`tribal fork` writes Codex sessions out, not only Claude ones.** A Codex session that your Codex no longer holds is written as a new rollout under `~/.codex/sessions/`, filed by date like Codex's own, and `tribal fork` prints the `codex resume <id>` that opens it. Tool activity is narrated as prose, as it is for Claude. Cursor still declines by name. `tribal upgrade` updates installed agent skills that said only Claude sessions could be written out.
+
 ### Changed
 
 - **User-facing prose and bundled agent skills say Tribal instead of Lineage.** Git ref namespaces (`refs/lineage/*`), crate names, and MCP tool prefixes are unchanged. The bundled skill installs under `.agents/skills/tribal/` (and the matching Cursor/Claude paths); `tribal upgrade` removes a legacy `lineage/` copy.

@@ -693,6 +693,67 @@ fn apply_skill_directory_rename(context: &Context) -> Result<Outcome> {
     )))
 }
 
+/// The sentence installed skills carried while only Claude sessions could be
+/// written out. An agent reading it will not offer to continue a Codex session it
+/// now can, and the sentence is the whole of the stale claim, so it is what is
+/// matched on.
+const CLAUDE_ONLY_WRITE_OUT: &str = "Writing out is Claude Code only.";
+
+fn skills_claiming_claude_only_write_out(repo_path: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    for dir in [".cursor/skills", ".claude/skills", ".agents/skills"] {
+        let path = repo_path.join(dir).join("tribal").join("SKILL.md");
+        let Ok(content) = fs::read_to_string(&path) else {
+            continue;
+        };
+        if content.contains(CLAUDE_ONLY_WRITE_OUT) {
+            out.push(path);
+        }
+    }
+    out
+}
+
+fn detect_codex_write_out_skills(context: &Context) -> Result<bool> {
+    Ok(repos_to_stamp(context)
+        .iter()
+        .any(|path| !skills_claiming_claude_only_write_out(path).is_empty()))
+}
+
+/// Reinstall the tribal skill wherever it still says only Claude can be written
+/// out. Forced, as the other skill steps are: the detector has already established
+/// these copies are ours and out of date.
+fn apply_codex_write_out_skills(context: &Context) -> Result<Outcome> {
+    let mut stamped = 0usize;
+
+    for path in repos_to_stamp(context) {
+        let stale = skills_claiming_claude_only_write_out(&path);
+        if stale.is_empty() {
+            continue;
+        }
+        let targets: Vec<String> = stale
+            .iter()
+            .filter_map(|p| target_of(&path, p))
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
+
+        match crate::skill_cmd::init_skill_quiet(&path, &targets, true) {
+            Ok(()) => stamped += 1,
+            Err(error) => tracing::warn!("could not restamp skills in {}: {error}", path.display()),
+        }
+    }
+
+    if stamped == 0 {
+        return Ok(Outcome::Skipped(
+            "installed skills already say Codex sessions can be written out".into(),
+        ));
+    }
+    Ok(Outcome::Applied(format!(
+        "updated agent skills for Codex write-out in {}",
+        repository_count(stamped)
+    )))
+}
+
 fn target_of(repo_path: &Path, skill_path: &Path) -> Option<String> {
     let rel = skill_path.strip_prefix(repo_path).ok()?;
     let first = rel.components().next()?.as_os_str().to_str()?;
@@ -749,6 +810,15 @@ pub const MIGRATIONS: &[Migration] = &[
             id: "skill-directory",
             detect: detect_skill_directory_rename,
             apply: apply_skill_directory_rename,
+        }],
+    },
+    Migration {
+        id: "0004-codex-write-out",
+        introduced_in: "0.6.0",
+        steps: &[Step {
+            id: "skills-codex-write-out",
+            detect: detect_codex_write_out_skills,
+            apply: apply_codex_write_out_skills,
         }],
     },
 ];

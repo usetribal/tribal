@@ -93,7 +93,7 @@ A session this machine already holds is reopened as itself: nothing is written,
 and continuing it adds to its history. Any other is written out as a new session
 that belongs to you, leaving the original untouched and recording it as an
 ancestor. Tool activity is replayed as prose, so you get their context but no
-replayable tool handles. Writing out is Claude Code only.
+replayable tool handles. Writing out works for Claude Code and Codex.
 
 The VS Code / Cursor extension offers both from the session tree and from hover.
 

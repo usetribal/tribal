@@ -522,8 +522,8 @@ Notes:
   ([conversation schema](../../specs/conversation-schema-v0.md)). Lines you write
   after the fork are attributed to you; the source session is an ancestor, never
   a co-author.
-- Claude Code only for now. Codex and Cursor sessions decline by name — see
-  [Fork a session](../fork-a-session.md) for why each is not supported yet.
+- Claude Code and Codex. Cursor sessions decline by name — see
+  [Fork a session](../fork-a-session.md) for why.
 - A session with nothing replayable (all system turns, or content redacted away
   at import) is refused here rather than written out as an empty transcript the
   harness would later reject as "session not found".

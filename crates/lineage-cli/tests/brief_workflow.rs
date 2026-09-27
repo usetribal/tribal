@@ -267,7 +267,7 @@ fn a_session_with_no_renderable_transcript_still_briefs() {
     let home = tempfile::tempdir().unwrap();
     commands::init_config(dir.path()).unwrap();
 
-    let mut conv = Conversation::new(AgentKind::Codex, dir.path().display().to_string());
+    let mut conv = Conversation::new(AgentKind::Cursor, dir.path().display().to_string());
     conv.pull_origin = Some(PullOrigin {
         server: "https://tribal.example".into(),
         tenant: None,
@@ -279,7 +279,7 @@ fn a_session_with_no_renderable_transcript_still_briefs() {
         .push(assistant_turn("Swapped the sleep for an interval", vec![]));
     store(dir.path(), &conv);
 
-    // fork itself refuses: codex has no transcript writer in this build.
+    // fork itself refuses: cursor has no transcript writer.
     let forked = Command::new(env!("CARGO_BIN_EXE_tribal"))
         .args([
             "--repo",

@@ -80,7 +80,7 @@ pub trait TranscriptWriter: Send + Sync {
 /// gets one recognisable failure naming the agent rather than per-adapter prose.
 pub fn transcript_writing_unsupported(agent: AgentKind) -> LineageError {
     LineageError::Other(format!(
-        "writing a resumable transcript is unsupported for {}: only claude sessions can be continued in their harness",
+        "writing a resumable transcript is unsupported for {}: its sessions cannot be continued in their harness",
         agent.as_str()
     ))
 }

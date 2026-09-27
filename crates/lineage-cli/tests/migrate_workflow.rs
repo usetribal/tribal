@@ -327,6 +327,31 @@ fn skills_predating_the_headless_switch_are_updated() {
     );
 }
 
+/// A skill installed while only Claude sessions could be written out tells an
+/// agent not to offer a Codex fork. The copy already documents
+/// `--no-interactive`, so only this migration can be what rewrites it.
+#[test]
+fn skills_saying_only_claude_can_be_written_out_are_updated() {
+    let (_home, home) = HomeGuard::new();
+    let repo = init_repo(&home);
+    let skill = repo.join(".agents/skills/tribal/SKILL.md");
+    fs::create_dir_all(skill.parent().unwrap()).unwrap();
+    fs::write(
+        &skill,
+        "---\nname: tribal\n---\nPass `--no-interactive`. Writing out is Claude Code only.\n",
+    )
+    .unwrap();
+
+    migrate::apply_pending(&repo_context(&repo)).unwrap();
+
+    let rewritten = fs::read_to_string(&skill).unwrap();
+    assert!(
+        !rewritten.contains("Writing out is Claude Code only."),
+        "the stale claim is gone: {rewritten}"
+    );
+    assert!(rewritten.contains("Claude Code and Codex"), "{rewritten}");
+}
+
 /// The skills step must not install into a repository that never opted in —
 /// only the agent directories that already hold a stale copy are rewritten.
 #[test]

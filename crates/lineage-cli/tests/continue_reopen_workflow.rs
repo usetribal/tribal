@@ -171,10 +171,11 @@ fn resume_writes_no_transcript_and_records_no_new_session() {
     );
 }
 
-/// Codex can be reopened even though no transcript can be written for it, so the
-/// reopen path must not be gated on the transcript-writing capability.
+/// A Codex session this machine still holds is reopened by its id. Now that a
+/// Codex transcript can also be written out, reopening has to win: writing would
+/// hand the user a copy of a session they already have.
 #[test]
-fn a_codex_session_resumes_even_though_it_cannot_be_forked() {
+fn a_codex_session_this_machine_holds_is_reopened_not_written_out() {
     let dir = init_repo();
     let home = tempfile::tempdir().unwrap();
     commands::init_config(dir.path()).unwrap();
@@ -195,6 +196,10 @@ fn a_codex_session_resumes_even_though_it_cannot_be_forked() {
     assert!(
         !stdout.contains("run this from"),
         "codex resolves from anywhere: {stdout}"
+    );
+    assert!(
+        !home.path().join(".codex").exists(),
+        "reopening writes no rollout"
     );
 }
 

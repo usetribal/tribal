@@ -5,6 +5,7 @@ mod cursor_tags;
 mod metadata;
 mod path_util;
 mod shell_writes;
+mod transcript_writing;
 
 pub use citations::{enrich_turn_with_citations, extract_citations_from_text};
 
@@ -19,6 +20,8 @@ pub mod claude;
 pub mod claude_transcript;
 #[cfg(feature = "codex")]
 pub mod codex;
+#[cfg(feature = "codex")]
+pub mod codex_transcript;
 #[cfg(feature = "cursor")]
 pub mod cursor;
 
@@ -42,7 +45,7 @@ pub trait ErasedAdapter: Send + Sync {
         &self,
         session: &lineage_agent::SessionRef,
     ) -> lineage_core::Result<lineage_core::Conversation>;
-    /// Errors for every agent but Claude. Kept on the erased trait rather than
+    /// Errors for Cursor. Kept on the erased trait rather than
     /// behind a downcast so a caller holding `Box<dyn ErasedAdapter>` gets the
     /// explicit refusal instead of having to know which concrete adapter can.
     fn render_transcript(
@@ -131,12 +134,12 @@ mod tests {
     fn adapters_without_a_writer_decline_by_name_rather_than_no_op() {
         let conversation = lineage_core::Conversation::new(AgentKind::Cursor, "/tmp");
         for (kind, adapter) in all_adapters(std::path::Path::new("/tmp")) {
-            if kind == AgentKind::Claude {
+            if matches!(kind, AgentKind::Claude | AgentKind::Codex) {
                 continue;
             }
             let err = adapter
                 .render_transcript(&conversation)
-                .expect_err("only claude can write a resumable transcript");
+                .expect_err("only claude and codex can write a resumable transcript");
             // The agent has to be named: a caller that cannot tell which
             // adapter refused cannot tell the user what to do instead.
             assert!(
@@ -147,17 +150,13 @@ mod tests {
         }
     }
 
-    /// Resuming and transcript writing are separate capabilities: Codex can
-    /// reopen a session it already holds but cannot be handed a written one. A
-    /// test that only checked "claude yes, everything else no" would pass on an
-    /// implementation that collapsed the two.
+    /// Resuming and transcript writing are separate capabilities: writing needs
+    /// only the conversation, while resuming needs the vendor id of a session the
+    /// harness already holds. A session imported from a teammate has no such id,
+    /// yet can still be written out.
     #[test]
     fn resume_capability_is_independent_of_transcript_writing() {
         let mut conversation = lineage_core::Conversation::new(AgentKind::Codex, "/tmp");
-        conversation.metadata.insert(
-            "codex_session_id".into(),
-            serde_json::Value::String("codex-abc".into()),
-        );
 
         let adapters = all_adapters(std::path::Path::new("/tmp"));
         let codex = adapters
@@ -166,7 +165,13 @@ mod tests {
             .map(|(_, adapter)| adapter)
             .expect("codex adapter is compiled in");
 
-        assert!(codex.render_transcript(&conversation).is_err());
+        assert!(codex.render_transcript(&conversation).is_ok());
+        assert!(codex.resume_invocation(&conversation).is_err());
+
+        conversation.metadata.insert(
+            "codex_session_id".into(),
+            serde_json::Value::String("codex-abc".into()),
+        );
         assert_eq!(
             codex.resume_invocation(&conversation).unwrap().command,
             "codex resume codex-abc"

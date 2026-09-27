@@ -5,22 +5,22 @@
 //! and no server handshake — so a transcript written there is resumable even if
 //! the installation has never seen the session id.
 //!
-//! What this deliberately does *not* do is reproduce tool state. A `tool_use`
-//! block names a handle the resuming model may act as though it still holds, and
-//! a `tool_result` paired to it asserts an outcome that is no longer inspectable
-//! — a model reading either can conclude it already made edits it did not make.
-//! Tool activity is therefore flattened into prose the model reads as history.
-//! Honest narrative beats structure that lies.
+//! Tool activity is narrated as prose rather than replayed as `tool_use` blocks;
+//! `transcript_writing` holds that rule and the reasons for it.
 
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, SecondsFormat, Utc};
 use lineage_agent::RenderedTranscript;
-use lineage_core::{Conversation, Role, Turn};
-use serde_json::{json, Value};
-use ulid::Ulid;
+use lineage_core::Conversation;
+use serde_json::json;
 
 use crate::path_util::claude_project_dir;
+use crate::transcript_writing::{mint_uuid, narrate};
+
+/// Every session id Claude Code writes for itself is a well-formed v4, so an id
+/// that is merely UUID-shaped sits outside the set the harness is known to accept.
+const SESSION_ID_VERSION: u8 = 4;
 
 /// Claude resolves records by walking `parentUuid` back from the last line and
 /// drops anything unreachable, so every record carries the previous record's
@@ -41,7 +41,7 @@ impl RecordChain {
     }
 
     fn push(&mut self, role: &str, text: &str, timestamp: DateTime<Utc>) {
-        let uuid = mint_uuid();
+        let uuid = mint_uuid(SESSION_ID_VERSION);
         let record = json!({
             "parentUuid": self.parent_uuid,
             "uuid": uuid,
@@ -74,17 +74,20 @@ pub fn render_claude_transcript(
     home: &Path,
     workspace_root: &Path,
 ) -> RenderedTranscript {
-    let session_id = mint_uuid();
+    let session_id = mint_uuid(SESSION_ID_VERSION);
     let path = transcript_path(home, workspace_root, &session_id);
 
     let mut chain = RecordChain::new(session_id.clone());
     let base_timestamp = conversation.started_at;
 
     for turn in &conversation.turns {
-        let Some((role, text)) = narrate(turn) else {
-            continue;
-        };
-        chain.push(role, &text, turn.timestamp.unwrap_or(base_timestamp));
+        for (speaker, text) in narrate(turn) {
+            chain.push(
+                speaker.as_str(),
+                &text,
+                turn.timestamp.unwrap_or(base_timestamp),
+            );
+        }
     }
 
     RenderedTranscript {
@@ -104,132 +107,11 @@ pub fn transcript_path(home: &Path, workspace_root: &Path, session_id: &str) -> 
     claude_project_dir(home, workspace_root).join(format!("{session_id}.jsonl"))
 }
 
-/// One turn as a `(claude_role, text)` pair, or `None` when it carries nothing
-/// worth a record. Claude only accepts `user` and `assistant`, so tribal's
-/// four roles collapse onto two.
-fn narrate(turn: &Turn) -> Option<(&'static str, String)> {
-    let body = match turn.role {
-        // A Tool turn is a tool *result*: Claude's parser re-roles the user
-        // record that carried `tool_result` blocks. Replaying it as a user turn
-        // verbatim would read as Alice having typed the tool's output, so it is
-        // labelled as the recap it is.
-        Role::Tool => tool_result_prose(turn),
-        // System turns are tribal's own; attributing them to the user would be
-        // a lie, and Claude has no system record type in a transcript.
-        Role::System => return None,
-        Role::User => turn.content.trim().to_string(),
-        Role::Assistant => assistant_prose(turn),
-    };
-
-    let body = body.trim();
-    if body.is_empty() {
-        return None;
-    }
-
-    let role = match turn.role {
-        Role::Assistant => "assistant",
-        _ => "user",
-    };
-    Some((role, body.to_string()))
-}
-
-/// Assistant text plus a plain-language note of what it did, so the resumed
-/// model knows work happened without being handed a handle to it.
-fn assistant_prose(turn: &Turn) -> String {
-    let mut parts = Vec::new();
-    let text = turn.content.trim();
-    if !text.is_empty() {
-        parts.push(text.to_string());
-    }
-
-    let actions: Vec<String> = turn
-        .tool_calls
-        .iter()
-        .filter(|call| call.name != "tool_result")
-        .map(|call| format!("- {}{}", call.name, summarize_arguments(&call.arguments)))
-        .collect();
-
-    if !actions.is_empty() {
-        parts.push(format!(
-            "[tribal: this turn used tools, recorded here as history rather than replayable calls]\n{}",
-            actions.join("\n")
-        ));
-    }
-
-    parts.join("\n\n")
-}
-
-fn tool_result_prose(turn: &Turn) -> String {
-    let mut parts = Vec::new();
-    let text = turn.content.trim();
-    if !text.is_empty() {
-        parts.push(text.to_string());
-    }
-
-    for call in &turn.tool_calls {
-        let Some(result) = call
-            .result
-            .as_deref()
-            .map(str::trim)
-            .filter(|r| !r.is_empty())
-        else {
-            continue;
-        };
-        parts.push(result.to_string());
-    }
-
-    if parts.is_empty() {
-        return String::new();
-    }
-
-    format!(
-        "[tribal: tool output from the original session]\n{}",
-        parts.join("\n")
-    )
-}
-
-/// Tool arguments are stored as a JSON string. A file path is the one detail
-/// worth surfacing in prose; everything else would bloat the narrative without
-/// helping the model orient.
-fn summarize_arguments(arguments: &str) -> String {
-    let Ok(value) = serde_json::from_str::<Value>(arguments) else {
-        return String::new();
-    };
-    let path = ["file_path", "path", "file", "command"]
-        .iter()
-        .find_map(|key| value.get(*key).and_then(|v| v.as_str()));
-    match path {
-        Some(path) => format!(" {path}"),
-        None => String::new(),
-    }
-}
-
-/// Claude session ids are UUIDs and the filename is the id, so the minted id
-/// must look like one. A ULID is 128 bits from the same workspace dependency
-/// tribal already uses for ids, formatted in UUID layout — adding a `uuid`
-/// crate to mint a name would buy nothing.
-///
-/// The version and variant nibbles are stamped to v4 rather than left as ULID
-/// bytes: every id Claude Code writes itself is a well-formed v4, so an id that
-/// is merely UUID-*shaped* sits outside the set the harness has been observed to
-/// accept. A ULID's leading 48 bits are a timestamp, so without this the version
-/// nibble would be whatever the clock produced. Stamping costs nothing and keeps
-/// the minted id inside the shape the format documents.
-fn mint_uuid() -> String {
-    let mut b = Ulid::new().to_bytes();
-    b[6] = (b[6] & 0x0f) | 0x40;
-    b[8] = (b[8] & 0x3f) | 0x80;
-    format!(
-        "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-        b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11], b[12], b[13],
-        b[14], b[15]
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lineage_core::{AgentKind, LineageId, ToolCall};
+    use lineage_core::{AgentKind, LineageId, Role, ToolCall, Turn};
+    use serde_json::Value;
 
     fn turn(role: Role, content: &str) -> Turn {
         Turn {
@@ -307,31 +189,13 @@ mod tests {
         assert_eq!(first.session_handle.len(), 36);
     }
 
-    /// Every session id Claude Code writes for itself is a well-formed v4, so a
-    /// merely UUID-shaped id sits outside the set the harness is known to accept.
-    /// Rendering repeatedly because the ULID timestamp bits move between calls:
-    /// a single sample would pass even if the nibbles were never stamped.
     #[test]
-    fn minted_ids_are_well_formed_v4_uuids() {
-        for _ in 0..64 {
-            let id = mint_uuid();
-            let fields: Vec<&str> = id.split('-').collect();
+    fn the_session_id_is_a_v4_uuid() {
+        let conv = conversation(vec![turn(Role::User, "hello")]);
+        let rendered =
+            render_claude_transcript(&conv, Path::new("/home/bob"), Path::new("/tmp/workspace"));
 
-            assert_eq!(
-                fields.iter().map(|f| f.len()).collect::<Vec<_>>(),
-                [8, 4, 4, 4, 12]
-            );
-            assert!(id.chars().all(|c| c.is_ascii_hexdigit() || c == '-'));
-            assert_eq!(
-                fields[2].chars().next(),
-                Some('4'),
-                "version nibble in {id}"
-            );
-            assert!(
-                matches!(fields[3].chars().next(), Some('8' | '9' | 'a' | 'b')),
-                "variant nibble in {id}"
-            );
-        }
+        assert_eq!(rendered.session_handle.chars().nth(14), Some('4'));
     }
 
     #[test]

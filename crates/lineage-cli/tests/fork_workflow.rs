@@ -159,6 +159,23 @@ fn claude_transcripts(home: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
+/// Every file under Codex's sessions directory, which files rollouts by date.
+fn codex_rollouts(home: &Path) -> Vec<PathBuf> {
+    let mut pending = vec![home.join(".codex").join("sessions")];
+    let mut files = Vec::new();
+    while let Some(dir) = pending.pop() {
+        for entry in std::fs::read_dir(&dir).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                pending.push(path);
+            } else {
+                files.push(path);
+            }
+        }
+    }
+    files
+}
+
 #[test]
 fn fork_writes_a_transcript_and_records_the_edge() {
     let dir = init_repo();
@@ -326,21 +343,55 @@ fn a_session_with_nothing_replayable_refuses_before_writing() {
     assert!(claude_transcripts(home.path()).is_empty());
 }
 
-/// Only Claude can be continued in its harness today. The refusal has to name
-/// the agent, or a user cannot tell whether to try a different session or a
-/// different tool.
+/// A Codex session is written as a rollout where Codex looks for one, under the
+/// minted id, for the workspace it was forked into — and the command printed is
+/// the one that opens that id.
+#[test]
+fn a_codex_session_forks_into_a_rollout_codex_can_resume() {
+    let dir = init_repo();
+    let home = tempfile::tempdir().unwrap();
+    commands::init_config(dir.path()).unwrap();
+    let source = seed_alice_session(dir.path(), AgentKind::Codex);
+
+    let stdout = stdout_of(&run_fork(dir.path(), home.path(), source.id.as_str(), &[]));
+
+    let written = codex_rollouts(home.path());
+    assert_eq!(written.len(), 1, "exactly one rollout materialized");
+    let handle = fork_of(dir.path(), &source)
+        .fork_origin
+        .unwrap()
+        .forked_session_handle;
+    let name = written[0].file_name().unwrap().to_str().unwrap();
+    assert!(name.starts_with("rollout-") && name.ends_with(&format!("{handle}.jsonl")));
+
+    let first_line = std::fs::read_to_string(&written[0]).unwrap();
+    let meta: serde_json::Value = serde_json::from_str(first_line.lines().next().unwrap()).unwrap();
+    assert_eq!(meta["type"], "session_meta");
+    assert_eq!(meta["payload"]["id"], handle.as_str());
+    assert_eq!(
+        meta["payload"]["cwd"],
+        dir.path().canonicalize().unwrap().to_str().unwrap()
+    );
+    assert!(first_line.contains("accepts an empty password"));
+
+    assert!(
+        stdout.contains(&format!("codex resume {handle}")),
+        "{stdout}"
+    );
+}
+
+/// Cursor cannot be continued in its harness. The refusal has to name the agent,
+/// or a user cannot tell whether to try a different session or a different tool.
 #[test]
 fn forking_a_session_from_an_unsupported_agent_refuses_by_name() {
     let dir = init_repo();
     let home = tempfile::tempdir().unwrap();
     commands::init_config(dir.path()).unwrap();
 
-    for agent in [AgentKind::Codex, AgentKind::Cursor] {
-        let source = seed_alice_session(dir.path(), agent);
-        let output = run_fork(dir.path(), home.path(), source.id.as_str(), &[]);
-        assert!(!output.status.success(), "{agent:?} fork should refuse");
-        let stderr = String::from_utf8(output.stderr).unwrap();
-        assert!(stderr.contains(agent.as_str()), "{stderr}");
-        assert!(stderr.contains("unsupported"), "{stderr}");
-    }
+    let source = seed_alice_session(dir.path(), AgentKind::Cursor);
+    let output = run_fork(dir.path(), home.path(), source.id.as_str(), &[]);
+    assert!(!output.status.success(), "cursor fork should refuse");
+    let stderr = String::from_utf8(output.stderr).unwrap();
+    assert!(stderr.contains("cursor"), "{stderr}");
+    assert!(stderr.contains("unsupported"), "{stderr}");
 }

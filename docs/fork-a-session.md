@@ -22,7 +22,7 @@ one. `--new` forces it for a session that could have been reopened.
 | Agent | Reopen | Write out | Notes |
 |-------|--------|-----------|-------|
 | Claude Code | Yes | Yes | Writing out needs no local transcript and no `vendor_session_id` |
-| Codex | Yes | Not yet | Reopening needs `vendor_session_id` from import |
+| Codex | Yes | Yes | Reopening needs `vendor_session_id` from import; writing out needs neither |
 | Cursor | View only | No | Tribal reads Cursor's IDE sessions; `cursor-agent` has its own separate store |
 
 ## Usage
@@ -66,16 +66,16 @@ a thing to choose rather than have happen.
 - **Only what tribal stored.** Redaction runs before persist, so it is at most
   as complete as the redacted stored copy.
 
-Claude Code only for now. Codex and Cursor sessions decline by name rather than
-failing obscurely.
+Claude Code and Codex. Cursor sessions decline by name rather than failing
+obscurely.
 
-### Why not Codex yet
+### How a Codex session is written
 
-`codex fork <id>` exists, and Codex's id resolution appears to scan rollout files
-rather than an index — so this very likely works. It has not been executed
-against a lineage-written transcript, and Codex's unified backend may validate
-ids server-side. One test decides it; until that test is run, tribal refuses
-rather than writing a file that may not open.
+Codex resolves `codex resume <id>` by scanning `~/.codex/sessions/` for a rollout
+whose first record names the id, so tribal writes one there, filed by date like
+Codex's own. Its `cwd` is your workspace, and its `originator` and `cli_version`
+name tribal as the writer. Checked against codex-cli 0.153.4, where Codex resumes
+the written session and answers from its history.
 
 ### Why not Cursor
 
